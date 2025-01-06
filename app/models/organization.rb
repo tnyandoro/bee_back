@@ -1,6 +1,7 @@
 class Organization < ApplicationRecord
     validates :name, :email, presence: true
-    validates :subdomain, uniqueness: true
+    validate :name, presence: true
+    validates :subdomain, presence: true,  uniqueness: true
   
     before_validation :generate_subdomain, on: :create
 
