@@ -35,13 +35,20 @@ class Organization < ApplicationRecord
 
   private
 
+  # Generate subdomain from the organization name if not provided
+  def generate_subdomain
+    self.subdomain ||= name.parameterize
+  end
+
+  # Ensure subdomain is lowercase
+  def normalize_subdomain
+    self.subdomain = subdomain.downcase if subdomain.present?
+  end
+
+  # Validate subdomain format
   def subdomain_format
     unless subdomain.match?(/\A[a-z0-9-]+\z/)
       errors.add(:subdomain, "can only contain lowercase letters, numbers, and hyphens")
     end
-  end
-
-  def normalize_subdomain
-    self.subdomain = subdomain.downcase if subdomain.present?
   end
 end

@@ -10,10 +10,10 @@
 # db/seeds.rb
 organization = Organization.create!(
   name: "Example Org",
-  subdomain: "example",
   address: "123 Main St",
   email: "info@example.com",
   web_address: "https://example.com"
+  # Do not explicitly set `subdomain` if you want it to be generated automatically
 )
 
 User.create!(
