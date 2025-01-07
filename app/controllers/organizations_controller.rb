@@ -1,5 +1,5 @@
 class OrganizationsController < ApplicationController
-  before_action :set_organization, only: %i[ show update destroy ]
+  before_action :set_organization, only: %i[ show update destroy users]
 
   # GET /organizations
   def index
@@ -36,6 +36,12 @@ class OrganizationsController < ApplicationController
   # DELETE /organizations/1
   def destroy
     @organization.destroy!
+  end
+
+   # GET /organizations/:id/users
+   def users
+    @users = @organization.users
+    render json: @users
   end
 
   private

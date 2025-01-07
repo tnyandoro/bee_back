@@ -1,16 +1,26 @@
+# app/controllers/users_controller.rb
 class UsersController < ApplicationController
-  include Pagy::Backend
-
   before_action :set_organization
   before_action :set_user, only: %i[show update destroy]
   before_action :authorize_admin, only: %i[create update destroy]
 
-  # GET /users
+  # GET /organizations/:organization_id/users
   def index
-    @pagy, @users = pagy(@organization.users.filter_by_role(params[:role]))
+    if params[:role] && !User.roles.key?(params[:role])
+      render json: { error: 'Invalid role' }, status: :unprocessable_entity
+      return
+    end
+
+    @users = @organization.users.filter_by_role(params[:role])
+    @users = @users.paginate(page: params[:page], per_page: 10) # Paginate with 10 items per page
+
     render json: {
       users: UserSerializer.new(@users).serializable_hash,
-      pagy: pagy_metadata(@pagy)
+      pagination: {
+        current_page: @users.current_page,
+        total_pages: @users.total_pages,
+        total_entries: @users.total_entries
+      }
     }
   end
 
@@ -23,6 +33,12 @@ class UsersController < ApplicationController
   def create
     @user = @organization.users.new(user_params)
 
+    # Prevent non-admins from creating admins
+    if user_params[:role] == 'admin' && !current_user.role_admin?
+      render json: { error: 'You are not authorized to create an admin user' }, status: :forbidden
+      return
+    end
+
     if @user.save
       render json: UserSerializer.new(@user).serializable_hash, status: :created, location: @user
     else
@@ -32,6 +48,12 @@ class UsersController < ApplicationController
 
   # PATCH/PUT /users/1
   def update
+    # Prevent non-admins from updating users to admin
+    if user_params[:role] == 'admin' && !current_user.role_admin?
+      render json: { error: 'You are not authorized to update this user to admin' }, status: :forbidden
+      return
+    end
+
     if @user.update(user_params)
       render json: UserSerializer.new(@user).serializable_hash
     else
@@ -47,14 +69,20 @@ class UsersController < ApplicationController
 
   private
 
-  # Identify organization using subdomain
+  # Identify organization using organization_id or subdomain
   def set_organization
-    @organization = Organization.find_by!(subdomain: request.subdomain)
+    if params[:organization_id]
+      @organization = Organization.find(params[:organization_id])
+    else
+      @organization = Organization.find_by!(subdomain: request.subdomain)
+    end
   end
 
   # Use callbacks to share common setup or constraints between actions
   def set_user
-    @user = @organization.users.find(params[:id])
+    @user = @organization.users.find_by!(id: params[:id])
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'User not found' }, status: :not_found
   end
 
   # Only allow a list of trusted parameters through
@@ -64,7 +92,7 @@ class UsersController < ApplicationController
 
   # Ensure only admins can perform certain actions
   def authorize_admin
-    unless current_user&.admin?
+    unless current_user&.role_admin? || (current_user&.role_teamlead? && @user&.role_agent? || @user&.role_viewer?)
       render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
     end
   end

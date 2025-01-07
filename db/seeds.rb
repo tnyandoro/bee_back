@@ -7,3 +7,43 @@
 #   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
+# db/seeds.rb
+organization = Organization.create!(
+  name: "Example Org",
+  address: "123 Main St",
+  email: "info@example.com",
+  web_address: "https://example.com"
+  # Do not explicitly set `subdomain` if you want it to be generated automatically
+)
+
+User.create!(
+  name: "Admin User",
+  email: "admin@example.com",
+  password: "password",
+  role: :admin,
+  organization: organization
+)
+
+User.create!(
+  name: "Teamlead User",
+  email: "teamlead@example.com",
+  password: "password",
+  role: :teamlead,
+  organization: organization
+)
+
+User.create!(
+  name: "Agent User",
+  email: "agent@example.com",
+  password: "password",
+  role: :agent,
+  organization: organization
+)
+
+User.create!(
+  name: "Viewer User",
+  email: "viewer@example.com",
+  password: "password",
+  role: :viewer,
+  organization: organization
+)
