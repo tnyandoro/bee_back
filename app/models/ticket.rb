@@ -9,6 +9,7 @@ class Ticket < ApplicationRecord
   # Validations
   validates :title, :description, :ticket_type, :status, :priority, :impact, :requester, :organization, :creator, presence: true
   validates :ticket_number, uniqueness: true
+  validates :team_id, :reported_at, :category, :caller_name, :caller_surname, :caller_email, :caller_phone, :customer, :source, presence: true
 
   # Enums
   enum status: { open: "open", pending: "pending", resolved: "resolved", closed: "closed" }

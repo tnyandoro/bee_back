@@ -72,6 +72,16 @@ class TicketsController < ApplicationController
       :title, :description, :ticket_type, :status, :urgency, :priority, :impact,
       :assignee_id, :team_id, :category, :caller_name, :caller_surname, :caller_email,
       :caller_phone, :customer, :source, :reported_at, :requester_id # Allow requester_id to be overridden
-    )
+    ).tap do |ticket_params|
+      # Ensure required fields are present
+      required_fields = [
+        :title, :description, :ticket_type, :status, :urgency, :priority, :impact,
+        :team_id, :category, :caller_name, :caller_surname, :caller_email, :caller_phone,
+        :customer, :source, :reported_at
+      ]
+      required_fields.each do |field|
+        ticket_params.require(field) # Raise ActionController::ParameterMissing if any required field is missing
+      end
+    end
   end
 end
