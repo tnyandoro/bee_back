@@ -1,51 +1,77 @@
 class TicketsController < ApplicationController
-  before_action :set_ticket, only: %i[ show update destroy ]
+  before_action :set_organization
+  before_action :set_creator, only: [:create]
+  before_action :set_ticket, only: %i[show update destroy]
 
-  # GET /tickets
+  # GET /organizations/:organization_id/tickets
   def index
-    @tickets = Ticket.all
-
+    @tickets = @organization.tickets
     render json: @tickets
   end
 
-  # GET /tickets/1
+  # GET /organizations/:organization_id/tickets/:id
   def show
     render json: @ticket
   end
 
-  # POST /tickets
+  # POST /organizations/:organization_id/tickets
   def create
-    @ticket = Ticket.new(ticket_params)
+    @ticket = @organization.tickets.new(ticket_params)
+    @ticket.creator = @creator # Set the creator of the ticket
+    @ticket.requester = @creator # Set the requester to the creator by default (can be overridden in params)
 
     if @ticket.save
-      render json: @ticket, status: :created, location: @ticket
+      render json: @ticket, status: :created, location: organization_ticket_url(@organization, @ticket)
     else
-      render json: @ticket.errors, status: :unprocessable_entity
+      render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
-  # PATCH/PUT /tickets/1
+  # PATCH/PUT /organizations/:organization_id/tickets/:id
   def update
     if @ticket.update(ticket_params)
       render json: @ticket
     else
-      render json: @ticket.errors, status: :unprocessable_entity
+      render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
-  # DELETE /tickets/1
+  # DELETE /organizations/:organization_id/tickets/:id
   def destroy
     @ticket.destroy!
+    head :no_content
   end
 
   private
-    # Use callbacks to share common setup or constraints between actions.
-    def set_ticket
-      @ticket = Ticket.find(params[:id])
-    end
 
-    # Only allow a list of trusted parameters through.
-    def ticket_params
-      params.require(:ticket).permit(:title, :description, :status, :priority, :user_id, :organization_id)
+  # Set the organization based on the organization_id in the URL
+  def set_organization
+    @organization = Organization.find(params[:organization_id])
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Organization not found' }, status: :not_found
+  end
+
+  # Set the creator of the ticket (current user)
+  def set_creator
+    @creator = current_user
+    unless @creator
+      render json: { error: "User not authenticated" }, status: :unauthorized
     end
+  end
+
+  # Set the ticket based on the ticket ID and organization
+  def set_ticket
+    @ticket = @organization.tickets.find(params[:id])
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Ticket not found' }, status: :not_found
+  end
+
+  # Only allow a list of trusted parameters through
+  def ticket_params
+    params.require(:ticket).permit(
+      :title, :description, :ticket_type, :status, :urgency, :priority, :impact,
+      :assignee_id, :team_id, :category, :caller_name, :caller_surname, :caller_email,
+      :caller_phone, :customer, :source, :reported_at, :requester_id # Allow requester_id to be overridden
+    )
+  end
 end

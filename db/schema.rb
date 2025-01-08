@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_01_07_055044) do
+ActiveRecord::Schema[7.1].define(version: 2025_01_08_074110) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -36,13 +36,29 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_07_055044) do
   create_table "tickets", force: :cascade do |t|
     t.string "title"
     t.text "description"
-    t.integer "status"
     t.integer "priority"
-    t.bigint "user_id", null: false
     t.bigint "organization_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "ticket_number", null: false
+    t.string "ticket_type", null: false
+    t.string "urgency"
+    t.string "impact"
+    t.bigint "assignee_id"
+    t.bigint "team_id"
+    t.bigint "requester_id"
+    t.datetime "reported_at"
+    t.string "category"
+    t.string "caller_name"
+    t.string "caller_surname"
+    t.string "caller_email"
+    t.string "caller_phone"
+    t.string "customer"
+    t.string "source"
+    t.bigint "user_id", null: false
+    t.string "status"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
+    t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
     t.index ["user_id"], name: "index_tickets_on_user_id"
   end
 
@@ -63,5 +79,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_07_055044) do
   add_foreign_key "problems", "tickets"
   add_foreign_key "tickets", "organizations"
   add_foreign_key "tickets", "users"
+  add_foreign_key "tickets", "users", column: "assignee_id"
+  add_foreign_key "tickets", "users", column: "requester_id"
   add_foreign_key "users", "organizations"
 end

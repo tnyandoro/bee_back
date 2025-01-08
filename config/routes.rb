@@ -7,6 +7,7 @@ Rails.application.routes.draw do
   resources :users
   resources :organizations do
     resources :users, only: [:index, :create, :update, :destroy]
+    resources :tickets, only: %i[index show create update destroy]
   end
   
 

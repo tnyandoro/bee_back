@@ -4,8 +4,8 @@ class User < ApplicationRecord
 
   has_many :tickets, dependent: :destroy
 
-  # Enum for roles with a prefix to avoid method conflicts
-  enum role: { admin: 'admin', teamlead: 'teamlead', agent: 'agent', viewer: 'viewer' }, _prefix: :role
+  # Enum for roles using integers
+  enum role: { admin: 0, teamlead: 1, agent: 2, viewer: 3 }, _prefix: :role
 
   # Validations
   validates :email, presence: true, uniqueness: true
@@ -23,6 +23,6 @@ class User < ApplicationRecord
 
   # Default role assignment
   def set_default_role
-    self.role ||= 'viewer'
+    self.role ||= :viewer
   end
 end
