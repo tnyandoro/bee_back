@@ -1,15 +1,16 @@
 class Ticket < ApplicationRecord
   # Associations
+  belongs_to :organization
+  belongs_to :team, optional: true
   belongs_to :creator, class_name: "User", foreign_key: "user_id" # The user who created the ticket
   belongs_to :assignee, class_name: "User", optional: true # The user assigned to the ticket
-  belongs_to :team, optional: true
   belongs_to :requester, class_name: "User" # The user who requested the ticket
-  belongs_to :organization
+
 
   # Validations
   validates :title, :description, :ticket_type, :status, :priority, :impact, :requester, :organization, :creator, presence: true
   validates :ticket_number, uniqueness: true
-  validates :team_id, :reported_at, :category, :caller_name, :caller_surname, :caller_email, :caller_phone, :customer, :source, presence: true
+  validates :reported_at, :category, :caller_name, :caller_surname, :caller_email, :caller_phone, :customer, :source, presence: true
 
   # Enums
   enum status: { open: "open", pending: "pending", resolved: "resolved", closed: "closed" }

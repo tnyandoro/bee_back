@@ -7,6 +7,7 @@
 puts "Clearing existing data..."
 Ticket.destroy_all
 User.destroy_all
+Team.destroy_all
 Organization.destroy_all
 
 # Create an organization
@@ -18,6 +19,11 @@ organization = Organization.create!(
   web_address: "https://example.com",
   subdomain: "example"
 )
+
+# Create teams
+puts "Creating teams..."
+it_team = Team.create!(name: "IT Team", organization: organization)
+support_team = Team.create!(name: "Support Team", organization: organization)
 
 # Create users
 puts "Creating users..."
@@ -31,6 +37,16 @@ admin_user = User.create!(
   organization: organization
 )
 
+super_user = User.create!(
+  name: "Super User",
+  email: "super@example.com",
+  password: "password",
+  role: :super_user,
+  department: "Management",
+  position: "Super User",
+  organization: organization
+)
+
 teamlead_user = User.create!(
   name: "Teamlead User",
   email: "teamlead@example.com",
@@ -38,7 +54,8 @@ teamlead_user = User.create!(
   role: :teamlead,
   department: "IT",
   position: "Team Lead",
-  organization: organization
+  organization: organization,
+  team: it_team
 )
 
 agent_user = User.create!(
@@ -48,7 +65,8 @@ agent_user = User.create!(
   role: :agent,
   department: "Support",
   position: "Support Agent",
-  organization: organization
+  organization: organization,
+  team: support_team
 )
 
 viewer_user = User.create!(
@@ -66,15 +84,24 @@ puts "Creating tickets..."
 Ticket.create!(
   title: "Printer Not Working",
   description: "The printer in the HR department is not printing.",
-  ticket_type: "incident", # Use string values for ticket_type
-  status: "open",          # Use string values for status
-  priority: 2,             # Use integer value for enum priority (:high => 2)
-  urgency: "Medium",       # Use string values for enum urgency
-  impact: "High",          # Use string values for enum impact
+  ticket_type: "incident",
+  status: "open",
+  priority: 2,
+  urgency: "Medium",
+  impact: "High",
   creator: admin_user,
   organization: organization,
   requester: teamlead_user,
-  assignee: agent_user
+  assignee: agent_user,
+  team: it_team,
+  reported_at: Time.current,
+  category: "Hardware",
+  caller_name: "John",
+  caller_surname: "Doe",
+  caller_email: "john.doe@example.com",
+  caller_phone: "123-456-7890",
+  customer: "HR Department",
+  source: "Phone"
 )
 
 Ticket.create!(
@@ -82,13 +109,22 @@ Ticket.create!(
   description: "Unable to access email account.",
   ticket_type: "service_request",
   status: "pending",
-  priority: 3,             # Use integer value for enum priority (:medium => 3)
-  urgency: "Low",          # Use string values for enum urgency
-  impact: "Medium",        # Use string values for enum impact
+  priority: 3,
+  urgency: "Low",
+  impact: "Medium",
   creator: teamlead_user,
   organization: organization,
   requester: agent_user,
-  assignee: admin_user
+  assignee: admin_user,
+  team: support_team,
+  reported_at: Time.current,
+  category: "Software",
+  caller_name: "Jane",
+  caller_surname: "Smith",
+  caller_email: "jane.smith@example.com",
+  caller_phone: "987-654-3210",
+  customer: "IT Department",
+  source: "Email"
 )
 
 puts "Seeding completed successfully!"

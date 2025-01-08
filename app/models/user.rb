@@ -1,8 +1,15 @@
 class User < ApplicationRecord
-  belongs_to :organization
   has_secure_password
+  belongs_to :organization
+  belongs_to :creator, class_name: "User", foreign_key: "user_id"
+  belongs_to :assignee, class_name: "User", optional: true
+  belongs_to :team, optional: true # Tickets can be assigned to a team (optional)
+  belongs_to :requester, class_name: "User"
 
   has_many :tickets, dependent: :destroy
+  has_many :assigned_tickets, class_name: "Ticket", foreign_key: "assignee_id"
+  has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id"
+  has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
 
   # Enum for roles using integers
   enum role: { admin: 0, teamlead: 1, agent: 2, viewer: 3 }, _prefix: :role
@@ -18,6 +25,14 @@ class User < ApplicationRecord
 
   # Callbacks
   before_validation :set_default_role, on: :create
+
+  def can_create_teams?
+    admin? || super_user?
+  end
+
+  def teamlead?
+    role == "teamlead"
+  end
 
   private
 
