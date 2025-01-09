@@ -1,18 +1,15 @@
 class User < ApplicationRecord
   has_secure_password
   belongs_to :organization
-  belongs_to :creator, class_name: "User", foreign_key: "user_id"
-  belongs_to :assignee, class_name: "User", optional: true
-  belongs_to :team, optional: true # Tickets can be assigned to a team (optional)
-  belongs_to :requester, class_name: "User"
+  belongs_to :team, optional: true
 
   has_many :tickets, dependent: :destroy
   has_many :assigned_tickets, class_name: "Ticket", foreign_key: "assignee_id"
   has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id"
   has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
 
-  # Enum for roles using integers
-  enum role: { admin: 0, teamlead: 1, agent: 2, viewer: 3 }, _prefix: :role
+  # Add super_user to the enum
+  enum role: { admin: 0, super_user: 1, teamlead: 2, agent: 3, viewer: 4 }, _prefix: :role
 
   # Validations
   validates :email, presence: true, uniqueness: true

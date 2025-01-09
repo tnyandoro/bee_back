@@ -1,7 +1,6 @@
 # This file should ensure the existence of records required to run the application in every environment (production,
 # development, test). The code here should be idempotent so that it can be executed at any point in every environment.
 # The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
-#
 
 # Clear existing data
 puts "Clearing existing data..."
@@ -9,6 +8,7 @@ Ticket.destroy_all
 User.destroy_all
 Team.destroy_all
 Organization.destroy_all
+Problem.destroy_all # Clear existing problems
 
 # Create an organization
 puts "Creating organization..."
@@ -37,16 +37,6 @@ admin_user = User.create!(
   organization: organization
 )
 
-super_user = User.create!(
-  name: "Super User",
-  email: "super@example.com",
-  password: "password",
-  role: :super_user,
-  department: "Management",
-  position: "Super User",
-  organization: organization
-)
-
 teamlead_user = User.create!(
   name: "Teamlead User",
   email: "teamlead@example.com",
@@ -55,7 +45,7 @@ teamlead_user = User.create!(
   department: "IT",
   position: "Team Lead",
   organization: organization,
-  team: it_team
+  team: it_team # Assign to IT Team
 )
 
 agent_user = User.create!(
@@ -66,7 +56,7 @@ agent_user = User.create!(
   department: "Support",
   position: "Support Agent",
   organization: organization,
-  team: support_team
+  team: support_team # Assign to Support Team
 )
 
 viewer_user = User.create!(
@@ -81,7 +71,7 @@ viewer_user = User.create!(
 
 # Create tickets
 puts "Creating tickets..."
-Ticket.create!(
+printer_ticket = Ticket.create!(
   title: "Printer Not Working",
   description: "The printer in the HR department is not printing.",
   ticket_type: "incident",
@@ -89,10 +79,10 @@ Ticket.create!(
   priority: 2,
   urgency: "Medium",
   impact: "High",
-  creator: admin_user,
+  creator: admin_user, # Set the creator
   organization: organization,
-  requester: teamlead_user,
-  assignee: agent_user,
+  requester: teamlead_user, # Set the requester
+  assignee: agent_user, # Set the assignee
   team: it_team,
   reported_at: Time.current,
   category: "Hardware",
@@ -104,7 +94,7 @@ Ticket.create!(
   source: "Phone"
 )
 
-Ticket.create!(
+email_ticket = Ticket.create!(
   title: "Email Access Issue",
   description: "Unable to access email account.",
   ticket_type: "service_request",
@@ -112,10 +102,10 @@ Ticket.create!(
   priority: 3,
   urgency: "Low",
   impact: "Medium",
-  creator: teamlead_user,
+  creator: teamlead_user, # Set the creator
   organization: organization,
-  requester: agent_user,
-  assignee: admin_user,
+  requester: agent_user, # Set the requester
+  assignee: admin_user, # Set the assignee
   team: support_team,
   reported_at: Time.current,
   category: "Software",
@@ -126,5 +116,18 @@ Ticket.create!(
   customer: "IT Department",
   source: "Email"
 )
+
+# Escalate the "Printer Not Working" ticket to a problem
+puts "Escalating ticket to a problem..."
+problem = Problem.create!(
+  description: printer_ticket.description,
+  organization: printer_ticket.organization,
+  team: printer_ticket.team,
+  creator: teamlead_user, # Team lead escalates the ticket
+  reported_at: Time.current
+)
+
+# Link the ticket to the problem
+printer_ticket.update!(problem: problem)
 
 puts "Seeding completed successfully!"
