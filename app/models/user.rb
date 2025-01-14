@@ -1,11 +1,15 @@
 class User < ApplicationRecord
-  belongs_to :organization
   has_secure_password
+  belongs_to :organization
+  belongs_to :team, optional: true
 
   has_many :tickets, dependent: :destroy
+  has_many :assigned_tickets, class_name: "Ticket", foreign_key: "assignee_id"
+  has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id"
+  has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
 
-  # Enum for roles with a prefix to avoid method conflicts
-  enum role: { admin: 'admin', teamlead: 'teamlead', agent: 'agent', viewer: 'viewer' }, _prefix: :role
+  # Add super_user to the enum
+  enum role: { admin: 0, super_user: 1, teamlead: 2, agent: 3, viewer: 4 }, _prefix: :role
 
   # Validations
   validates :email, presence: true, uniqueness: true
@@ -19,10 +23,18 @@ class User < ApplicationRecord
   # Callbacks
   before_validation :set_default_role, on: :create
 
+  def can_create_teams?
+    admin? || super_user?
+  end
+
+  def teamlead?
+    role == "teamlead"
+  end
+
   private
 
   # Default role assignment
   def set_default_role
-    self.role ||= 'viewer'
+    self.role ||= :viewer
   end
 end
