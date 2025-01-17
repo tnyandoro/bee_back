@@ -1,4 +1,5 @@
-# app/controllers/users_controller.rb
+# frozen_string_literal: true
+
 class UsersController < ApplicationController
   before_action :set_organization
   before_action :set_user, only: %i[show update destroy]
@@ -33,6 +34,12 @@ class UsersController < ApplicationController
   def create
     @user = @organization.users.new(user_params)
 
+    # Prevent non-admins from creating users
+    unless current_user.role_admin?
+      render json: { error: 'You are not authorized to create users' }, status: :forbidden
+      return
+    end
+
     # Prevent non-admins from creating admins
     if user_params[:role] == 'admin' && !current_user.role_admin?
       render json: { error: 'You are not authorized to create an admin user' }, status: :forbidden
@@ -48,6 +55,12 @@ class UsersController < ApplicationController
 
   # PATCH/PUT /users/1
   def update
+    # Prevent non-admins from updating users
+    unless current_user.role_admin?
+      render json: { error: 'You are not authorized to update users' }, status: :forbidden
+      return
+    end
+
     # Prevent non-admins from updating users to admin
     if user_params[:role] == 'admin' && !current_user.role_admin?
       render json: { error: 'You are not authorized to update this user to admin' }, status: :forbidden
@@ -63,6 +76,12 @@ class UsersController < ApplicationController
 
   # DELETE /users/1
   def destroy
+    # Prevent non-admins from deleting users
+    unless current_user.role_admin?
+      render json: { error: 'You are not authorized to delete users' }, status: :forbidden
+      return
+    end
+
     @user.destroy!
     head :no_content
   end
@@ -92,7 +111,7 @@ class UsersController < ApplicationController
 
   # Ensure only admins can perform certain actions
   def authorize_admin
-    unless current_user&.role_admin? || (current_user&.role_teamlead? && @user&.role_agent? || @user&.role_viewer?)
+    unless current_user&.role_admin?
       render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
     end
   end

@@ -9,8 +9,8 @@ class Organization < ApplicationRecord
 
   # Associations
   has_many :users, dependent: :destroy
-  has_many :tickets, through: :users
-  has_many :problems, through: :tickets
+  has_many :tickets, dependent: :destroy # Direct association with tickets
+  has_many :problems, through: :tickets # Indirect association with problems through tickets
 
   # Custom Methods
   def total_tickets

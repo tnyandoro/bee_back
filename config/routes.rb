@@ -1,14 +1,18 @@
-require_relative '../app/constraints/subdomain_constraint'
-
 Rails.application.routes.draw do
   # General resources
   resources :problems
   resources :tickets
-  resources :users
-  resources :organizations do
-    resources :users, only: [:index, :create, :update, :destroy]
+  resources :users do
+    resources :tickets, only: [:index] # Nested tickets under users
   end
-  
+  resources :organizations do
+    resources :users, only: [:index, :create, :update, :destroy] do
+      resources :tickets, only: [:index] # Nested tickets under organization and user
+      resources :problems, only: [:index] # Nested problems under organization and user
+    end
+    resources :tickets, only: [:index] # Tickets scoped to the organization
+    resources :problems, only: [:index] # Problems scoped to the organization
+  end
 
   # Subdomain-specific routes
   constraints SubdomainConstraint do
@@ -20,15 +24,22 @@ Rails.application.routes.draw do
     end
   end
 
-  get 'api/v1/login', to: 'api/v1/sessions#create' # Explicit route for login
-  get 'api/v1/logout', to: 'api/v1/sessions#destroy' # Explicit route for logout
+  # Explicit session routes
+  get 'api/v1/login', to: 'api/v1/sessions#create'
+  get 'api/v1/logout', to: 'api/v1/sessions#destroy'
 
   # API V1 Routes
   namespace :api do
     namespace :v1 do
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
-      resources :organizations, only: [:index, :show]
+      resources :organizations, only: [:index, :show] do
+        resources :users, only: [:index, :show] do
+          resources :tickets, only: [:index] # Scoped tickets under API namespace
+        end
+        resources :tickets, only: [:index] # Organization-level tickets
+        resources :problems, only: [:index] # Organization-level problems
+      end
       resource :dashboard, only: [:show]
     end
   end

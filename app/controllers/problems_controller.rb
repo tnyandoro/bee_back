@@ -1,9 +1,13 @@
 class ProblemsController < ApplicationController
-  before_action :set_problem, only: %i[ show update destroy ]
+  before_action :set_problem, only: %i[show update destroy]
 
-  # GET /problems
   def index
-    @problems = Problem.all
+    if params[:organization_id]
+      @organization = Organization.find(params[:organization_id])
+      @problems = @organization.problems
+    else
+      @problems = Problem.all
+    end
 
     render json: @problems
   end
@@ -39,13 +43,14 @@ class ProblemsController < ApplicationController
   end
 
   private
-    # Use callbacks to share common setup or constraints between actions.
-    def set_problem
-      @problem = Problem.find(params[:id])
-    end
 
-    # Only allow a list of trusted parameters through.
-    def problem_params
-      params.require(:problem).permit(:description, :ticket_id)
-    end
+  # Use callbacks to share common setup or constraints between actions.
+  def set_problem
+    @problem = Problem.find(params[:id])
+  end
+
+  # Only allow a list of trusted parameters through.
+  def problem_params
+    params.require(:problem).permit(:description, :ticket_id, :organization_id)
+  end
 end

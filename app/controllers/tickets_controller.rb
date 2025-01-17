@@ -1,11 +1,29 @@
 class TicketsController < ApplicationController
-  before_action :set_ticket, only: %i[ show update destroy ]
+  before_action :set_ticket, only: %i[show update destroy]
 
   # GET /tickets
   def index
-    @tickets = Ticket.all
+    valid_statuses = %w[open assigned escalated closed suspended resolved]
 
-    render json: @tickets
+    # Validate the status query parameter
+    if params[:status].present? && !valid_statuses.include?(params[:status])
+      return render json: { error: 'Invalid status. Allowed values are: open, assigned, escalated, closed, suspended, resolved.' }, status: :unprocessable_entity
+    end
+
+    # Fetch tickets for a specific organization
+    if params[:organization_id].present?
+      @tickets = Ticket.where(organization_id: params[:organization_id])
+
+      # Filter tickets by user if user_id is provided
+      @tickets = @tickets.where(user_id: params[:user_id]) if params[:user_id].present?
+
+      # Filter tickets by status if provided
+      @tickets = @tickets.where(status: params[:status]) if params[:status].present?
+
+      render json: @tickets
+    else
+      render json: { error: 'organization_id is required.' }, status: :unprocessable_entity
+    end
   end
 
   # GET /tickets/1
@@ -36,16 +54,18 @@ class TicketsController < ApplicationController
   # DELETE /tickets/1
   def destroy
     @ticket.destroy!
+    head :no_content
   end
 
   private
-    # Use callbacks to share common setup or constraints between actions.
-    def set_ticket
-      @ticket = Ticket.find(params[:id])
-    end
 
-    # Only allow a list of trusted parameters through.
-    def ticket_params
-      params.require(:ticket).permit(:title, :description, :status, :priority, :user_id, :organization_id)
-    end
+  # Use callbacks to share common setup or constraints between actions.
+  def set_ticket
+    @ticket = Ticket.find(params[:id])
+  end
+
+  # Only allow a list of trusted parameters through.
+  def ticket_params
+    params.require(:ticket).permit(:title, :description, :status, :priority, :user_id, :organization_id)
+  end
 end
