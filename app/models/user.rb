@@ -1,6 +1,9 @@
 class User < ApplicationRecord
   has_secure_password
+  belongs_to :organization
+  belongs_to :team, optional: true
 
+<<<<<<< HEAD
   # Associations
   belongs_to :organization
   belongs_to :team, optional: true
@@ -11,6 +14,14 @@ class User < ApplicationRecord
   has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
 
   # Roles
+=======
+  has_many :tickets, dependent: :destroy
+  has_many :assigned_tickets, class_name: "Ticket", foreign_key: "assignee_id"
+  has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id"
+  has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
+
+  # Add super_user to the enum
+>>>>>>> origin/main
   enum role: { admin: 0, super_user: 1, teamlead: 2, agent: 3, viewer: 4 }, _prefix: :role
 
   # Validations
@@ -47,6 +58,8 @@ class User < ApplicationRecord
 
   def super_user?
     role == "super_user"
+  def can_create_teams?
+    admin? || super_user?
   end
 
   def teamlead?

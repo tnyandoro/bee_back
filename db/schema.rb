@@ -81,6 +81,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_17_130315) do
     t.bigint "user_id", null: false
     t.integer "status", default: 0, null: false
     t.bigint "creator_id"
+    t.string "status"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
     t.index ["user_id"], name: "index_tickets_on_user_id"
