@@ -5,31 +5,61 @@ class TicketsController < ApplicationController
   before_action :set_ticket, only: %i[show update destroy assign_to_user escalate_to_problem]
 
   # GET /organizations/:organization_id/tickets
+
   def index
     valid_statuses = %w[open assigned escalated closed suspended resolved]
-
+  
     # Validate the status query parameter
     if params[:status].present? && !valid_statuses.include?(params[:status])
       return render json: { error: 'Invalid status. Allowed values are: open, assigned, escalated, closed, suspended, resolved.' }, status: :unprocessable_entity
     end
-
+  
     # Fetch tickets for a specific organization
     if params[:organization_id].present?
       @tickets = Ticket.where(organization_id: params[:organization_id])
-
+  
       # Filter tickets by user if user_id is provided
       @tickets = @tickets.where(user_id: params[:user_id]) if params[:user_id].present?
-
+  
       # Filter tickets by status if provided
       @tickets = @tickets.where(status: params[:status]) if params[:status].present?
-
+  
       render json: @tickets
     else
       render json: { error: 'organization_id is required.' }, status: :unprocessable_entity
     end
-    @tickets = @organization.tickets
-    render json: @tickets
   end
+  
+  # def index
+  #   if some_condition
+  #     render json: { error: 'Some error' }, status: :bad_request
+  #     return
+  #   end
+
+  #   valid_statuses = %w[open assigned escalated closed suspended resolved]
+
+  #   # Validate the status query parameter
+  #   if params[:status].present? && !valid_statuses.include?(params[:status])
+  #     return render json: { error: 'Invalid status. Allowed values are: open, assigned, escalated, closed, suspended, resolved.' }, status: :unprocessable_entity
+  #   end
+
+  #   # Fetch tickets for a specific organization
+  #   if params[:organization_id].present?
+  #     @tickets = Ticket.where(organization_id: params[:organization_id])
+
+  #     # Filter tickets by user if user_id is provided
+  #     @tickets = @tickets.where(user_id: params[:user_id]) if params[:user_id].present?
+
+  #     # Filter tickets by status if provided
+  #     @tickets = @tickets.where(status: params[:status]) if params[:status].present?
+
+  #     render json: @tickets
+  #   else
+  #     render json: { error: 'organization_id is required.' }, status: :unprocessable_entity
+  #   end
+  #   @tickets = @organization.tickets
+  #   render json: @tickets
+  # end
 
   # GET /organizations/:organization_id/tickets/:id
   def show
@@ -148,9 +178,6 @@ class TicketsController < ApplicationController
     @ticket = Ticket.find(params[:id])
   end
 
-  # Only allow a list of trusted parameters through.
-  def ticket_params
-    params.require(:ticket).permit(:title, :description, :status, :priority, :user_id, :organization_id)
   # Set the organization based on the organization_id in the URL
   def set_organization
     @organization = Organization.find(params[:organization_id])
@@ -164,13 +191,6 @@ class TicketsController < ApplicationController
     unless @creator
       render json: { error: "User not authenticated" }, status: :unauthorized
     end
-  end
-
-  # Set the ticket based on the ticket ID and organization
-  def set_ticket
-    @ticket = @organization.tickets.find(params[:id])
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: 'Ticket not found' }, status: :not_found
   end
 
   # Only allow a list of trusted parameters through

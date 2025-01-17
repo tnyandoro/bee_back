@@ -18,7 +18,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_17_130315) do
     t.bigint "user_id", null: false
     t.bigint "organization_id", null: false
     t.string "message"
-    t.boolean "read"
+    t.boolean "read", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["organization_id"], name: "index_notifications_on_organization_id"
@@ -38,12 +38,11 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_17_130315) do
 
   create_table "problems", force: :cascade do |t|
     t.text "description"
-    t.bigint "ticket_id", null: false
+    t.bigint "ticket_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "user_id"
     t.bigint "organization_id", null: false
-    t.bigint "user_id", null: false
-    t.index ["organization_id"], name: "index_problems_on_organization_id"
     t.index ["ticket_id"], name: "index_problems_on_ticket_id"
     t.index ["user_id"], name: "index_problems_on_user_id"
   end
@@ -68,19 +67,18 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_17_130315) do
     t.string "urgency"
     t.string "impact"
     t.bigint "assignee_id"
-    t.bigint "team_id"
+    t.bigint "team_id", null: false
     t.bigint "requester_id"
-    t.datetime "reported_at"
-    t.string "category"
-    t.string "caller_name"
-    t.string "caller_surname"
-    t.string "caller_email"
-    t.string "caller_phone"
-    t.string "customer"
-    t.string "source"
-    t.bigint "user_id", null: false
-    t.integer "status", default: 0, null: false
+    t.datetime "reported_at", null: false
+    t.string "category", null: false
+    t.string "caller_name", null: false
+    t.string "caller_surname", null: false
+    t.string "caller_email", null: false
+    t.string "caller_phone", null: false
+    t.string "customer", null: false
+    t.string "source", null: false
     t.bigint "creator_id"
+    t.bigint "user_id", null: false
     t.string "status"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
@@ -104,13 +102,14 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_17_130315) do
 
   add_foreign_key "notifications", "organizations"
   add_foreign_key "notifications", "users"
-  add_foreign_key "problems", "organizations"
   add_foreign_key "problems", "tickets"
   add_foreign_key "problems", "users"
   add_foreign_key "teams", "organizations"
   add_foreign_key "tickets", "organizations"
+  add_foreign_key "tickets", "teams"
   add_foreign_key "tickets", "users"
   add_foreign_key "tickets", "users", column: "assignee_id"
   add_foreign_key "tickets", "users", column: "requester_id"
   add_foreign_key "users", "organizations"
+  add_foreign_key "users", "teams"
 end
