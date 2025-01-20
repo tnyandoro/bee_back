@@ -29,37 +29,6 @@ class TicketsController < ApplicationController
       render json: { error: 'organization_id is required.' }, status: :unprocessable_entity
     end
   end
-  
-  # def index
-  #   if some_condition
-  #     render json: { error: 'Some error' }, status: :bad_request
-  #     return
-  #   end
-
-  #   valid_statuses = %w[open assigned escalated closed suspended resolved]
-
-  #   # Validate the status query parameter
-  #   if params[:status].present? && !valid_statuses.include?(params[:status])
-  #     return render json: { error: 'Invalid status. Allowed values are: open, assigned, escalated, closed, suspended, resolved.' }, status: :unprocessable_entity
-  #   end
-
-  #   # Fetch tickets for a specific organization
-  #   if params[:organization_id].present?
-  #     @tickets = Ticket.where(organization_id: params[:organization_id])
-
-  #     # Filter tickets by user if user_id is provided
-  #     @tickets = @tickets.where(user_id: params[:user_id]) if params[:user_id].present?
-
-  #     # Filter tickets by status if provided
-  #     @tickets = @tickets.where(status: params[:status]) if params[:status].present?
-
-  #     render json: @tickets
-  #   else
-  #     render json: { error: 'organization_id is required.' }, status: :unprocessable_entity
-  #   end
-  #   @tickets = @organization.tickets
-  #   render json: @tickets
-  # end
 
   # GET /organizations/:organization_id/tickets/:id
   def show
@@ -122,6 +91,28 @@ class TicketsController < ApplicationController
   end
 
   # POST /organizations/:organization_id/tickets/:id/assign_to_user
+  # def assign_to_user
+  #   # Ensure the current user is a team lead for the ticket's team
+  #   unless current_user.teamlead? && current_user.team == @ticket.team
+  #     return render json: { error: "You are not authorized to assign this ticket" }, status: :unauthorized
+  #   end
+
+  #   # Find the user within the team
+  #   assignee = @ticket.team.users.find_by(id: params[:user_id])
+  #   unless assignee
+  #     return render json: { error: "User not found in the team" }, status: :unprocessable_entity
+  #   end
+
+  #   # Assign the ticket to the user
+  #   if @ticket.update(assignee: assignee)
+  #     render json: @ticket
+  #   else
+  #     render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
+  #   end
+  # end
+
+ 
+    # app/controllers/tickets_controller.rb
   def assign_to_user
     # Ensure the current user is a team lead for the ticket's team
     unless current_user.teamlead? && current_user.team == @ticket.team
@@ -136,12 +127,24 @@ class TicketsController < ApplicationController
 
     # Assign the ticket to the user
     if @ticket.update(assignee: assignee)
-      render json: @ticket
+      # Enqueue the job to send emails
+      SendTicketAssignmentEmailsJob.perform_later(@ticket, @ticket.team, assignee)
+
+      # Create a system notification for the assigned user, scoped to the organization
+      Notification.create!(
+        user: assignee,
+        organization: @ticket.organization, # Associate with the organization
+        message: "You have been assigned a new ticket: #{@ticket.title}",
+        read: false,
+        metadata: { ticket_id: @ticket.id } # Optional: Include additional metadata
+      )
+
+      render json: @ticket, status: :ok
     else
       render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
     end
   end
-
+  
   # POST /organizations/:organization_id/tickets/:id/escalate_to_problem
   def escalate_to_problem
     # Ensure the current user is a team lead

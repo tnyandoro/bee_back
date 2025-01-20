@@ -12,6 +12,10 @@ Rails.application.routes.draw do
     end
     resources :tickets, only: [:index] # Tickets scoped to the organization
     resources :problems, only: [:index] # Problems scoped to the organization
+    resources :notifications, only: [:index] do
+      member do
+        patch :mark_as_read
+      end
   end
 
   # Subdomain-specific routes
