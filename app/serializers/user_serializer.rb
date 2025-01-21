@@ -5,5 +5,5 @@ class UserSerializer
     attributes :id, :name, :email, :role, :department, :position, :created_at, :updated_at
   
     belongs_to :organization, serializer: OrganizationSerializer
-    belongs_to :team
+    belongs_to :team, serializer: TeamSerializer
   end
