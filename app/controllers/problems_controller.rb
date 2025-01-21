@@ -1,10 +1,14 @@
+# frozen_string_literal: true
 class ProblemsController < ApplicationController
   before_action :set_problem, only: %i[show update destroy]
 
   def index
     if params[:organization_id]
       @organization = Organization.find(params[:organization_id])
-      @problems = @organization.problems
+      @problems = Problem.joins(:ticket).where(tickets: { organization_id: @organization.id })
+    elsif params[:user_id]
+      @user = User.find(params[:user_id])
+      @problems = @user.problems
     else
       @problems = Problem.all
     end
@@ -51,6 +55,6 @@ class ProblemsController < ApplicationController
 
   # Only allow a list of trusted parameters through.
   def problem_params
-    params.require(:problem).permit(:description, :ticket_id, :organization_id)
+    params.require(:problem).permit(:description, :ticket_id, :organization_id, :team_id, :creator_id, :user_id)
   end
 end

@@ -16,6 +16,7 @@ Rails.application.routes.draw do
       member do
         patch :mark_as_read
       end
+    end
   end
 
   # Subdomain-specific routes

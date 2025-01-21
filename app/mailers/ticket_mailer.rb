@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 class TicketMailer < ApplicationMailer
-    default from: 'notifications@example.com'
+    default from: 'notifications@gssitsm.com'
   
     def ticket_assigned_to_team(ticket, team)
       @ticket = ticket

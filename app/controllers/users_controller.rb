@@ -12,7 +12,12 @@ class UsersController < ApplicationController
       return
     end
 
-    @users = @organization.users.filter_by_role(params[:role])
+    @users = @organization.users
+    @users = @users.filter_by_role(params[:role]) if params[:role]
+    @users = @users.filter_by_department(params[:department]) if params[:department]
+    @users = @users.filter_by_position(params[:position]) if params[:position]
+    @users = @users.filter_by_team(params[:team_id]) if params[:team_id]
+
     @users = @users.paginate(page: params[:page], per_page: 10) # Paginate with 10 items per page
 
     render json: {
@@ -95,6 +100,8 @@ class UsersController < ApplicationController
     else
       @organization = Organization.find_by!(subdomain: request.subdomain)
     end
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: 'Organization not found' }, status: :not_found
   end
 
   # Use callbacks to share common setup or constraints between actions
@@ -106,7 +113,7 @@ class UsersController < ApplicationController
 
   # Only allow a list of trusted parameters through
   def user_params
-    params.require(:user).permit(:name, :email, :password, :role, :department, :position)
+    params.require(:user).permit(:name, :email, :password, :password_confirmation, :role, :department, :position, :team_id)
   end
 
   # Ensure only admins can perform certain actions
@@ -114,5 +121,10 @@ class UsersController < ApplicationController
     unless current_user&.role_admin?
       render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
     end
+  end
+
+  # Get the current logged-in user
+  def current_user
+    @current_user ||= User.find_by(id: session[:user_id])
   end
 end
