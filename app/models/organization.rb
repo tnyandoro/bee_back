@@ -3,6 +3,12 @@ class Organization < ApplicationRecord
   validates :name, :email, presence: true
   validates :subdomain, presence: true, uniqueness: true
 
+  # Ensure subdomain format
+  validate :subdomain_format, on: :create
+
+  # Ensure at least one admin user exists before saving the organization
+  validate :must_have_admin_user, on: :create
+
   # Callbacks
   before_validation :generate_subdomain, on: :create
   before_validation :normalize_subdomain
@@ -50,5 +56,12 @@ class Organization < ApplicationRecord
     unless subdomain.match?(/\A[a-z0-9-]+\z/)
       errors.add(:subdomain, "can only contain lowercase letters, numbers, and hyphens")
     end
+  end
+
+  # Ensure at least one admin user exists before saving the organization
+  def must_have_admin_user
+    return unless users.empty? || users.none? { |user| user.admin? }
+
+    errors.add(:base, "An organization must have at least one admin user")
   end
 end

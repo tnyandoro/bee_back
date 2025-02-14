@@ -10,7 +10,7 @@ module Api
         render json: @organizations
       end
 
-      # GET /api/v1/organizations/1
+      # GET /api/v1/organizations/:subdomain
       def show
         render json: @organization
       end
@@ -18,15 +18,14 @@ module Api
       # POST /api/v1/organizations
       def create
         @organization = Organization.new(organization_params)
-
         if @organization.save
-          render json: @organization, status: :created, location: api_v1_organization_url(@organization)
+          render json: @organization, status: :created, location: api_v1_organization_url(@organization.subdomain)
         else
           render json: @organization.errors, status: :unprocessable_entity
         end
       end
 
-      # PATCH/PUT /api/v1/organizations/1
+      # PATCH/PUT /api/v1/organizations/:subdomain
       def update
         if @organization.update(organization_params)
           render json: @organization
@@ -35,13 +34,13 @@ module Api
         end
       end
 
-      # DELETE /api/v1/organizations/1
+      # DELETE /api/v1/organizations/:subdomain
       def destroy
         @organization.destroy!
         head :no_content
       end
 
-      # GET /api/v1/organizations/:id/users
+      # GET /api/v1/organizations/:subdomain/users
       def users
         @users = @organization.users
         render json: @users
@@ -51,7 +50,7 @@ module Api
 
       # Use callbacks to share common setup or constraints between actions.
       def set_organization
-        @organization = Organization.find(params[:id])
+        @organization = Organization.find_by!(subdomain: params[:subdomain])
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Organization not found' }, status: :not_found
       end

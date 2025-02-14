@@ -9,15 +9,24 @@ Rails.application.routes.draw do
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
 
-      # Resources
-      resources :organizations, only: %i[index show create update destroy] do
+      # Organizations Resource with Subdomain-Based Routing
+      resources :organizations, only: [:index], param: :subdomain do
+        # Show, Update, and Destroy actions use custom routes with subdomain
+        get ':subdomain', on: :collection, to: 'organizations#show', as: :organization_show
+        patch ':subdomain', on: :collection, to: 'organizations#update', as: :organization_update
+        put ':subdomain', on: :collection, to: 'organizations#update', as: :organization_put_update
+        delete ':subdomain', on: :collection, to: 'organizations#destroy', as: :organization_destroy
+
+        # Nested Resources
         resources :users, only: %i[index show create update destroy] do
           resources :tickets, only: [:index]
           resources :problems, only: [:index]
         end
+
         resources :teams, only: %i[index show create update destroy]
         resources :tickets, only: %i[index show create update destroy]
         resources :problems, only: %i[index show create update destroy]
+
         resources :notifications, only: [:index] do
           member do
             patch :mark_as_read
@@ -25,6 +34,7 @@ Rails.application.routes.draw do
         end
       end
 
+      # Global Problems and Tickets Resources
       resources :problems, only: %i[index show create update destroy]
       resources :tickets, only: %i[index show create update destroy] do
         member do
@@ -32,6 +42,8 @@ Rails.application.routes.draw do
           post :escalate_to_problem
         end
       end
+
+      # Users Resource
       resources :users, only: %i[index show create update destroy] do
         resources :tickets, only: [:index]
       end
