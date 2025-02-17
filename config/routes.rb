@@ -10,12 +10,11 @@ Rails.application.routes.draw do
       delete '/logout', to: 'sessions#destroy'
 
       # Organizations Resource with Subdomain-Based Routing
-      resources :organizations, only: [:index], param: :subdomain do
-        # Show, Update, and Destroy actions use custom routes with subdomain
-        get ':subdomain', on: :collection, to: 'organizations#show', as: :organization_show
-        patch ':subdomain', on: :collection, to: 'organizations#update', as: :organization_update
-        put ':subdomain', on: :collection, to: 'organizations#update', as: :organization_put_update
-        delete ':subdomain', on: :collection, to: 'organizations#destroy', as: :organization_destroy
+      resources :organizations, param: :subdomain, only: [:index] do
+        get '/', to: 'organizations#show', as: :show
+        patch '/', to: 'organizations#update', as: :update
+        put '/', to: 'organizations#update', as: :put_update
+        delete '/', to: 'organizations#destroy', as: :destroy
 
         # Nested Resources
         resources :users, only: %i[index show create update destroy] do
