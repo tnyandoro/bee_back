@@ -2,8 +2,8 @@ default: &default
   adapter: postgresql
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  username: tendai
-  password: Mybreak28#
+  username: <%= ENV.fetch("ITSM_API_DATABASE_USERNAME") { 'postgres' } %>
+  password: <%= ENV.fetch("ITSM_API_DATABASE_PASSWORD") { 'postgres' } %>
   host: localhost
   port: 5432
 
@@ -18,5 +18,5 @@ test:
 production:
   <<: *default
   database: itsm_api_production
-  username: itsm_api
-  password: <%= ENV["ITSM_API_DATABASE_PASSWORD"] %>
+  username: <%= ENV.fetch("ITSM_API_DATABASE_USERNAME") { 'itsm_api' } %>
+  password: <%= ENV.fetch("ITSM_API_DATABASE_PASSWORD") %>
