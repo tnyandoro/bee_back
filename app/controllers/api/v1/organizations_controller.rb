@@ -26,7 +26,7 @@ module Api
               raise ActiveRecord::Rollback
             end
           else
-            render json: @organization.errors, status: :unprocessable_entity
+            render json: { errors: @organization.errors.full_messages }, status: :unprocessable_entity
           end
         end
       rescue => e
@@ -38,14 +38,17 @@ module Api
         if @organization.update(organization_params)
           render json: @organization
         else
-          render json: @organization.errors, status: :unprocessable_entity
+          render json: { errors: @organization.errors.full_messages }, status: :unprocessable_entity
         end
       end
 
       # DELETE /api/v1/organizations/:subdomain
       def destroy
-        @organization.destroy!
-        head :no_content
+        if @organization.destroy
+          head :no_content
+        else
+          render json: { error: "Failed to delete organization" }, status: :unprocessable_entity
+        end
       end
 
       # GET /api/v1/organizations/:subdomain/users
