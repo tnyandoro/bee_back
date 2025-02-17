@@ -11,11 +11,6 @@ Rails.application.routes.draw do
 
       # Organizations Resource with Subdomain-Based Routing
       resources :organizations, param: :subdomain, only: [:index] do
-        get '/', to: 'organizations#show', as: :show
-        patch '/', to: 'organizations#update', as: :update
-        put '/', to: 'organizations#update', as: :put_update
-        delete '/', to: 'organizations#destroy', as: :destroy
-
         # Nested Resources
         resources :users, only: %i[index show create update destroy] do
           resources :tickets, only: [:index]
@@ -32,6 +27,13 @@ Rails.application.routes.draw do
           end
         end
       end
+
+      # Custom routes for organizations based on subdomain
+      get '/organizations/:subdomain', to: 'organizations#show', as: :organization
+      patch '/organizations/:subdomain', to: 'organizations#update'
+      put '/organizations/:subdomain', to: 'organizations#update'
+      delete '/organizations/:subdomain', to: 'organizations#destroy'
+      get '/organizations/:subdomain/users', to: 'organizations#users', as: :organization_users
 
       # Global Problems and Tickets Resources
       resources :problems, only: %i[index show create update destroy]
@@ -52,7 +54,4 @@ Rails.application.routes.draw do
       post '/organizations/:subdomain/register_admin', to: 'registrations#register_admin', as: :register_admin
     end
   end
-
-  # Root route placeholder
-  # root "posts#index"
 end
