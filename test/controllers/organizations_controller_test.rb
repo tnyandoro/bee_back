@@ -6,33 +6,55 @@ class OrganizationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should get index" do
-    get organizations_url, as: :json
+    get api_v1_organizations_url, as: :json
     assert_response :success
   end
 
   test "should create organization" do
     assert_difference("Organization.count") do
-      post organizations_url, params: { organization: { address: @organization.address, email: @organization.email, name: @organization.name, subdomain: @organization.subdomain, web_address: @organization.web_address } }, as: :json
+      post api_v1_organizations_url, 
+        params: { organization: { 
+          address: "New Address",
+          email: "new_org@example.com",
+          name: "New Organization",
+          subdomain: "neworg",
+          web_address: "http://neworg.com"
+        } }, 
+        as: :json
     end
 
     assert_response :created
   end
 
   test "should show organization" do
-    get organization_url(@organization), as: :json
+    get api_v1_organization_url(subdomain: @organization.subdomain), as: :json
     assert_response :success
   end
 
   test "should update organization" do
-    patch organization_url(@organization), params: { organization: { address: @organization.address, email: @organization.email, name: @organization.name, subdomain: @organization.subdomain, web_address: @organization.web_address } }, as: :json
+    patch api_v1_organization_url(subdomain: @organization.subdomain), 
+      params: { organization: { 
+        address: "Updated Address",
+        email: "updated@example.com",
+        name: "Updated Org",
+        subdomain: @organization.subdomain,
+        web_address: "http://updatedorg.com"
+      } }, 
+      as: :json
+
     assert_response :success
   end
 
   test "should destroy organization" do
     assert_difference("Organization.count", -1) do
-      delete organization_url(@organization), as: :json
+      delete api_v1_organization_url(subdomain: @organization.subdomain), as: :json
     end
 
     assert_response :no_content
+  end
+
+  test "should return 404 for non-existent organization" do
+    get api_v1_organization_url(subdomain: "nonexistent"), as: :json
+    assert_response :not_found
   end
 end

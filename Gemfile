@@ -15,6 +15,10 @@ gem "puma", ">= 5.0"
 
 gem 'pundit'
 
+gem 'jwt', '~> 2.10', '>= 2.10.1'
+
+gem 'stringio', '~> 3.1.2'
+
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 
