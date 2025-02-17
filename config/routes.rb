@@ -33,7 +33,6 @@ Rails.application.routes.draw do
       patch '/organizations/:subdomain', to: 'organizations#update'
       put '/organizations/:subdomain', to: 'organizations#update'
       delete '/organizations/:subdomain', to: 'organizations#destroy'
-      get '/organizations/:subdomain/users', to: 'organizations#users', as: :organization_users
 
       # Global Problems and Tickets Resources
       resources :problems, only: %i[index show create update destroy]
