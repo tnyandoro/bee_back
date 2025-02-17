@@ -49,6 +49,7 @@ Rails.application.routes.draw do
 
       # Custom route for registering an organization and its admin
       post '/register', to: 'registrations#create'
+      post '/organizations/:subdomain/register_admin', to: 'registrations#register_admin', as: :register_admin
     end
   end
 
