@@ -1,4 +1,3 @@
-# app/controllers/api/v1/organizations_controller.rb
 module Api
   module V1
     class OrganizationsController < ApplicationController
@@ -17,12 +16,21 @@ module Api
 
       # POST /api/v1/organizations
       def create
-        @organization = Organization.new(organization_params)
-        if @organization.save
-          render json: @organization, status: :created, location: api_v1_organization_url(@organization.subdomain)
-        else
-          render json: @organization.errors, status: :unprocessable_entity
+        ActiveRecord::Base.transaction do
+          @organization = Organization.new(organization_params)
+          if @organization.save
+            @admin = @organization.users.new(admin_params.merge(role: 'admin'))
+            if @admin.save
+              render json: { organization: @organization, admin: @admin }, status: :created
+            else
+              raise ActiveRecord::Rollback
+            end
+          else
+            render json: @organization.errors, status: :unprocessable_entity
+          end
         end
+      rescue => e
+        render json: { error: e.message }, status: :unprocessable_entity
       end
 
       # PATCH/PUT /api/v1/organizations/:subdomain
@@ -48,16 +56,18 @@ module Api
 
       private
 
-      # Use callbacks to share common setup or constraints between actions.
       def set_organization
         @organization = Organization.find_by!(subdomain: params[:subdomain])
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Organization not found' }, status: :not_found
       end
 
-      # Only allow a list of trusted parameters through.
       def organization_params
         params.require(:organization).permit(:name, :address, :email, :web_address, :subdomain)
+      end
+
+      def admin_params
+        params.require(:admin).permit(:name, :email, :password, :password_confirmation)
       end
     end
   end
