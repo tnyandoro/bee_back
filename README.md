@@ -188,14 +188,146 @@ This README provides step-by-step instructions for setting up the ITSM backend a
 10. [Contributing](#10-contributing)
 
 ---
+# Ruby on Rails Application Setup Guide
 
-## 1. Prerequisites
+This guide provides step-by-step instructions to clone, set up, and run a Ruby on Rails application with a PostgreSQL database on your local machine.
 
-Before starting the setup, ensure your development environment has the following installed:
+---
 
-### 1.1 Ruby
-Install Ruby version 3.x (or the version specified in the `Gemfile`).
+## Prerequisites
 
-Verify installation:
+Before starting, ensure you have the following installed on your machine:
+
+1. **Ruby**: Version 3.x or higher (check with `ruby -v`).
+2. **Rails**: Version 7.x or higher (check with `rails -v`).
+3. **PostgreSQL**: Installed and running (check with `psql --version`).
+4. **Git**: Installed (check with `git --version`).
+5. **Node.js** and **Yarn**: Required for asset compilation (check with `node -v` and `yarn -v`).
+
+If any of these are missing, follow the installation instructions below:
+
+- **Ruby**: Use [rbenv](https://github.com/rbenv/rbenv) or [RVM](https://rvm.io/).
+- **Rails**: Install with `gem install rails`.
+- **PostgreSQL**: Download from [postgresql.org](https://www.postgresql.org/download/).
+- **Node.js**: Download from [nodejs.org](https://nodejs.org/).
+- **Yarn**: Install with `npm install -g yarn`.
+
+---
+
+## Step 1: Clone the Repository
+
+1. Open your terminal.
+2. Navigate to the directory where you want to clone the project.
+3. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/your-repo-name.git
+   ```
+4. Navigate into the project directory:
+   ```bash
+   cd your-repo-name
+   ```
+
+---
+
+## Step 2: Install Dependencies
+
+1. Install Ruby gems:
+   ```bash
+   bundle install
+   ```
+2. Install JavaScript dependencies:
+   ```bash
+   yarn install
+   ```
+
+---
+
+## Step 3: Set Up the Database
+
+1. Ensure PostgreSQL is running on your machine.
+2. Update the `config/database.yml` file with your PostgreSQL credentials:
+   ```yaml
+   default: &default
+     adapter: postgresql
+     encoding: unicode
+     pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+     username: your_postgres_username
+     password: your_postgres_password
+     host: localhost
+     port: 5432
+
+   development:
+     <<: *default
+     database: your_app_name_development
+
+   test:
+     <<: *default
+     database: your_app_name_test
+   ```
+3. Create the databases:
+   ```bash
+   rails db:create
+   ```
+4. Run migrations:
+   ```bash
+   rails db:migrate
+   ```
+5. (Optional) Seed the database with sample data:
+   ```bash
+   rails db:seed
+   ```
+
+---
+
+## Step 4: Run the Application
+
+1. Start the Rails server:
+   ```bash
+   rails server
+   ```
+2. Open your browser and navigate to:
+   ```
+   http://localhost:3000
+   ```
+
+---
+
+## Step 5: Running Tests
+
+To run the test suite, use:
 ```bash
-ruby -v
+rails test
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Errors**:
+   - Ensure PostgreSQL is running.
+   - Verify credentials in `config/database.yml`.
+
+2. **Missing Dependencies**:
+   - Run `bundle install` and `yarn install` again.
+
+3. **Port Conflicts**:
+   - Use a different port for the Rails server:
+     ```bash
+     rails server -p 3001
+     ```
+
+4. **Asset Compilation Errors**:
+   - Ensure Node.js and Yarn are installed.
+   - Run `yarn install` and `rails assets:precompile`.
+
+---
+
+## Additional Resources
+
+- [Ruby on Rails Guides](https://guides.rubyonrails.org/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Rbenv Documentation](https://github.com/rbenv/rbenv)
+- [Yarn Documentation](https://yarnpkg.com/getting-started)
+
