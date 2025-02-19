@@ -8,6 +8,7 @@ class Ticket < ApplicationRecord
   belongs_to :team, optional: true
 
   has_many :problems, dependent: :destroy
+  has_many :comments, dependent: :destroy
 
   enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }
 

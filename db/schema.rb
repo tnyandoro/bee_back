@@ -10,9 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_01_20_073110) do
+ActiveRecord::Schema[7.1].define(version: 2025_02_18_125759) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "comments", force: :cascade do |t|
+    t.string "content"
+    t.bigint "user_id", null: false
+    t.bigint "ticket_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ticket_id"], name: "index_comments_on_ticket_id"
+    t.index ["user_id"], name: "index_comments_on_user_id"
+  end
 
   create_table "notifications", force: :cascade do |t|
     t.bigint "user_id", null: false
@@ -33,6 +43,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_20_073110) do
     t.string "subdomain"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "phone_number"
     t.index ["subdomain"], name: "index_organizations_on_subdomain", unique: true
   end
 
@@ -43,6 +54,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_20_073110) do
     t.datetime "updated_at", null: false
     t.bigint "user_id"
     t.bigint "organization_id", null: false
+    t.bigint "creator_id"
+    t.bigint "team_id"
     t.index ["ticket_id"], name: "index_problems_on_ticket_id"
     t.index ["user_id"], name: "index_problems_on_user_id"
   end
@@ -96,10 +109,25 @@ ActiveRecord::Schema[7.1].define(version: 2025_01_20_073110) do
     t.string "department"
     t.string "position"
     t.bigint "team_id"
+    t.string "auth_token"
+    t.string "phone_number"
+    t.string "username"
+    t.string "encrypted_password", default: "", null: false
+    t.string "reset_password_token"
+    t.datetime "reset_password_sent_at"
+    t.datetime "remember_created_at"
+    t.string "confirmation_token"
+    t.datetime "confirmed_at"
+    t.datetime "confirmation_sent_at"
+    t.string "unconfirmed_email"
+    t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
+    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "comments", "tickets"
+  add_foreign_key "comments", "users"
   add_foreign_key "notifications", "organizations"
   add_foreign_key "notifications", "users"
   add_foreign_key "problems", "tickets"

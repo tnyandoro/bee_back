@@ -1,8 +1,10 @@
-# frozen_string_literal: true
-
+# app/models/user.rb
 class User < ApplicationRecord
   has_secure_password
   has_secure_token :auth_token # For API authentication
+
+  # Add an accessor to skip auth_token generation
+  attr_accessor :skip_auth_token
 
   # Associations
   belongs_to :organization
@@ -13,7 +15,7 @@ class User < ApplicationRecord
   has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id"
   has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
   has_many :problems, dependent: :nullify # If problems are assigned to users
-  has_many :comments, dependent: :destroy # If users can comment on tickets/problems
+  has_many :comments, class_name: 'Comment', dependent: :destroy # Fixing the association
   has_many :notifications, dependent: :destroy # If users receive notifications
 
   # Roles
@@ -26,28 +28,8 @@ class User < ApplicationRecord
   validates :password, length: { minimum: 8 }, if: -> { password.present? }
   validate :team_organization_matches_user_organization
 
-  # Scopes
-  scope :filter_by_role, ->(role) { role.present? ? where(role: role) : all }
-  scope :by_organization, ->(organization_id) { where(organization_id: organization_id) }
-  scope :by_team, ->(team_id) { where(team_id: team_id) }
-  scope :by_roles, ->(*roles) { where(role: roles) }
-  scope :by_role_and_organization, ->(role, organization_id) {
-    where(role: role, organization_id: organization_id)
-  }
-  scope :by_role_and_team, ->(role, team_id) { where(role: role, team_id: team_id) }
-  scope :without_team, -> { where(team_id: nil) }
-  scope :by_roles_without_team, ->(*roles) { where(role: roles, team_id: nil) }
-  scope :search, ->(query) {
-    where("name ILIKE ? OR email ILIKE ?", "%#{query}%", "%#{query}%")
-  }
-  scope :with_tickets, -> {
-    left_joins(:created_tickets, :assigned_tickets, :requested_tickets)
-      .where("tickets.id IS NOT NULL OR assigned_tickets_tickets.id IS NOT NULL OR requested_tickets_tickets.id IS NOT NULL")
-      .distinct
-  }
-
   # Callbacks
-  before_validation :set_default_role, on: :create
+  before_create :generate_auth_token, unless: :skip_auth_token?
 
   # Role-specific methods
   def admin?
@@ -90,7 +72,6 @@ class User < ApplicationRecord
 
   # Return avatar URL (if applicable)
   def avatar_url
-    # Example: "https://www.gravatar.com/avatar/#{Digest::MD5.hexdigest(email)}?d=identicon"
     nil # Replace with actual logic
   end
 
@@ -111,5 +92,15 @@ class User < ApplicationRecord
     return unless team.present? && team.organization != organization
 
     errors.add(:team, "must belong to the same organization as the user")
+  end
+
+  # Conditionally generate auth_token
+  def generate_auth_token
+    self.auth_token = SecureRandom.hex(10) if self.auth_token.nil?
+  end
+
+  # Define skip_auth_token? method
+  def skip_auth_token?
+    self.skip_auth_token == true
   end
 end

@@ -1,16 +1,3 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
-#
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
-
-# db/seeds.rb
-
-# Clear existing data to ensure idempotency
 puts "Clearing existing data..."
 Problem.destroy_all
 Ticket.destroy_all
@@ -18,7 +5,7 @@ User.destroy_all
 Team.destroy_all
 Organization.destroy_all
 
-# Create the organization
+# Create the organization first
 puts "Creating organization..."
 organization = Organization.create!(
   name: "Example Org",
@@ -40,7 +27,7 @@ support_team = Team.create!(
   organization: organization
 )
 
-# Create the admin user
+# Create the admin user with organization association
 puts "Creating admin user..."
 admin_user = User.create!(
   name: "Admin User",
@@ -49,7 +36,7 @@ admin_user = User.create!(
   role: :admin,
   department: "Management",
   position: "Admin",
-  organization: organization
+  organization: organization # Ensure the admin user is assigned to the organization
 )
 
 puts "Created admin user: #{admin_user.email}"
@@ -138,14 +125,18 @@ if admin_user.persisted?
   problem1 = Problem.create!(
     description: "Printer not working",
     ticket: ticket1, # Assign the ticket
-    user: admin_user, # Assign the user
+    creator: admin_user, # Use creator association
+    user: admin_user, # Assign the user who will resolve the problem (if applicable)
+    team: it_team, # Optional: assign to the team
     organization_id: organization.id # Assign organization_id explicitly
   )
 
   problem2 = Problem.create!(
     description: "Email access issue",
     ticket: ticket2, # Assign the ticket
-    user: teamlead_user, # Assign the user
+    creator: teamlead_user, # Use creator association
+    user: teamlead_user, # Assign the user who will resolve the problem (if applicable)
+    team: support_team, # Optional: assign to the team
     organization_id: organization.id # Assign organization_id explicitly
   )
 
@@ -155,4 +146,3 @@ else
 end
 
 puts "Seeding completed successfully!"
-
