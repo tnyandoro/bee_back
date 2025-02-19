@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Organization < ApplicationRecord
   # Validations
   validates :name, :email, presence: true
@@ -6,8 +8,8 @@ class Organization < ApplicationRecord
   # Ensure subdomain format
   validate :subdomain_format, on: :create
 
-  # Ensure at least one admin user exists before saving the organization
-  validate :must_have_admin_user, on: :create
+  # Ensure at least one admin user exists before saving the organization (adjusted this)
+  validate :must_have_admin_user, on: :update
 
   # Callbacks
   before_validation :generate_subdomain, on: :create
@@ -58,9 +60,9 @@ class Organization < ApplicationRecord
     end
   end
 
-  # Ensure at least one admin user exists before saving the organization
+  # Ensure at least one admin user exists before saving the organization (now on update)
   def must_have_admin_user
-    return unless users.empty? || users.none? { |user| user.admin? }
+    return unless users.none? { |user| user.admin? }
 
     errors.add(:base, "An organization must have at least one admin user")
   end
