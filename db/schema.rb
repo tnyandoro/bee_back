@@ -43,18 +43,19 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_18_125759) do
     t.string "subdomain"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "phone_number"
     t.index ["subdomain"], name: "index_organizations_on_subdomain", unique: true
   end
 
   create_table "problems", force: :cascade do |t|
     t.text "description"
-    t.bigint "ticket_id", null: false
+    t.bigint "ticket_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
+    t.bigint "user_id"
     t.bigint "organization_id", null: false
-    t.integer "creator_id"
-    t.integer "team_id"
+    t.bigint "creator_id"
+    t.bigint "team_id"
     t.index ["ticket_id"], name: "index_problems_on_ticket_id"
     t.index ["user_id"], name: "index_problems_on_user_id"
   end
@@ -64,6 +65,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_18_125759) do
     t.bigint "organization_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["organization_id"], name: "index_teams_on_organization_id"
   end
 
   create_table "tickets", force: :cascade do |t|
@@ -88,10 +90,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_18_125759) do
     t.string "caller_phone", null: false
     t.string "customer", null: false
     t.string "source", null: false
-    t.bigint "user_id", null: false
-    t.integer "status", default: 6, null: false
     t.bigint "creator_id"
-    t.index ["creator_id"], name: "index_tickets_on_creator_id"
+    t.bigint "user_id", null: false
+    t.string "status"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
     t.index ["user_id"], name: "index_tickets_on_user_id"
@@ -109,8 +110,20 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_18_125759) do
     t.string "position"
     t.bigint "team_id"
     t.string "auth_token"
+    t.string "phone_number"
+    t.string "username"
+    t.string "encrypted_password", default: "", null: false
+    t.string "reset_password_token"
+    t.datetime "reset_password_sent_at"
+    t.datetime "remember_created_at"
+    t.string "confirmation_token"
+    t.datetime "confirmed_at"
+    t.datetime "confirmation_sent_at"
+    t.string "unconfirmed_email"
+    t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
+    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
   add_foreign_key "comments", "tickets"
@@ -124,7 +137,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_18_125759) do
   add_foreign_key "tickets", "teams"
   add_foreign_key "tickets", "users"
   add_foreign_key "tickets", "users", column: "assignee_id"
-  add_foreign_key "tickets", "users", column: "creator_id"
   add_foreign_key "tickets", "users", column: "requester_id"
   add_foreign_key "users", "organizations"
   add_foreign_key "users", "teams"
