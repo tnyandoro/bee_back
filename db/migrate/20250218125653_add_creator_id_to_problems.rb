@@ -4,3 +4,4 @@ class AddCreatorIdToProblems < ActiveRecord::Migration[7.1]
       add_column :problems, :creator_id, :integer
     end
   end
+end
