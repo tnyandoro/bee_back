@@ -1,8 +1,8 @@
-# frozen_string_literal: true
+# app/controllers/api/v1/sessions_controller.rb
 module Api
   module V1
     class SessionsController < ApplicationController
-      skip_before_action :verify_authenticity_token # For API usage
+      # Skip authentication for login, rely on ApplicationController's except: [:create]
       before_action :set_organization_from_subdomain, only: [:create]
 
       def create
@@ -12,12 +12,9 @@ module Api
         end
 
         user = @organization.users.find_by(email: params[:email])
-
         if user&.authenticate(params[:password])
-          # Generate or update auth token
-          user.update(auth_token: SecureRandom.hex(20)) unless user.auth_token
-
-          # Prepare response data
+          # Ensure token is unique and regenerated on each login
+          user.update!(auth_token: SecureRandom.hex(20))
           render json: {
             message: "Login successful",
             auth_token: user.auth_token,
@@ -36,21 +33,15 @@ module Api
       end
 
       def destroy
-        # Assuming you have a current_user method from authentication
         if current_user
-          current_user.update(auth_token: nil)
+          current_user.update!(auth_token: nil)
           render json: { message: "Logout successful" }, status: :ok
         else
           render json: { error: "Not logged in" }, status: :unauthorized
         end
       end
 
-      private
-
-      def set_organization_from_subdomain
-        subdomain = request.subdomain.presence || params[:subdomain]
-        @organization = Organization.find_by(subdomain: subdomain)
-      end
+      # Note: set_organization_from_subdomain is defined in ApplicationController
     end
   end
 end
