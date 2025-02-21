@@ -8,10 +8,10 @@ Rails.application.routes.draw do
       # Session management
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
+      get '/profile', to: 'users#profile' # New profile endpoint
 
       # Organizations Resource with Subdomain-Based Routing
       resources :organizations, param: :subdomain, only: [:index] do
-        # Nested Resources
         resources :users, only: %i[index show create update destroy] do
           resources :tickets, only: [:index]
           resources :problems, only: [:index]

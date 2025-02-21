@@ -2,11 +2,29 @@
 module Api
   module V1
     class UsersController < ApplicationController
-      before_action :set_organization
+      before_action :set_organization, except: [:profile] # Exclude profile from requiring explicit organization_id
+      before_action :authenticate_user!, only: [:profile, :index, :show, :update, :destroy] # Add authentication for profile
+      before_action :set_organization_from_subdomain, only: [:profile] # Use subdomain for profile
+      before_action :verify_user_organization, only: [:profile] # Verify user belongs to organization
       before_action :set_user, only: %i[show update destroy]
       before_action :authorize_admin, only: %i[create update destroy]
 
-      # GET /organizations/:organization_id/users
+      # GET /api/v1/profile
+      def profile
+        render json: UserSerializer.new(current_user).serializable_hash.merge(
+          organization: {
+            id: @organization.id,
+            name: @organization.name,
+            subdomain: @organization.subdomain,
+            email: @organization.email,
+            phone_number: @organization.phone_number,
+            address: @organization.address,
+            web_address: @organization.web_address
+          }
+        ), status: :ok
+      end
+
+      # GET /organizations/:organization_id/users or /api/v1/users (with subdomain)
       def index
         if params[:role] && !User.roles.key?(params[:role])
           render json: { error: 'Invalid role' }, status: :unprocessable_entity
@@ -19,7 +37,7 @@ module Api
         @users = @users.filter_by_position(params[:position]) if params[:position]
         @users = @users.filter_by_team(params[:team_id]) if params[:team_id]
 
-        @users = @users.paginate(page: params[:page], per_page: 10) # Paginate with 10 items per page
+        @users = @users.paginate(page: params[:page], per_page: 10)
 
         render json: {
           users: UserSerializer.new(@users).serializable_hash,
@@ -31,26 +49,14 @@ module Api
         }
       end
 
-      # GET /users/1
+      # GET /users/:id
       def show
         render json: UserSerializer.new(@user).serializable_hash
       end
 
-      # POST /users
+      # POST /organizations/:organization_id/users
       def create
         @user = @organization.users.new(user_params)
-
-        # Prevent non-admins from creating users
-        unless current_user.role_admin?
-          render json: { error: 'You are not authorized to create users' }, status: :forbidden
-          return
-        end
-
-        # Prevent non-admins from creating admins
-        if user_params[:role] == 'admin' && !current_user.role_admin?
-          render json: { error: 'You are not authorized to create an admin user' }, status: :forbidden
-          return
-        end
 
         if @user.save
           render json: UserSerializer.new(@user).serializable_hash, status: :created, location: @user
@@ -59,20 +65,8 @@ module Api
         end
       end
 
-      # PATCH/PUT /users/1
+      # PATCH/PUT /users/:id
       def update
-        # Prevent non-admins from updating users
-        unless current_user.role_admin?
-          render json: { error: 'You are not authorized to update users' }, status: :forbidden
-          return
-        end
-
-        # Prevent non-admins from updating users to admin
-        if user_params[:role] == 'admin' && !current_user.role_admin?
-          render json: { error: 'You are not authorized to update this user to admin' }, status: :forbidden
-          return
-        end
-
         if @user.update(user_params)
           render json: UserSerializer.new(@user).serializable_hash
         else
@@ -80,14 +74,8 @@ module Api
         end
       end
 
-      # DELETE /users/1
+      # DELETE /users/:id
       def destroy
-        # Prevent non-admins from deleting users
-        unless current_user.role_admin?
-          render json: { error: 'You are not authorized to delete users' }, status: :forbidden
-          return
-        end
-
         @user.destroy!
         head :no_content
       end
@@ -124,10 +112,11 @@ module Api
         end
       end
 
-      # Get the current logged-in user
-      def current_user
-        @current_user ||= User.find_by(id: session[:user_id])
-      end
+      # Override current_user to use token-based authentication from ApplicationController
+      # Remove this if already defined correctly in ApplicationController
+      # def current_user
+      #   @current_user ||= User.find_by(id: session[:user_id]) # This is session-based, replace if using token
+      # end
     end
   end
 end

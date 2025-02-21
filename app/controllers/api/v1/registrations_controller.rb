@@ -2,28 +2,20 @@
 module Api
     module V1
       class RegistrationsController < ApplicationController
-        skip_before_action :authenticate_user!, only: [:create] # No auth required for registration
+        skip_before_action :authenticate_user!, only: [:create]
   
         def create
           ActiveRecord::Base.transaction do
-            # Create the organization
+            Rails.logger.debug "Organization params: #{organization_params.inspect}"
             @organization = Organization.new(organization_params)
-            unless @organization.save
-              render json: { errors: @organization.errors.full_messages }, status: :unprocessable_entity
-              return
-            end
+            @organization.save!
   
-            # Create the admin user for the organization
+            Rails.logger.debug "Admin params: #{admin_params.inspect}"
             @admin = @organization.users.new(admin_params)
-            @admin.role = :admin # Force admin role for initial registration
-            @admin.auth_token = SecureRandom.hex(20) # Generate token immediately
+            @admin.role = :admin
+            @admin.auth_token = SecureRandom.hex(20)
+            @admin.save!
   
-            unless @admin.save
-              render json: { errors: @admin.errors.full_messages }, status: :unprocessable_entity
-              return
-            end
-  
-            # Success response with organization, admin, and token
             render json: {
               message: "Organization and admin registered successfully",
               organization: {
@@ -39,7 +31,10 @@ module Api
                 auth_token: @admin.auth_token
               }
             }, status: :created
+          rescue ActiveRecord::RecordInvalid => e
+            render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
           rescue StandardError => e
+            Rails.logger.error "Registration error: #{e.message}"
             render json: { error: e.message }, status: :unprocessable_entity
           end
         end
@@ -47,7 +42,10 @@ module Api
         private
   
         def organization_params
-          params.require(:organization).permit(:name, :email, :phone_number, :website, :address, :subdomain)
+          # Map 'website' to 'web_address'
+          org_params = params.require(:organization).permit(:name, :email, :phone_number, :website, :address, :subdomain)
+          org_params[:web_address] = org_params.delete(:website) if org_params[:website]
+          org_params
         end
   
         def admin_params
@@ -56,3 +54,4 @@ module Api
       end
     end
   end
+  
