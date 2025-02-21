@@ -2,10 +2,9 @@
 module Api
   module V1
     class UsersController < ApplicationController
-      before_action :set_organization, except: [:profile] # Exclude profile from requiring explicit organization_id
-      before_action :authenticate_user!, only: [:profile, :index, :show, :update, :destroy] # Add authentication for profile
-      before_action :set_organization_from_subdomain, only: [:profile] # Use subdomain for profile
-      before_action :verify_user_organization, only: [:profile] # Verify user belongs to organization
+      before_action :authenticate_user!, only: [:profile, :index, :show, :create, :update, :destroy]
+      before_action :set_organization_from_subdomain # Use subdomain for all actions
+      before_action :verify_user_organization, only: [:profile, :index, :show, :create, :update, :destroy]
       before_action :set_user, only: %i[show update destroy]
       before_action :authorize_admin, only: %i[create update destroy]
 
@@ -24,7 +23,7 @@ module Api
         ), status: :ok
       end
 
-      # GET /organizations/:organization_id/users or /api/v1/users (with subdomain)
+      # GET /api/v1/organizations/:subdomain/users
       def index
         if params[:role] && !User.roles.key?(params[:role])
           render json: { error: 'Invalid role' }, status: :unprocessable_entity
@@ -49,23 +48,25 @@ module Api
         }
       end
 
-      # GET /users/:id
+      # GET /api/v1/organizations/:subdomain/users/:id
       def show
         render json: UserSerializer.new(@user).serializable_hash
       end
 
-      # POST /organizations/:organization_id/users
+      # POST /api/v1/organizations/:subdomain/users
       def create
         @user = @organization.users.new(user_params)
+        @user.auth_token = SecureRandom.hex(20) # Generate token for new user
 
         if @user.save
-          render json: UserSerializer.new(@user).serializable_hash, status: :created, location: @user
+          render json: UserSerializer.new(@user).serializable_hash, status: :created, 
+                 location: api_v1_organization_user_url(@organization.subdomain, @user)
         else
           render json: { errors: @user.errors.full_messages }, status: :unprocessable_entity
         end
       end
 
-      # PATCH/PUT /users/:id
+      # PATCH/PUT /api/v1/organizations/:subdomain/users/:id
       def update
         if @user.update(user_params)
           render json: UserSerializer.new(@user).serializable_hash
@@ -74,24 +75,13 @@ module Api
         end
       end
 
-      # DELETE /users/:id
+      # DELETE /api/v1/organizations/:subdomain/users/:id
       def destroy
         @user.destroy!
         head :no_content
       end
 
       private
-
-      # Identify organization using organization_id or subdomain
-      def set_organization
-        if params[:organization_id]
-          @organization = Organization.find(params[:organization_id])
-        else
-          @organization = Organization.find_by!(subdomain: request.subdomain)
-        end
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Organization not found' }, status: :not_found
-      end
 
       # Use callbacks to share common setup or constraints between actions
       def set_user
@@ -102,21 +92,17 @@ module Api
 
       # Only allow a list of trusted parameters through
       def user_params
-        params.require(:user).permit(:name, :email, :password, :password_confirmation, :role, :department, :position, :team_id)
+        params.require(:user).permit(
+          :name, :email, :username, :phone_number, :department, :position, :role, :password
+        )
       end
 
-      # Ensure only admins can perform certain actions
+      # Ensure only admins or super users can perform certain actions
       def authorize_admin
-        unless current_user&.role_admin?
+        unless current_user&.role_admin? || current_user&.role_super_user?
           render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
         end
       end
-
-      # Override current_user to use token-based authentication from ApplicationController
-      # Remove this if already defined correctly in ApplicationController
-      # def current_user
-      #   @current_user ||= User.find_by(id: session[:user_id]) # This is session-based, replace if using token
-      # end
     end
   end
 end

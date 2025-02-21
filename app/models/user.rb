@@ -26,6 +26,7 @@ class User < ApplicationRecord
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
   validates :role, presence: true, inclusion: { in: roles.keys }
   validates :name, presence: true
+  validates :username, presence: true, uniqueness: true, allow_nil: true
   validates :password, length: { minimum: 8 }, if: -> { password.present? || new_record? }
   validate :team_organization_matches_user_organization
 
