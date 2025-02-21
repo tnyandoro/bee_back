@@ -8,17 +8,23 @@ Rails.application.routes.draw do
       # Session management
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
-      get '/profile', to: 'users#profile' # New profile endpoint
+      get '/profile', to: 'users#profile' # User profile endpoint
 
       # Organizations Resource with Subdomain-Based Routing
       resources :organizations, param: :subdomain, only: [:index] do
+        # Nested Resources
         resources :users, only: %i[index show create update destroy] do
-          resources :tickets, only: [:index]
+          resources :tickets, only: [:index] # User-specific ticket listings
           resources :problems, only: [:index]
         end
 
         resources :teams, only: %i[index show create update destroy]
-        resources :tickets, only: %i[index show create update destroy]
+        resources :tickets, only: %i[index show create update destroy] do
+          member do
+            post :assign_to_user
+            post :escalate_to_problem
+          end
+        end
         resources :problems, only: %i[index show create update destroy]
 
         resources :notifications, only: [:index] do
@@ -34,7 +40,7 @@ Rails.application.routes.draw do
       put '/organizations/:subdomain', to: 'organizations#update'
       delete '/organizations/:subdomain', to: 'organizations#destroy'
 
-      # Global Problems and Tickets Resources
+      # Global Problems and Tickets Resources (optional, consider removing if not needed)
       resources :problems, only: %i[index show create update destroy]
       resources :tickets, only: %i[index show create update destroy] do
         member do
@@ -43,7 +49,7 @@ Rails.application.routes.draw do
         end
       end
 
-      # Users Resource
+      # Users Resource (global, consider scoping to organizations if not needed globally)
       resources :users, only: %i[index show create update destroy] do
         resources :tickets, only: [:index]
       end
