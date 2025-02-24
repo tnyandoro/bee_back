@@ -31,18 +31,17 @@ module Api
       def show
         render json: ticket_attributes(@ticket)
       end
-      
 
       # POST /api/v1/organizations/:subdomain/tickets
       def create
         @ticket = @organization.tickets.new(ticket_params)
         @ticket.creator = @creator
         @ticket.requester = @creator
-        @ticket.user_id = @creator.id # Add this line to set user_id
+        @ticket.user_id = @creator.id
         @ticket.ticket_number = SecureRandom.hex(5)
         @ticket.reported_at = Time.current
         @ticket.status = 'open'
-        
+
         if ticket_params[:team_id].present?
           team = @organization.teams.find_by(id: ticket_params[:team_id])
           unless team
@@ -58,7 +57,7 @@ module Api
               return
             end
             @ticket.assignee = assignee
-            @ticket.status = 'assigned' # Set status to 'assigned' if assignee is set
+            @ticket.status = 'assigned'
           end
         end
 
@@ -68,7 +67,8 @@ module Api
         end
 
         if @ticket.save
-          render json: ticket_attributes(@ticket), status: :created, 
+          # Add SLA fields to response
+          render json: ticket_attributes(@ticket), status: :created,
                  location: api_v1_organization_ticket_url(@organization.subdomain, @ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
@@ -93,10 +93,10 @@ module Api
             return
           end
           @ticket.assignee = assignee
-          @ticket.status = 'assigned' # Update status if assignee changes
-        elsif ticket_params[:assignee_id] == '' # Explicitly clearing assignee
+          @ticket.status = 'assigned'
+        elsif ticket_params[:assignee_id] == ''
           @ticket.assignee = nil
-          @ticket.status = 'open' # Reset status if assignee is removed
+          @ticket.status = 'open'
         end
 
         if ticket_params[:category].present? && !VALID_CATEGORIES.include?(ticket_params[:category])
@@ -105,6 +105,7 @@ module Api
         end
 
         if @ticket.update(ticket_params)
+          @ticket.calculate_sla_dates if sla_params_changed?
           render json: ticket_attributes(@ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
@@ -165,6 +166,42 @@ module Api
       end
 
       private
+
+      def ticket_attributes(ticket)
+        {
+          id: ticket.id,
+          title: ticket.title,
+          description: ticket.description,
+          ticket_type: ticket.ticket_type,
+          status: ticket.status,
+          urgency: ticket.urgency,
+          priority: ticket.priority,
+          impact: ticket.impact,
+          team_id: ticket.team_id,
+          assignee_id: ticket.assignee_id,
+          requester_id: ticket.requester_id,
+          creator_id: ticket.creator_id,
+          ticket_number: ticket.ticket_number,
+          reported_at: ticket.reported_at,
+          caller_name: ticket.caller_name,
+          caller_surname: ticket.caller_surname,
+          caller_email: ticket.caller_email,
+          caller_phone: ticket.caller_phone,
+          customer: ticket.customer,
+          source: ticket.source,
+          category: ticket.category,
+          # SLA Fields
+          response_due_at: ticket.response_due_at,
+          resolution_due_at: ticket.resolution_due_at,
+          escalation_level: ticket.escalation_level,
+          sla_breached: ticket.sla_breached,
+          calculated_priority: ticket.calculated_priority
+        }
+      end
+
+      def sla_params_changed?
+        ticket_params[:urgency].present? || ticket_params[:impact].present? || ticket_params[:priority].present?
+      end
 
       def validate_params
         return if validate_status && validate_ticket_type
