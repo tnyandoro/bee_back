@@ -13,7 +13,9 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
       origins ENV['CORS_ALLOWED_ORIGINS']&.split(',') || 'http://localhost:3001'
   
       resource '*',
-        headers: :any,
-        methods: [:get, :post, :put, :patch, :delete, :options, :head]
+        # headers: :any,
+        # methods: [:get, :post, :put, :patch, :delete, :options, :head]
+        headers: ['Authorization', 'Content-Type', 'Accept'],
+        methods: [:get, :post, :put, :patch, :delete, :options]
     end
   end
