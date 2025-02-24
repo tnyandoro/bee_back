@@ -9,7 +9,8 @@
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
     allow do
       # Adjust origins to match your React frontend's URL
-      origins 'http://localhost:3001' # Change to your React app's port if different
+      # origins 'http://localhost:3001' # Change to your React app's port if different
+      origins ENV['CORS_ALLOWED_ORIGINS']&.split(',') || 'http://localhost:3001'
   
       resource '*',
         headers: :any,
