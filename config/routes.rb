@@ -18,7 +18,10 @@ Rails.application.routes.draw do
           resources :problems, only: [:index]
         end
 
-        resources :teams, only: %i[index show create update destroy]
+        resources :teams, only: %i[index show create update destroy] do
+          get 'users', to: 'teams#users', on: :member # New route to fetch team users
+        end
+
         resources :tickets, only: %i[index show create update destroy] do
           member do
             post :assign_to_user

@@ -1,21 +1,22 @@
+# app/controllers/api/v1/tickets_controller.rb
 # frozen_string_literal: true
-
 module Api
   module V1
     class TicketsController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_organization_from_subdomain # Use subdomain instead of organization_id
+      before_action :set_organization_from_subdomain
       before_action :set_ticket, only: %i[show update destroy assign_to_user escalate_to_problem]
       before_action :set_creator, only: [:create]
       before_action :validate_params, only: [:index]
 
       VALID_STATUSES = %w[open assigned escalated closed suspended resolved pending].freeze
-      VALID_TICKET_TYPES = %w[Incident Request Problem].freeze # Align with TicketForm
+      VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
+      VALID_CATEGORIES = %w[Technical Billing Support Hardware Software Other].freeze
 
       # GET /api/v1/organizations/:subdomain/tickets
       def index
         @tickets = apply_filters(@organization.tickets)
-        @tickets = @tickets.paginate(page: params[:page], per_page: 10) # Keep pagination
+        @tickets = @tickets.paginate(page: params[:page], per_page: 10)
         render json: {
           tickets: @tickets.map { |ticket| ticket_attributes(ticket) },
           pagination: {
@@ -30,24 +31,45 @@ module Api
       def show
         render json: ticket_attributes(@ticket)
       end
+      
 
       # POST /api/v1/organizations/:subdomain/tickets
       def create
         @ticket = @organization.tickets.new(ticket_params)
         @ticket.creator = @creator
         @ticket.requester = @creator
-        @ticket.ticket_number = SecureRandom.hex(5) # Generate ticket number
-        @ticket.reported_at = Time.current # Set automatically
-        @ticket.status = 'open' # Default status
-
-        if params[:ticket][:team_id].present?
-          team = @organization.teams.find_by(id: params[:ticket][:team_id])
-          return render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity unless team
+        @ticket.user_id = @creator.id # Add this line to set user_id
+        @ticket.ticket_number = SecureRandom.hex(5)
+        @ticket.reported_at = Time.current
+        @ticket.status = 'open'
+        
+        if ticket_params[:team_id].present?
+          team = @organization.teams.find_by(id: ticket_params[:team_id])
+          unless team
+            render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity
+            return
+          end
           @ticket.team = team
+
+          if ticket_params[:assignee_id].present?
+            assignee = team.users.find_by(id: ticket_params[:assignee_id])
+            unless assignee
+              render json: { error: 'Assignee not found in the selected team' }, status: :unprocessable_entity
+              return
+            end
+            @ticket.assignee = assignee
+            @ticket.status = 'assigned' # Set status to 'assigned' if assignee is set
+          end
+        end
+
+        unless VALID_CATEGORIES.include?(ticket_params[:category])
+          render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
+          return
         end
 
         if @ticket.save
-          render json: ticket_attributes(@ticket), status: :created, location: api_v1_organization_ticket_url(@organization.subdomain, @ticket)
+          render json: ticket_attributes(@ticket), status: :created, 
+                 location: api_v1_organization_ticket_url(@organization.subdomain, @ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
         end
@@ -55,16 +77,31 @@ module Api
 
       # PATCH/PUT /api/v1/organizations/:subdomain/tickets/:id
       def update
-        if params[:ticket][:team_id].present?
-          team = @organization.teams.find_by(id: params[:ticket][:team_id])
-          return render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity unless team
+        if ticket_params[:team_id].present?
+          team = @organization.teams.find_by(id: ticket_params[:team_id])
+          unless team
+            render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity
+            return
+          end
           @ticket.team = team
         end
 
-        if params[:ticket][:assignee_id].present?
-          assignee = @ticket.team&.users&.find_by(id: params[:ticket][:assignee_id])
-          return render json: { error: 'Assignee not found in the team' }, status: :unprocessable_entity unless assignee
+        if ticket_params[:assignee_id].present?
+          assignee = @ticket.team&.users&.find_by(id: ticket_params[:assignee_id])
+          unless assignee
+            render json: { error: 'Assignee not found in the team' }, status: :unprocessable_entity
+            return
+          end
           @ticket.assignee = assignee
+          @ticket.status = 'assigned' # Update status if assignee changes
+        elsif ticket_params[:assignee_id] == '' # Explicitly clearing assignee
+          @ticket.assignee = nil
+          @ticket.status = 'open' # Reset status if assignee is removed
+        end
+
+        if ticket_params[:category].present? && !VALID_CATEGORIES.include?(ticket_params[:category])
+          render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
+          return
         end
 
         if @ticket.update(ticket_params)
@@ -92,7 +129,6 @@ module Api
         end
 
         if @ticket.update(assignee: assignee)
-          # Assuming SendTicketAssignmentEmailsJob and Notification are defined
           SendTicketAssignmentEmailsJob.perform_later(@ticket, @ticket.team, assignee) if defined?(SendTicketAssignmentEmailsJob)
           Notification.create!(
             user: assignee,
@@ -121,10 +157,10 @@ module Api
           organization: @ticket.organization,
           team: @ticket.team,
           creator: current_user,
-          ticket_id: @ticket.id # Link to original ticket
+          ticket_id: @ticket.id
         )
 
-        @ticket.update!(status: 'escalated') # Update status instead of problem association
+        @ticket.update!(status: 'escalated')
         render json: { message: 'Ticket escalated to problem', problem: problem.as_json }, status: :created
       end
 
@@ -171,8 +207,13 @@ module Api
         params.require(:ticket).permit(
           :title, :description, :ticket_type, :urgency, :priority, :impact,
           :team_id, :caller_name, :caller_surname, :caller_email, :caller_phone,
-          :customer, :source
-        )
+          :customer, :source, :category, :assignee_id
+        ).tap do |ticket_params|
+          required_fields = %i[title description ticket_type urgency priority impact 
+                              team_id caller_name caller_surname caller_email caller_phone 
+                              customer source category]
+          required_fields.each { |field| ticket_params.require(field) }
+        end
       end
 
       def ticket_attributes(ticket)
@@ -196,7 +237,8 @@ module Api
           caller_email: ticket.caller_email,
           caller_phone: ticket.caller_phone,
           customer: ticket.customer,
-          source: ticket.source
+          source: ticket.source,
+          category: ticket.category
         }
       end
     end
