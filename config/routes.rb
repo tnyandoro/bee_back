@@ -14,6 +14,9 @@ Rails.application.routes.draw do
       resources :organizations, param: :subdomain, only: [:index] do
         # Nested Resources
         resources :users, only: %i[index show create update destroy] do
+          collection do
+            post :add_user # New route for adding a user to the organization
+          end
           resources :tickets, only: [:index] # User-specific ticket listings
           resources :problems, only: [:index]
         end

@@ -23,11 +23,13 @@ module Api
 
         @current_user = User.find_by(auth_token: token)
         unless @current_user
-          Rails.logger.debug "Invalid or expired token: #{token}"
+          # Rails.logger.debug "Invalid or expired token: #{token}"
+          Rails.logger.debug "Invalid or expired token detected"
           render json: { error: 'Invalid or expired token' }, status: :unauthorized
           return
         end
-        Rails.logger.debug "Authenticated user: #{@current_user.email}"
+        # Rails.logger.debug "Authenticated user: #{@current_user.email}"
+        Rails.logger.debug "User authenticated successfully"
       end
 
       # Accessor for the current authenticated user
@@ -50,26 +52,33 @@ module Api
       end
 
       # Set organization based on subdomain
-      def set_organization_from_subdomain
-        Rails.logger.debug "Request host: #{request.host}"
-        subdomain = request.subdomain.presence || params[:subdomain]
-        Rails.logger.debug "Extracted subdomain: #{subdomain}"
+      # def set_organization_from_subdomain
+      #   Rails.logger.debug "Request host: #{request.host}"
+      #   subdomain = request.subdomain.presence || params[:subdomain]
+      #   Rails.logger.debug "Extracted subdomain: #{subdomain}"
         
-        if subdomain.blank?
-          host = request.host
-          if host =~ /^(.+)\.lvh\.me$/ || host =~ /^(.+)\.yourdomain\.com$/ # Add production domain if needed
-            subdomain = $1
-            Rails.logger.debug "Fallback subdomain from host: #{subdomain}"
-          end
-        end
+      #   if subdomain.blank?
+      #     host = request.host
+      #     if host =~ /^(.+)\.lvh\.me$/ || host =~ /^(.+)\.yourdomain\.com$/ # Add production domain if needed
+      #       subdomain = $1
+      #       Rails.logger.debug "Fallback subdomain from host: #{subdomain}"
+      #     end
+      #   end
 
+      #   @organization = Organization.find_by(subdomain: subdomain)
+      #   unless @organization
+      #     Rails.logger.debug "Organization not found for subdomain: #{subdomain || 'none'}"
+      #     render json: { error: "Organization not found for subdomain: #{subdomain || 'none'}" }, status: :not_found
+      #   end
+      # end
+      def set_organization_from_subdomain
+        subdomain = SubdomainExtractor.extract(request)
         @organization = Organization.find_by(subdomain: subdomain)
         unless @organization
-          Rails.logger.debug "Organization not found for subdomain: #{subdomain || 'none'}"
-          render json: { error: "Organization not found for subdomain: #{subdomain || 'none'}" }, status: :not_found
+          render json: { error: "Organization not found" }, status: :not_found
         end
       end
-
+      
       # Verify the current user belongs to the organization
       def verify_user_organization
         if @organization && current_user&.organization_id != @organization.id
