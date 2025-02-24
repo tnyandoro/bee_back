@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_02_24_081943) do
+ActiveRecord::Schema[7.1].define(version: 2025_02_24_201930) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -80,8 +80,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_24_081943) do
     t.datetime "updated_at", null: false
     t.string "ticket_number", null: false
     t.string "ticket_type", null: false
-    t.string "urgency"
-    t.string "impact"
     t.bigint "assignee_id"
     t.bigint "team_id", null: false
     t.bigint "requester_id"
@@ -96,6 +94,12 @@ ActiveRecord::Schema[7.1].define(version: 2025_02_24_081943) do
     t.bigint "creator_id"
     t.bigint "user_id", null: false
     t.string "status"
+    t.string "impact"
+    t.string "urgency"
+    t.datetime "response_due_at"
+    t.datetime "resolution_due_at"
+    t.integer "escalation_level", default: 0
+    t.boolean "sla_breached", default: false
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
     t.index ["user_id"], name: "index_tickets_on_user_id"
