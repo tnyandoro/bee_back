@@ -1,6 +1,8 @@
-# app/models/ticket.rb
 # frozen_string_literal: true
 class Ticket < ApplicationRecord
+
+  # Associations
+  belongs_to :user  # Add this line to set user_id
   belongs_to :organization
   belongs_to :creator, class_name: "User", foreign_key: "creator_id"
   belongs_to :requester, class_name: "User", foreign_key: "requester_id"
@@ -9,6 +11,9 @@ class Ticket < ApplicationRecord
 
   has_many :problems, dependent: :destroy
   has_many :comments, dependent: :destroy
+  has_many :create_tickets, class_name: "Ticket", foreign_key: "creator_id"
+  has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
+  has_many :tickets, foreign_key: "user_id"
 
   enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }
 
