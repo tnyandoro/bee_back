@@ -199,6 +199,14 @@ module Api
         }
       end
 
+      def set_organization_from_subdomain
+        subdomain = request.subdomain.presence || 'default' # Fallback if no subdomain
+        @organization = Organization.find_by!(subdomain: subdomain)
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
+        nil
+      end
+          
       def sla_params_changed?
         ticket_params[:urgency].present? || ticket_params[:impact].present? || ticket_params[:priority].present?
       end
@@ -251,32 +259,6 @@ module Api
                               customer source category]
           required_fields.each { |field| ticket_params.require(field) }
         end
-      end
-
-      def ticket_attributes(ticket)
-        {
-          id: ticket.id,
-          title: ticket.title,
-          description: ticket.description,
-          ticket_type: ticket.ticket_type,
-          status: ticket.status,
-          urgency: ticket.urgency,
-          priority: ticket.priority,
-          impact: ticket.impact,
-          team_id: ticket.team_id,
-          assignee_id: ticket.assignee_id,
-          requester_id: ticket.requester_id,
-          creator_id: ticket.creator_id,
-          ticket_number: ticket.ticket_number,
-          reported_at: ticket.reported_at,
-          caller_name: ticket.caller_name,
-          caller_surname: ticket.caller_surname,
-          caller_email: ticket.caller_email,
-          caller_phone: ticket.caller_phone,
-          customer: ticket.customer,
-          source: ticket.source,
-          category: ticket.category
-        }
       end
     end
   end

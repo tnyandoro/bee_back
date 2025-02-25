@@ -1,4 +1,6 @@
-# app/services/sla_calculator.rb
+# Service Object to calculate SLA for a ticket
+# Frozen string literal: true
+
 class SlaCalculator
     def initialize(ticket)
       @ticket = ticket
@@ -53,4 +55,3 @@ class SlaCalculator
       @ticket.sla_breached = Time.current > @ticket.response_due_at || Time.current > @ticket.resolution_due_at
     end
   end
-  
