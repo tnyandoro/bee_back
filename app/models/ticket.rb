@@ -36,11 +36,16 @@ class Ticket < ApplicationRecord
   # Callbacks
   before_save :set_calculated_priority
   after_commit :update_sla_dates, on: [:create, :update]
+  after_create :create_notifications
 
   # SLA Methods
   def calculate_sla_dates
-    self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority)
-    return unless sla_policy
+    self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority) ||
+                        organization.sla_policies.find_by(priority: :p4) # Fallback to p4
+    unless sla_policy && organization.business_hours.any?
+      Rails.logger.warn "Skipping SLA calculation for Ticket ##{id}: No SLA policy or business hours found"
+      return
+    end
 
     business_hours = organization.business_hours
     reported_time = reported_at || Time.current
@@ -59,8 +64,9 @@ class Ticket < ApplicationRecord
   private
 
   def set_calculated_priority
-    self.calculated_priority = priority_matrix["#{urgency}_#{impact}"] || :p4
-    self.priority = calculated_priority unless priority_changed? # Only set priority if not explicitly changed
+    calculated = priority_matrix["#{urgency}_#{impact}"] || :p4
+    self.calculated_priority = self.class.priorities[calculated] # Convert symbol to integer
+    self.priority = calculated_priority unless priority_changed? # Set priority as integer
   end
 
   def priority_matrix
@@ -78,14 +84,18 @@ class Ticket < ApplicationRecord
   end
 
   def update_sla_dates
-    return if destroyed? || !sla_attributes_changed?
+    return if destroyed?
 
-    calculate_sla_dates
-    update_columns(
-      response_due_at: response_due_at,
-      resolution_due_at: resolution_due_at,
-      sla_breached: sla_breached
-    ) if changed?
+    begin
+      calculate_sla_dates
+      update_columns(
+        response_due_at: response_due_at,
+        resolution_due_at: resolution_due_at,
+        sla_breached: sla_breached
+      )
+    rescue => e
+      Rails.logger.error "Failed to update SLA dates for Ticket ##{id}: #{e.message}"
+    end
   end
 
   def sla_attributes_changed?
@@ -94,27 +104,56 @@ class Ticket < ApplicationRecord
   end
 
   def calculate_due_date(start_time, duration_minutes, business_hours)
-    return start_time + duration_minutes.minutes unless business_hours.any? # Fallback if no business hours
+    Rails.logger.debug "Calculating due date: start_time=#{start_time}, duration_minutes=#{duration_minutes}"
+    return start_time + duration_minutes.minutes unless business_hours.any?
 
     remaining_minutes = duration_minutes
     current_time = start_time.dup
+    max_days = 365 # Limit to one year to avoid infinite loops
 
-    loop do
-      break if remaining_minutes <= 0
+    max_days.times do |day_offset|
+      Rails.logger.debug "Day offset: #{day_offset}, current_time: #{current_time}, remaining_minutes: #{remaining_minutes}"
       current_day = business_hours.find { |bh| bh.day_of_week == current_time.wday.to_s }
-      next_day_start = current_time.end_of_day + 1.second
-
+      
       if current_day && within_business_hours?(current_time, current_day)
-        time_until_end = ((current_day.end_time - current_time) / 60).floor
+        end_of_day = Time.zone.parse("#{current_time.to_date} #{current_day.end_time.strftime('%H:%M:%S')}")
+        time_until_end = ((end_of_day - current_time) / 60).floor
         minutes_to_add = [remaining_minutes, time_until_end].min
         current_time += minutes_to_add.minutes
         remaining_minutes -= minutes_to_add
+        Rails.logger.debug "Added #{minutes_to_add} minutes, new current_time: #{current_time}, remaining: #{remaining_minutes}"
+        break if remaining_minutes <= 0
       else
-        current_time = next_day_start
-        current_time += 1.minute until business_hours.any? { |bh| bh.day_of_week == current_time.wday.to_s }
+        # Move to the next business day’s start time
+        next_day = current_time + 1.day
+        next_day_start = Time.zone.parse("#{next_day.to_date} 00:00:00")
+        next_business_day = nil
+        
+        7.times do |i| # Check up to one week ahead
+          check_day = next_day_start + i.days
+          if business_hours.any? { |bh| bh.day_of_week == check_day.wday.to_s }
+            next_business_day = check_day
+            break
+          end
+        end
+
+        unless next_business_day
+          Rails.logger.warn "No business hours found within a week from #{next_day_start} for Ticket ##{id}"
+          return current_time + remaining_minutes.minutes # Fallback to simple addition
+        end
+
+        start_of_next_day = business_hours.find { |bh| bh.day_of_week == next_business_day.wday.to_s }.start_time
+        current_time = Time.zone.parse("#{next_business_day.to_date} #{start_of_next_day.strftime('%H:%M:%S')}")
+        Rails.logger.debug "Moved to next business day: #{current_time}"
       end
     end
 
+    if remaining_minutes > 0
+      Rails.logger.warn "SLA calculation exceeded #{max_days} days for Ticket ##{id}, remaining: #{remaining_minutes} minutes"
+      current_time += remaining_minutes.minutes # Fallback for remaining time
+    end
+
+    Rails.logger.debug "Due date calculated: #{current_time}"
     current_time
   end
 
