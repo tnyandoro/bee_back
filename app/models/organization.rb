@@ -16,6 +16,8 @@ class Organization < ApplicationRecord
   before_validation :normalize_subdomain
 
   # Associations
+  has_many :business_hours, dependent: :destroy
+  has_many :sla_policies, dependent: :destroy
   has_many :users, dependent: :destroy
   has_many :tickets, dependent: :destroy # Direct association with tickets
   has_many :problems, through: :tickets # Indirect association with problems through tickets

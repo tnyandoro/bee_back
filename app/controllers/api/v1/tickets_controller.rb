@@ -1,4 +1,3 @@
-# app/controllers/api/v1/tickets_controller.rb
 # frozen_string_literal: true
 module Api
   module V1
@@ -13,7 +12,6 @@ module Api
       VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
       VALID_CATEGORIES = %w[Technical Billing Support Hardware Software Other].freeze
 
-      # GET /api/v1/organizations/:subdomain/tickets
       def index
         @tickets = apply_filters(@organization.tickets)
         @tickets = @tickets.paginate(page: params[:page], per_page: 10)
@@ -27,58 +25,68 @@ module Api
         }
       end
 
-      # GET /api/v1/organizations/:subdomain/tickets/:id
       def show
         render json: ticket_attributes(@ticket)
       end
-      
 
-      # POST /api/v1/organizations/:subdomain/tickets
       def create
-        @ticket = @organization.tickets.new(ticket_params)
+        ticket_params_adjusted = ticket_params_with_enums
+        # Clamp priority to valid range (0-3)
+        if ticket_params_adjusted[:priority].present?
+          priority_value = ticket_params_adjusted[:priority].to_i
+          ticket_params_adjusted[:priority] = [0, [3, priority_value].min].max # Ensures 0-3 (p4-p1)
+        end
+
+        @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = @creator
         @ticket.requester = @creator
-        @ticket.user_id = @creator.id # Add this line to set user_id
+        @ticket.user_id = @creator.id
         @ticket.ticket_number = SecureRandom.hex(5)
         @ticket.reported_at = Time.current
         @ticket.status = 'open'
-        
-        if ticket_params[:team_id].present?
-          team = @organization.teams.find_by(id: ticket_params[:team_id])
+
+        if ticket_params_adjusted[:team_id].present?
+          team = @organization.teams.find_by(id: ticket_params_adjusted[:team_id])
           unless team
             render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity
             return
           end
           @ticket.team = team
 
-          if ticket_params[:assignee_id].present?
-            assignee = team.users.find_by(id: ticket_params[:assignee_id])
+          if ticket_params_adjusted[:assignee_id].present?
+            assignee = team.users.find_by(id: ticket_params_adjusted[:assignee_id])
             unless assignee
               render json: { error: 'Assignee not found in the selected team' }, status: :unprocessable_entity
               return
             end
             @ticket.assignee = assignee
-            @ticket.status = 'assigned' # Set status to 'assigned' if assignee is set
+            @ticket.status = 'assigned'
           end
         end
 
-        unless VALID_CATEGORIES.include?(ticket_params[:category])
+        unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
           render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
           return
         end
 
         if @ticket.save
-          render json: ticket_attributes(@ticket), status: :created, 
+          render json: ticket_attributes(@ticket), status: :created,
                  location: api_v1_organization_ticket_url(@organization.subdomain, @ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
         end
       end
 
-      # PATCH/PUT /api/v1/organizations/:subdomain/tickets/:id
       def update
-        if ticket_params[:team_id].present?
-          team = @organization.teams.find_by(id: ticket_params[:team_id])
+        ticket_params_adjusted = ticket_params_with_enums
+        # Clamp priority to valid range (0-3)
+        if ticket_params_adjusted[:priority].present?
+          priority_value = ticket_params_adjusted[:priority].to_i
+          ticket_params_adjusted[:priority] = [0, [3, priority_value].min].max # Ensures 0-3 (p4-p1)
+        end
+
+        if ticket_params_adjusted[:team_id].present?
+          team = @organization.teams.find_by(id: ticket_params_adjusted[:team_id])
           unless team
             render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity
             return
@@ -86,38 +94,36 @@ module Api
           @ticket.team = team
         end
 
-        if ticket_params[:assignee_id].present?
-          assignee = @ticket.team&.users&.find_by(id: ticket_params[:assignee_id])
+        if ticket_params_adjusted[:assignee_id].present?
+          assignee = @ticket.team&.users&.find_by(id: ticket_params_adjusted[:assignee_id])
           unless assignee
             render json: { error: 'Assignee not found in the team' }, status: :unprocessable_entity
             return
           end
           @ticket.assignee = assignee
-          @ticket.status = 'assigned' # Update status if assignee changes
-        elsif ticket_params[:assignee_id] == '' # Explicitly clearing assignee
+          @ticket.status = 'assigned'
+        elsif ticket_params_adjusted[:assignee_id] == ''
           @ticket.assignee = nil
-          @ticket.status = 'open' # Reset status if assignee is removed
+          @ticket.status = 'open'
         end
 
-        if ticket_params[:category].present? && !VALID_CATEGORIES.include?(ticket_params[:category])
+        if ticket_params_adjusted[:category].present? && !VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
           render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
           return
         end
 
-        if @ticket.update(ticket_params)
+        if @ticket.update(ticket_params_adjusted)
           render json: ticket_attributes(@ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
         end
       end
 
-      # DELETE /api/v1/organizations/:subdomain/tickets/:id
       def destroy
         @ticket.destroy!
         head :no_content
       end
 
-      # POST /api/v1/organizations/:subdomain/tickets/:id/assign_to_user
       def assign_to_user
         unless current_user.teamlead? && current_user.team == @ticket.team
           return render json: { error: 'You are not authorized to assign this ticket' }, status: :unauthorized
@@ -143,7 +149,6 @@ module Api
         end
       end
 
-      # POST /api/v1/organizations/:subdomain/tickets/:id/escalate_to_problem
       def escalate_to_problem
         unless current_user.teamlead?
           return render json: { error: 'Only team leads can escalate tickets to problems' }, status: :forbidden
@@ -165,6 +170,49 @@ module Api
       end
 
       private
+
+      def ticket_attributes(ticket)
+        {
+          id: ticket.id,
+          title: ticket.title,
+          description: ticket.description,
+          ticket_type: ticket.ticket_type,
+          status: ticket.status,
+          urgency: ticket.urgency,
+          priority: ticket.priority_before_type_cast, # Returns string like "p1"
+          impact: ticket.impact,
+          team_id: ticket.team_id,
+          assignee_id: ticket.assignee_id,
+          requester_id: ticket.requester_id,
+          creator_id: ticket.creator_id,
+          ticket_number: ticket.ticket_number,
+          reported_at: ticket.reported_at,
+          caller_name: ticket.caller_name,
+          caller_surname: ticket.caller_surname,
+          caller_email: ticket.caller_email,
+          caller_phone: ticket.caller_phone,
+          customer: ticket.customer,
+          source: ticket.source,
+          category: ticket.category,
+          response_due_at: ticket.response_due_at,
+          resolution_due_at: ticket.resolution_due_at,
+          escalation_level: ticket.escalation_level,
+          sla_breached: ticket.sla_breached,
+          calculated_priority: ticket.calculated_priority
+        }
+      end
+
+      def set_organization_from_subdomain
+        subdomain = request.subdomain.presence || 'default'
+        @organization = Organization.find_by!(subdomain: subdomain)
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
+        nil
+      end
+
+      def sla_params_changed?
+        ticket_params[:urgency].present? || ticket_params[:impact].present? || ticket_params[:priority].present?
+      end
 
       def validate_params
         return if validate_status && validate_ticket_type
@@ -216,30 +264,20 @@ module Api
         end
       end
 
-      def ticket_attributes(ticket)
-        {
-          id: ticket.id,
-          title: ticket.title,
-          description: ticket.description,
-          ticket_type: ticket.ticket_type,
-          status: ticket.status,
-          urgency: ticket.urgency,
-          priority: ticket.priority,
-          impact: ticket.impact,
-          team_id: ticket.team_id,
-          assignee_id: ticket.assignee_id,
-          requester_id: ticket.requester_id,
-          creator_id: ticket.creator_id,
-          ticket_number: ticket.ticket_number,
-          reported_at: ticket.reported_at,
-          caller_name: ticket.caller_name,
-          caller_surname: ticket.caller_surname,
-          caller_email: ticket.caller_email,
-          caller_phone: ticket.caller_phone,
-          customer: ticket.customer,
-          source: ticket.source,
-          category: ticket.category
-        }
+      def ticket_params_with_enums
+        permitted_params = ticket_params.dup
+        Rails.logger.debug "Raw ticket_params: #{permitted_params.inspect}"
+        # Convert string urgency and impact to integers
+        if permitted_params[:urgency].present?
+          urgency_value = permitted_params[:urgency].downcase
+          permitted_params[:urgency] = Ticket.urgencies[urgency_value] || raise("Invalid urgency: #{urgency_value}")
+        end
+        if permitted_params[:impact].present?
+          impact_value = permitted_params[:impact].downcase
+          permitted_params[:impact] = Ticket.impacts[impact_value] || raise("Invalid impact: #{impact_value}")
+        end
+        Rails.logger.debug "Converted ticket_params: #{permitted_params.inspect}"
+        permitted_params
       end
     end
   end
