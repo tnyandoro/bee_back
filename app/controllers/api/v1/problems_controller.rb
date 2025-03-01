@@ -2,6 +2,8 @@
 module Api
   module V1
     class ProblemsController < ApplicationController
+      before_action :authenticate_user!
+      before_action :set_organization_from_subdomain
       before_action :set_problem, only: %i[show update destroy]
 
       def index
@@ -12,20 +14,23 @@ module Api
           @user = User.find(params[:user_id])
           @problems = @user.problems
         else
-          @problems = Problem.all
+          @problems = @organization.problems # Scope to the current organization
         end
-
         render json: @problems
       end
 
-      # GET /problems/1
       def show
         render json: @problem
       end
 
-      # POST /problems
       def create
-        @problem = Problem.new(problem_params)
+        @ticket = @organization.tickets.find(params[:problem][:ticket_id]) if params[:problem][:ticket_id].present?
+        @problem = Problem.new(problem_params.merge(creator: current_user, organization: @organization))
+
+        if @ticket
+          @problem.ticket = @ticket
+          @ticket.update(status: 'escalated') # Update ticket status if escalated
+        end
 
         if @problem.save
           render json: @problem, status: :created, location: @problem
@@ -34,7 +39,6 @@ module Api
         end
       end
 
-      # PATCH/PUT /problems/1
       def update
         if @problem.update(problem_params)
           render json: @problem
@@ -43,22 +47,29 @@ module Api
         end
       end
 
-      # DELETE /problems/1
       def destroy
         @problem.destroy!
+        head :no_content
       end
 
       private
 
-      # Use callbacks to share common setup or constraints between actions.
       def set_problem
-        @problem = Problem.find(params[:id])
+        @problem = @organization.problems.find(params[:id])
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Problem not found in this organization' }, status: :not_found
       end
 
-      # Only allow a list of trusted parameters through.
       def problem_params
-        params.require(:problem).permit(:description, :ticket_id, :organization_id, :team_id, :creator_id, :user_id)
+        params.require(:problem).permit(:description, :ticket_id, :team_id, :user_id)
+      end
+
+      def set_organization_from_subdomain
+        subdomain = request.subdomain.presence || 'default'
+        @organization = Organization.find_by!(subdomain: subdomain)
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
       end
     end
   end
-end   
+end
