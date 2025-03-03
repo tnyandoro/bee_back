@@ -14,7 +14,7 @@ module Api
           @user = User.find(params[:user_id])
           @problems = @user.problems
         else
-          @problems = @organization.problems # Scope to the current organization
+          @problems = @organization.problems
         end
         render json: @problems
       end
@@ -24,7 +24,9 @@ module Api
       end
 
       def create
-        @ticket = @organization.tickets.find(params[:problem][:ticket_id]) if params[:problem][:ticket_id].present?
+        Rails.logger.debug "Problem params: #{params.inspect}" # Debug incoming params
+
+        @ticket = @organization.tickets.find_by(id: params[:problem][:ticket_id]) if params[:problem][:ticket_id].present?
         @problem = Problem.new(problem_params.merge(creator: current_user, organization: @organization))
 
         if @ticket
@@ -33,17 +35,22 @@ module Api
         end
 
         if @problem.save
-          render json: @problem, status: :created, location: @problem
+          render json: @problem, status: :created, location: api_v1_organization_problem_url(@organization.subdomain, @problem)
         else
-          render json: @problem.errors, status: :unprocessable_entity
+          Rails.logger.debug "Problem errors: #{@problem.errors.full_messages}" # Debug validation errors
+          render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
         end
+      rescue StandardError => e
+        Rails.logger.error "Error creating problem: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        render json: { error: 'Internal server error', details: e.message }, status: :internal_server_error
       end
 
       def update
         if @problem.update(problem_params)
           render json: @problem
         else
-          render json: @problem.errors, status: :unprocessable_entity
+          render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
         end
       end
 
