@@ -134,7 +134,7 @@ module Api
           return render json: { error: 'User not found in the team' }, status: :unprocessable_entity
         end
 
-        if @ticket.update(assignee: assignee)
+        if @ticket.update(assignee: assignee, status: 'assigned')
           SendTicketAssignmentEmailsJob.perform_later(@ticket, @ticket.team, assignee) if defined?(SendTicketAssignmentEmailsJob)
           Notification.create!(
             user: assignee,
@@ -153,20 +153,37 @@ module Api
         unless current_user.teamlead?
           return render json: { error: 'Only team leads can escalate tickets to problems' }, status: :forbidden
         end
-        unless @ticket.ticket_type == 'Incident'
-          return render json: { error: 'Only incident tickets can be escalated to problems' }, status: :unprocessable_entity
-        end
 
-        problem = Problem.create!(
+        # Removed restriction to only Incidents; now any ticket type can be escalated
+        # If you want to restrict it back to Incidents, uncomment the following:
+        # unless @ticket.ticket_type == 'Incident'
+        #   return render json: { error: 'Only incident tickets can be escalated to problems' }, status: :unprocessable_entity
+        # end
+
+        @problem = Problem.new(
           description: @ticket.description,
           organization: @ticket.organization,
           team: @ticket.team,
           creator: current_user,
-          ticket_id: @ticket.id
+          ticket: @ticket
         )
 
-        @ticket.update!(status: 'escalated')
-        render json: { message: 'Ticket escalated to problem', problem: problem.as_json }, status: :created
+        if @problem.save
+          @ticket.update!(status: 'escalated')
+          # Optionally notify relevant users
+          if @ticket.assignee
+            Notification.create!(
+              user: @ticket.assignee,
+              organization: @ticket.organization,
+              message: "Ticket #{@ticket.ticket_number} has been escalated to a problem.",
+              read: false,
+              metadata: { ticket_id: @ticket.id, problem_id: @problem.id }
+            )
+          end
+          render json: { message: 'Ticket escalated to problem', problem: @problem.as_json }, status: :created
+        else
+          render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
+        end
       end
 
       private
