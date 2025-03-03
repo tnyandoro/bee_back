@@ -4,25 +4,13 @@ module Api
     class TeamsController < ApplicationController
       before_action :authenticate_user!
       before_action :set_organization_from_subdomain
-      before_action :authorize_admin_or_super_user, except: [:index, :show, :users] # Allow users action for all authenticated users
+      before_action :authorize_admin_or_super_user, except: [:index, :show, :users]
       before_action :set_team, only: [:show, :update, :destroy, :users]
 
       # GET /api/v1/organizations/:subdomain/teams
       def index
         @teams = @organization.teams
-        @teams = @teams.paginate(page: params[:page], per_page: 10)
-        if @teams.empty?
-          render json: { message: "No teams found in this organization" }, status: :ok
-        else
-          render json: {
-            teams: @teams.map { |team| team_attributes(team) },
-            pagination: {
-              current_page: @teams.current_page,
-              total_pages: @teams.total_pages,
-              total_entries: @teams.total_entries
-            }
-          }
-        end
+        render json: @teams.map { |team| { id: team.id, name: team.name } }
       end
 
       # GET /api/v1/organizations/:subdomain/teams/:id
@@ -33,7 +21,7 @@ module Api
       # GET /api/v1/organizations/:subdomain/teams/:team_id/users
       def users
         @users = @team.users
-        render json: { users: @users.map { |user| user_attributes(user) } }
+        render json: @users.map { |user| { id: user.id, name: user.name || user.username, team_id: user.team_id } }
       end
 
       # POST /api/v1/organizations/:subdomain/teams
@@ -84,7 +72,7 @@ module Api
       private
 
       def set_team
-        @team = @organization.teams.find(params[:id] || params[:team_id]) # Handle both :id and :team_id
+        @team = @organization.teams.find(params[:id] || params[:team_id])
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Team not found in this organization' }, status: :not_found
       end
@@ -97,6 +85,13 @@ module Api
         unless current_user&.role_admin? || current_user&.role_super_user?
           render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
         end
+      end
+
+      def set_organization_from_subdomain
+        subdomain = request.subdomain.presence || 'default'
+        @organization = Organization.find_by!(subdomain: subdomain)
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
       end
 
       def team_attributes(team)
