@@ -10,7 +10,24 @@ module Api
 
       # GET /api/v1/profile
       def profile
-        render json: user_attributes(current_user).merge(
+        unless current_user
+          render json: { error: 'User not authenticated' }, status: :unauthorized
+          return
+        end
+
+        render json: {
+          user: {
+            id: current_user.id,
+            email: current_user.email,
+            name: current_user.name,
+            username: current_user.username,
+            phone_number: current_user.phone_number,
+            department: current_user.department,
+            position: current_user.position,
+            role: current_user.role,
+            auth_token: current_user.auth_token,
+            team_id: current_user.team_id
+          },
           organization: {
             id: @organization.id,
             name: @organization.name,
@@ -20,7 +37,7 @@ module Api
             address: @organization.address,
             web_address: @organization.web_address
           }
-        ), status: :ok
+        }, status: :ok
       end
 
       # GET /api/v1/organizations/:subdomain/users
