@@ -55,6 +55,8 @@ gem "rack-cors"
 # Use Rack Attack to throttle and block abusive requests [
 gem "rack-attack"
 
+gem 'dotenv-rails', groups: [:development, :test]
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   # gem "debug", platforms: %i[ mri windows ]
