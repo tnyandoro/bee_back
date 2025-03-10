@@ -10,16 +10,10 @@ default: &default
 development:
   <<: *default
   database: itsm_api_development
-  username: tendai
-  password: Mybreak28#
-  host: localhost
 
 test:
   <<: *default
   database: itsm_api_test
-  username: tendai
-  password: Mybreak28#
-  host: localhost
 
 production:
   <<: *default
