@@ -10,7 +10,7 @@ services:
     runtime: ruby
     plan: free
     buildCommand: "./bin/render-build.sh"
-    startCommand: "bundle exec rails server -b 0.0.0.0"
+    startCommand: "bundle exec rails server -b 0.0.0.0 --verbose"
     envVars:
       - key: RAILS_ENV
         value: production
