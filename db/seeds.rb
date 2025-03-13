@@ -74,8 +74,8 @@ if admin_user.persisted?
     ticket_type: "incident",
     status: "open",
     priority: 2,
-    urgency: "Medium",
-    impact: "High",
+    urgency: "medium",
+    impact: "high",
     creator_id: admin_user.id, # Use creator_id
     requester_id: teamlead_user.id, # Use requester_id
     assignee_id: agent_user.id, # Use assignee_id
@@ -99,8 +99,8 @@ if admin_user.persisted?
     ticket_type: "service_request",
     status: "open",
     priority: 3,
-    urgency: "Low",
-    impact: "Medium",
+    urgency: "low",
+    impact: "medium",
     creator_id: teamlead_user.id, # Use creator_id
     requester_id: agent_user.id, # Use requester_id
     assignee_id: admin_user.id, # Use assignee_id
