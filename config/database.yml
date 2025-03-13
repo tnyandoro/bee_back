@@ -7,7 +7,7 @@ default: &default
   host: <%= ENV["DB_HOST"] %>
   port: <%= ENV["DB_PORT"] || 5432 %>
   variables:
-    lock_timeout: nil
+    lock_timeout: '5s'
 
 development:
   <<: *default
