@@ -22,7 +22,8 @@ RUN apt-get update -qq && \
 
 # Install gems
 COPY Gemfile Gemfile.lock ./
-RUN bundle install && \
+RUN gem install rails && \
+    bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
     bundle exec bootsnap precompile --gemfile
 
@@ -61,8 +62,8 @@ RUN chmod +x /rails/bin/docker-entrypoint
 # Make sure the render-build.sh script is executable
 RUN chmod +x /rails/bin/render-build.sh
 
-# Set the secret key base environment variable
-ENV SECRET_KEY_BASE="4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916"
+# Add the Rails binary to the PATH
+ENV PATH="/usr/local/bundle/bin:$PATH"
 
 USER rails:rails
 
