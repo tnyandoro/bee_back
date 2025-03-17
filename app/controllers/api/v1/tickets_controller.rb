@@ -219,13 +219,23 @@ module Api
         }
       end
 
+      # def set_organization_from_subdomain
+      #   subdomain = request.subdomain.presence || 'default'
+      #   @organization = Organization.find_by!(subdomain: subdomain)
+      # rescue ActiveRecord::RecordNotFound
+      #   render json: { error: 'Organization not found for this subdomain' }, status: :not_found
+      #   nil
+      # end
+
       def set_organization_from_subdomain
-        subdomain = request.subdomain.presence || 'default'
+        subdomain = params[:organization_subdomain].presence || request.subdomain.presence || 'default'
+        Rails.logger.info "Subdomain detected: #{subdomain}"
         @organization = Organization.find_by!(subdomain: subdomain)
       rescue ActiveRecord::RecordNotFound
+        Rails.logger.error "Organization not found for subdomain: #{subdomain}"
         render json: { error: 'Organization not found for this subdomain' }, status: :not_found
-        nil
       end
+      
 
       def sla_params_changed?
         ticket_params[:urgency].present? || ticket_params[:impact].present? || ticket_params[:priority].present?
