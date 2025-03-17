@@ -48,23 +48,31 @@ module Api
       def create
         @team = @organization.teams.new(team_params.except(:user_ids))
       
+        Rails.logger.info "🔥 Attempting to create team: #{@team.inspect}"
+        
         if @team.save
+          Rails.logger.info "✅ Team created successfully with ID: #{@team.id}"
+          
           if team_params[:user_ids].present?
             users = @organization.users.where(id: team_params[:user_ids])
             if users.count != team_params[:user_ids].size
+              Rails.logger.warn "⚠️ Some user IDs are invalid or missing."
               render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
               return
             end
             # ✅ Directly assign team_id to users
             users.update_all(team_id: @team.id)
+            Rails.logger.info "✅ Assigned team_id to users: #{users.pluck(:id)}"
           end
       
           render json: team_attributes(@team), status: :created,
                  location: api_v1_organization_team_url(@organization.subdomain, @team)
         else
+          Rails.logger.error "❌ Team creation failed: #{@team.errors.full_messages.join(", ")}"
           render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
         end
       end
+      
 
       # PATCH/PUT /api/v1/organizations/:subdomain/teams/:id
       def update
