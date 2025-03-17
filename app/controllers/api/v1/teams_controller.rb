@@ -25,20 +25,41 @@ module Api
       end
 
       # POST /api/v1/organizations/:subdomain/teams
+      # def create
+      #   @team = @organization.teams.new(team_params.except(:user_ids))
+
+      #   if team_params[:user_ids].present?
+      #     users = @organization.users.where(id: team_params[:user_ids])
+      #     if users.count != team_params[:user_ids].size
+      #       render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
+      #       return
+      #     end
+      #     @team.users = users
+      #   end
+
+      #   if @team.save
+      #     render json: team_attributes(@team), status: :created, 
+      #            location: api_v1_organization_team_url(@organization.subdomain, @team)
+      #   else
+      #     render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
+      #   end
+      # end
+
       def create
         @team = @organization.teams.new(team_params.except(:user_ids))
-
-        if team_params[:user_ids].present?
-          users = @organization.users.where(id: team_params[:user_ids])
-          if users.count != team_params[:user_ids].size
-            render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
-            return
-          end
-          @team.users = users
-        end
-
+      
         if @team.save
-          render json: team_attributes(@team), status: :created, 
+          if team_params[:user_ids].present?
+            users = @organization.users.where(id: team_params[:user_ids])
+            if users.count != team_params[:user_ids].size
+              render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
+              return
+            end
+            # ✅ Directly assign team_id to users
+            users.update_all(team_id: @team.id)
+          end
+      
+          render json: team_attributes(@team), status: :created,
                  location: api_v1_organization_team_url(@organization.subdomain, @team)
         else
           render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
