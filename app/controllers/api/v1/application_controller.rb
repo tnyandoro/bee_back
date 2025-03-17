@@ -48,13 +48,25 @@ module Api
         render json: { error: "Resource not found", details: exception.message }, status: :not_found
       end
 
+      # def set_organization_from_subdomain
+      #   subdomain = request.subdomain.presence || 'default'
+      #   @organization = Organization.find_by(subdomain: subdomain)
+      #   unless @organization
+      #     render json: { error: "Organization not found for subdomain: #{subdomain}" }, status: :not_found
+      #   end
+      # end
+
       def set_organization_from_subdomain
         subdomain = request.subdomain.presence || 'default'
+        Rails.logger.info "Subdomain detected: #{subdomain}"
         @organization = Organization.find_by(subdomain: subdomain)
+      
         unless @organization
+          Rails.logger.error "Organization not found for subdomain: #{subdomain}"
           render json: { error: "Organization not found for subdomain: #{subdomain}" }, status: :not_found
         end
       end
+      
 
       def verify_user_organization
         if @organization && current_user&.organization_id != @organization.id
