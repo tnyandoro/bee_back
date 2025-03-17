@@ -57,8 +57,12 @@ module Api
       # end
 
       def set_organization_from_subdomain
+        # Force to use params[:subdomain] if available, ignoring request.subdomain
         subdomain = params[:subdomain].presence || request.subdomain.presence || 'default'
-        Rails.logger.info "Subdomain detected: '#{subdomain}'"
+        
+        Rails.logger.info "Subdomain detected from params: '#{params[:subdomain]}'"
+        Rails.logger.info "Subdomain detected from request: '#{request.subdomain}'"
+        Rails.logger.info "Final subdomain used: '#{subdomain}'"
         
         @organization = Organization.find_by(subdomain: subdomain)
         
