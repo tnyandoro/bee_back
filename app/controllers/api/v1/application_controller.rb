@@ -57,15 +57,19 @@ module Api
       # end
 
       def set_organization_from_subdomain
-        subdomain = request.subdomain.presence || 'default'
-        Rails.logger.info "Subdomain detected: #{subdomain}"
+        subdomain = params[:subdomain].presence || request.subdomain.presence || 'default'
+        Rails.logger.info "Subdomain detected: '#{subdomain}'"
+        
         @organization = Organization.find_by(subdomain: subdomain)
-      
-        unless @organization
+        
+        if @organization
+          Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
+        else
           Rails.logger.error "Organization not found for subdomain: #{subdomain}"
           render json: { error: "Organization not found for subdomain: #{subdomain}" }, status: :not_found
         end
       end
+      
       
 
       def verify_user_organization
