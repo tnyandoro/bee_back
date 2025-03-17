@@ -95,12 +95,14 @@ module Api
       # end
 
       def set_organization_from_subdomain
-        subdomain = request.subdomain.presence || params[:organization_subdomain] || 'default'
+        subdomain = params[:organization_subdomain].presence || request.subdomain.presence || 'default'
         Rails.logger.info "Subdomain detected: #{subdomain}"
         @organization = Organization.find_by!(subdomain: subdomain)
       rescue ActiveRecord::RecordNotFound
+        Rails.logger.error "Organization not found for subdomain: #{subdomain}"
         render json: { error: 'Organization not found for this subdomain' }, status: :not_found
       end
+      
 
       def team_attributes(team)
         {
