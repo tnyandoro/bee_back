@@ -109,12 +109,27 @@ module Api
         end
       end
 
+      # def set_organization_from_subdomain
+      #   subdomain = request.subdomain.presence || 'default'
+      #   @organization = Organization.find_by!(subdomain: subdomain)
+      # rescue ActiveRecord::RecordNotFound
+      #   render json: { error: 'Organization not found for this subdomain' }, status: :not_found
+      # end
+
       def set_organization_from_subdomain
-        subdomain = request.subdomain.presence || 'default'
+        # Prioritize params[:subdomain] over request.subdomain
+        subdomain = params[:subdomain].presence || request.subdomain.presence || 'default'
+        
+        Rails.logger.info "Subdomain detected from params: '#{params[:subdomain]}'"
+        Rails.logger.info "Subdomain detected from request: '#{request.subdomain}'"
+        Rails.logger.info "Final subdomain used: '#{subdomain}'"
+      
         @organization = Organization.find_by!(subdomain: subdomain)
       rescue ActiveRecord::RecordNotFound
+        Rails.logger.error "Organization not found for subdomain: #{subdomain}"
         render json: { error: 'Organization not found for this subdomain' }, status: :not_found
       end
+      
 
       def verify_user_organization
         unless current_user&.organization_id == @organization.id
