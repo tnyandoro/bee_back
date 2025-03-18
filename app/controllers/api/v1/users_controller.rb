@@ -116,15 +116,28 @@ module Api
       #   render json: { error: 'Organization not found for this subdomain' }, status: :not_found
       # end
 
-      def set_organization_from_subdomain
-        # Prioritize `organization_subdomain` over `subdomain` and request subdomain
-        subdomain = params[:organization_subdomain].presence || params[:subdomain].presence || request.subdomain.presence || 'default'
+      # def set_organization_from_subdomain
+      #   # Prioritize `organization_subdomain` over `subdomain` and request subdomain
+      #   subdomain = params[:organization_subdomain].presence || params[:subdomain].presence || request.subdomain.presence || 'default'
         
-        Rails.logger.info "Subdomain detected from params: '#{params[:subdomain]}'"
-        Rails.logger.info "Organization subdomain from params: '#{params[:organization_subdomain]}'"
-        Rails.logger.info "Subdomain detected from request: '#{request.subdomain}'"
-        Rails.logger.info "Final subdomain used: '#{subdomain}'"
+      #   Rails.logger.info "Subdomain detected from params: '#{params[:subdomain]}'"
+      #   Rails.logger.info "Organization subdomain from params: '#{params[:organization_subdomain]}'"
+      #   Rails.logger.info "Subdomain detected from request: '#{request.subdomain}'"
+      #   Rails.logger.info "Final subdomain used: '#{subdomain}'"
       
+      #   @organization = Organization.find_by!(subdomain: subdomain)
+      # rescue ActiveRecord::RecordNotFound
+      #   Rails.logger.error "Organization not found for subdomain: #{subdomain}"
+      #   render json: { error: 'Organization not found for this subdomain for user' }, status: :not_found
+      # end
+
+      def set_organization_from_subdomain
+        # Only use params, not request.subdomain
+        subdomain = params[:organization_subdomain].presence || params[:subdomain].presence || 'default'
+        
+        Rails.logger.info "Organization subdomain from params: '#{params[:organization_subdomain]}'"
+        Rails.logger.info "Final subdomain used: '#{subdomain}'"
+        
         @organization = Organization.find_by!(subdomain: subdomain)
       rescue ActiveRecord::RecordNotFound
         Rails.logger.error "Organization not found for subdomain: #{subdomain}"
