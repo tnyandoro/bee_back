@@ -16,7 +16,7 @@ class Ticket < ApplicationRecord
   has_many :tickets, foreign_key: "user_id"
 
   # Enums
-  enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }
+  enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }, _default: :open
   enum urgency: { low: 0, medium: 1, high: 2 }, _prefix: :urgency
   enum impact: { low: 0, medium: 1, high: 2 }, _prefix: :impact
   enum priority: { p4: 0, p3: 1, p2: 2, p1: 3 }
@@ -24,11 +24,11 @@ class Ticket < ApplicationRecord
   # Validations
   validates :title, :description, :urgency, :impact, presence: true
   validates :user_id, presence: true
+  validates :ticket_number, presence: true, uniqueness: true
+  validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname, :caller_email, :caller_phone, :customer, :source, presence: true
 
   # Scopes
-  scope :for_user_in_organization, ->(user_id, organization_id) {
-    where(creator_id: user_id, organization_id: organization_id)
-  }
+  scope :for_user_in_organization, ->(user_id, organization_id) { where(creator_id: user_id, organization_id: organization_id) }
   scope :sla_breached, -> { where(sla_breached: true) }
   scope :pending_response, -> { where("response_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
   scope :pending_resolution, -> { where("resolution_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
@@ -41,7 +41,7 @@ class Ticket < ApplicationRecord
   # SLA Methods
   def calculate_sla_dates
     self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority) ||
-                        organization.sla_policies.find_by(priority: :p4) # Fallback to p4
+                        organization.sla_policies.find_by(priority: :p4)
     unless sla_policy && organization.business_hours.any?
       Rails.logger.warn "Skipping SLA calculation for Ticket ##{id}: No SLA policy or business hours found"
       return
@@ -65,8 +65,8 @@ class Ticket < ApplicationRecord
 
   def set_calculated_priority
     calculated = priority_matrix["#{urgency}_#{impact}"] || :p4
-    self.calculated_priority = self.class.priorities[calculated] # Convert symbol to integer
-    self.priority = calculated_priority unless priority_changed? # Set priority as integer
+    self.calculated_priority = self.class.priorities[calculated]
+    self.priority = calculated_priority unless priority_changed?
   end
 
   def priority_matrix
@@ -109,7 +109,7 @@ class Ticket < ApplicationRecord
 
     remaining_minutes = duration_minutes
     current_time = start_time.dup
-    max_days = 365 # Limit to one year to avoid infinite loops
+    max_days = 365
 
     max_days.times do |day_offset|
       Rails.logger.debug "Day offset: #{day_offset}, current_time: #{current_time}, remaining_minutes: #{remaining_minutes}"
@@ -124,12 +124,11 @@ class Ticket < ApplicationRecord
         Rails.logger.debug "Added #{minutes_to_add} minutes, new current_time: #{current_time}, remaining: #{remaining_minutes}"
         break if remaining_minutes <= 0
       else
-        # Move to the next business day’s start time
         next_day = current_time + 1.day
         next_day_start = Time.zone.parse("#{next_day.to_date} 00:00:00")
         next_business_day = nil
         
-        7.times do |i| # Check up to one week ahead
+        7.times do |i|
           check_day = next_day_start + i.days
           if business_hours.any? { |bh| bh.day_of_week == check_day.wday.to_s }
             next_business_day = check_day
@@ -139,7 +138,7 @@ class Ticket < ApplicationRecord
 
         unless next_business_day
           Rails.logger.warn "No business hours found within a week from #{next_day_start} for Ticket ##{id}"
-          return current_time + remaining_minutes.minutes # Fallback to simple addition
+          return current_time + remaining_minutes.minutes
         end
 
         start_of_next_day = business_hours.find { |bh| bh.day_of_week == next_business_day.wday.to_s }.start_time
@@ -150,7 +149,7 @@ class Ticket < ApplicationRecord
 
     if remaining_minutes > 0
       Rails.logger.warn "SLA calculation exceeded #{max_days} days for Ticket ##{id}, remaining: #{remaining_minutes} minutes"
-      current_time += remaining_minutes.minutes # Fallback for remaining time
+      current_time += remaining_minutes.minutes
     end
 
     Rails.logger.debug "Due date calculated: #{current_time}"

@@ -1,3 +1,4 @@
+# db/seeds.rb
 puts "Clearing existing data..."
 Problem.destroy_all
 Ticket.destroy_all
@@ -12,7 +13,7 @@ organization = Organization.create!(
   address: "123 Main St",
   email: "info@example.com",
   web_address: "https://example.com",
-  subdomain: "example" # Ensure subdomain is unique
+  subdomain: "example"
 )
 
 # Create teams
@@ -32,32 +33,33 @@ puts "Creating admin user..."
 admin_user = User.create!(
   name: "Admin User",
   email: "admin@example.com",
-  password: "password", # Default password for development
-  role: :admin,
+  password: "password123", # Meets 8-character minimum
+  username: "adminuser", # Required by validation
+  role: :admin, # Use symbol to match enum
   department: "Management",
   position: "Admin",
-  organization: organization # Ensure the admin user is assigned to the organization
+  organization: organization
 )
-
 puts "Created admin user: #{admin_user.email}"
 
 # Only the admin can create other users
 if admin_user.persisted?
   puts "Creating other users..."
   roles = [
-    { name: "Teamlead User", email: "teamlead@example.com", role: :teamlead, team: it_team },
-    { name: "Agent User", email: "agent@example.com", role: :agent, team: support_team },
-    { name: "Viewer User", email: "viewer@example.com", role: :viewer }
+    { name: "Teamlead User", email: "teamlead@example.com", username: "teamleaduser", role: :teamlead, team: it_team },
+    { name: "Agent User", email: "agent@example.com", username: "agentuser", role: :agent, team: support_team },
+    { name: "Viewer User", email: "viewer@example.com", username: "vieweruser", role: :viewer }
   ]
 
   roles.each do |user_data|
     User.create!(
       name: user_data[:name],
       email: user_data[:email],
-      password: "password", # Default password for development
+      password: "password123",
+      username: user_data[:username],
       role: user_data[:role],
       organization: organization,
-      team: user_data[:team] # Assign to the appropriate team
+      team: user_data[:team]
     )
     puts "Created #{user_data[:role]} user: #{user_data[:email]}"
   end
@@ -76,10 +78,10 @@ if admin_user.persisted?
     priority: 2,
     urgency: "medium",
     impact: "high",
-    creator_id: admin_user.id, # Use creator_id
-    requester_id: teamlead_user.id, # Use requester_id
-    assignee_id: agent_user.id, # Use assignee_id
-    user_id: admin_user.id, # Use user_id
+    creator_id: admin_user.id,
+    requester_id: teamlead_user.id,
+    assignee_id: agent_user.id,
+    user_id: admin_user.id,
     organization: organization,
     reported_at: Time.current,
     category: "Hardware",
@@ -89,8 +91,8 @@ if admin_user.persisted?
     caller_phone: "123-456-7890",
     customer: "HR Department",
     source: "Phone",
-    team: it_team,
-    ticket_number: "TICKET-#{Time.current.to_i}" # Add unique ticket_number
+    team_id: it_team.id,
+    ticket_number: "TICKET-#{Time.current.to_i}"
   )
 
   ticket2 = Ticket.create!(
@@ -101,10 +103,10 @@ if admin_user.persisted?
     priority: 3,
     urgency: "low",
     impact: "medium",
-    creator_id: teamlead_user.id, # Use creator_id
-    requester_id: agent_user.id, # Use requester_id
-    assignee_id: admin_user.id, # Use assignee_id
-    user_id: teamlead_user.id, # Use user_id
+    creator_id: teamlead_user.id,
+    requester_id: agent_user.id,
+    assignee_id: admin_user.id,
+    user_id: teamlead_user.id,
     organization: organization,
     reported_at: Time.current,
     category: "Software",
@@ -114,8 +116,8 @@ if admin_user.persisted?
     caller_phone: "987-654-3210",
     customer: "IT Department",
     source: "Email",
-    team: support_team,
-    ticket_number: "TICKET-#{Time.current.to_i + 1}" # Add unique ticket_number
+    team_id: support_team.id,
+    ticket_number: "TICKET-#{Time.current.to_i + 1}"
   )
 
   puts "Created tickets: #{ticket1.title}, #{ticket2.title}"
@@ -124,20 +126,20 @@ if admin_user.persisted?
   puts "Creating problems..."
   problem1 = Problem.create!(
     description: "Printer not working",
-    ticket: ticket1, # Assign the ticket
-    creator: admin_user, # Use creator association
-    user: admin_user, # Assign the user who will resolve the problem (if applicable)
-    team: it_team, # Optional: assign to the team
-    organization_id: organization.id # Assign organization_id explicitly
+    ticket_id: ticket1.id,
+    user_id: admin_user.id,
+    creator_id: admin_user.id,
+    team_id: it_team.id,
+    organization_id: organization.id
   )
 
   problem2 = Problem.create!(
     description: "Email access issue",
-    ticket: ticket2, # Assign the ticket
-    creator: teamlead_user, # Use creator association
-    user: teamlead_user, # Assign the user who will resolve the problem (if applicable)
-    team: support_team, # Optional: assign to the team
-    organization_id: organization.id # Assign organization_id explicitly
+    ticket_id: ticket2.id,
+    user_id: teamlead_user.id,
+    creator_id: teamlead_user.id,
+    team_id: support_team.id,
+    organization_id: organization.id
   )
 
   puts "Created problems: #{problem1.description}, #{problem2.description}"

@@ -8,7 +8,6 @@ module Api
       before_action :set_user, only: %i[show update destroy]
       before_action :authorize_admin, only: %i[create update destroy]
 
-      # GET /api/v1/profile
       def profile
         unless current_user
           render json: { error: 'User not authenticated' }, status: :unauthorized
@@ -21,7 +20,6 @@ module Api
             email: current_user.email,
             name: current_user.name,
             username: current_user.username,
-            phone_number: current_user.phone_number,
             department: current_user.department,
             position: current_user.position,
             role: current_user.role,
@@ -33,14 +31,13 @@ module Api
             name: @organization.name,
             subdomain: @organization.subdomain,
             email: @organization.email,
-            phone_number: @organization.phone_number,
+            phone_number: @organization.phone_number, # Organization has this field
             address: @organization.address,
             web_address: @organization.web_address
           }
         }, status: :ok
       end
 
-      # GET /api/v1/organizations/:subdomain/users
       def index
         if params[:role] && !User.roles.key?(params[:role])
           render json: { error: 'Invalid role' }, status: :unprocessable_entity
@@ -56,25 +53,22 @@ module Api
         render json: @users.map { |user| user_attributes(user) }
       end
 
-      # GET /api/v1/organizations/:subdomain/users/:id
       def show
         render json: user_attributes(@user)
       end
 
-      # POST /api/v1/organizations/:subdomain/users
       def create
         @user = @organization.users.new(user_params)
         @user.auth_token = SecureRandom.hex(20)
 
         if @user.save
-          render json: user_attributes(@user), status: :created, 
+          render json: user_attributes(@user), status: :created,
                  location: api_v1_organization_user_url(@organization.subdomain, @user)
         else
           render json: { errors: @user.errors.full_messages }, status: :unprocessable_entity
         end
       end
 
-      # PATCH/PUT /api/v1/organizations/:subdomain/users/:id
       def update
         if @user.update(user_params)
           render json: user_attributes(@user)
@@ -83,7 +77,6 @@ module Api
         end
       end
 
-      # DELETE /api/v1/organizations/:subdomain/users/:id
       def destroy
         @user.destroy!
         head :no_content
@@ -109,28 +102,21 @@ module Api
         end
       end
 
-      # def set_organization_from_subdomain
-      #   subdomain = request.subdomain.presence || 'default'
-      #   @organization = Organization.find_by!(subdomain: subdomain)
-      # rescue ActiveRecord::RecordNotFound
-      #   render json: { error: 'Organization not found for this subdomain' }, status: :not_found
-      # end
-
       def set_organization_from_subdomain
-        # Prioritize `organization_subdomain` over `subdomain` and request subdomain
-        subdomain = params[:organization_subdomain].presence || params[:subdomain].presence || request.subdomain.presence || 'default'
-        
-        Rails.logger.info "Subdomain detected from params: '#{params[:subdomain]}'"
-        Rails.logger.info "Organization subdomain from params: '#{params[:organization_subdomain]}'"
-        Rails.logger.info "Subdomain detected from request: '#{request.subdomain}'"
-        Rails.logger.info "Final subdomain used: '#{subdomain}'"
-      
-        @organization = Organization.find_by!(subdomain: subdomain)
+        subdomain = params[:organization_subdomain].presence || request.subdomain.presence
+        if subdomain
+          @organization = Organization.find_by!(subdomain: subdomain)
+        else
+          unless current_user&.organization
+            render json: { error: 'User has no associated organization' }, status: :unprocessable_entity
+            return
+          end
+          @organization = current_user.organization
+        end
       rescue ActiveRecord::RecordNotFound
         Rails.logger.error "Organization not found for subdomain: #{subdomain}"
         render json: { error: 'Organization not found for this subdomain for user' }, status: :not_found
       end
-
 
       def verify_user_organization
         unless current_user&.organization_id == @organization.id

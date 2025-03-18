@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
+ActiveRecord::Schema[7.1].define(version: 2025_03_18_120110) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -52,6 +52,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.string "email"
     t.string "web_address"
     t.string "subdomain"
+    t.string "phone_number"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["subdomain"], name: "index_organizations_on_subdomain", unique: true
@@ -118,6 +119,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.integer "urgency", default: 0, null: false
     t.integer "impact", default: 0, null: false
     t.integer "calculated_priority"
+    t.datetime "resolved_at"
+    t.text "resolution_note"
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["sla_policy_id"], name: "index_tickets_on_sla_policy_id"

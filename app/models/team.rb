@@ -5,4 +5,4 @@ class Team < ApplicationRecord
 
   validates :name, presence: true, uniqueness: { scope: :organization_id }
   validates :organization, presence: true
-end
+end 
