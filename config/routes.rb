@@ -29,6 +29,7 @@ Rails.application.routes.draw do
           member do
             post :assign_to_user
             post :escalate_to_problem
+            post :resolve # Added resolve action
           end
         end
         resources :problems, only: %i[index show create update destroy]
@@ -52,6 +53,7 @@ Rails.application.routes.draw do
         member do
           post :assign_to_user
           post :escalate_to_problem
+          post :resolve # Added resolve action here too, if global scope is needed
         end
       end
 

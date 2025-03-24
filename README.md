@@ -59,6 +59,11 @@ The ITSM system's database schema is defined using Rails migrations and ActiveRe
 - **Indexes**:
   - `ticket_number` (unique): Ensures each ticket has a unique number.
   - `organization_id`, `user_id`: Facilitates querying tickets by organization and user.
+  - ## Ticket Resolution
+- **Endpoint:** `POST /api/v1/:organization_subdomain/tickets/:ticket_number/resolve`
+- **Body:** `{ "resolution_note": "string" }`
+- **Authorization:** Requires team lead, assignee, or admin role.
+- **Response:** Updated ticket with `status: "resolved"`, `resolved_at`, and `resolution_note`.
 
 ### 1.5 Problems
 - **Description**: Represents issues that may arise from unresolved or recurring incidents.
