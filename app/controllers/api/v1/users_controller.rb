@@ -2,11 +2,11 @@
 module Api
   module V1
     class UsersController < ApplicationController
-      before_action :authenticate_user!, only: [:profile, :index, :show, :create, :update, :destroy]
+      before_action :authenticate_user!, only: [:profile, :index, :show, :create, :update, :destroy, :add_user]
       before_action :set_organization_from_subdomain
-      before_action :verify_user_organization, only: [:profile, :index, :show, :create, :update, :destroy]
+      before_action :verify_user_organization, only: [:profile, :index, :show, :create, :update, :destroy, :add_user]
       before_action :set_user, only: %i[show update destroy]
-      before_action :authorize_admin, only: %i[create update destroy]
+      before_action :authorize_admin, only: %i[create update destroy, :add_user]
 
       def profile
         unless current_user
@@ -31,7 +31,7 @@ module Api
             name: @organization.name,
             subdomain: @organization.subdomain,
             email: @organization.email,
-            phone_number: @organization.phone_number, # Organization has this field
+            phone_number: @organization.phone_number,
             address: @organization.address,
             web_address: @organization.web_address
           }
@@ -82,6 +82,18 @@ module Api
         head :no_content
       end
 
+      def add_user
+        @user = @organization.users.new(user_params)
+        @user.auth_token = SecureRandom.hex(20)
+        @user.role = 'user' # Default role for added users
+
+        if @user.save
+          render json: user_attributes(@user), status: :created
+        else
+          render json: { errors: @user.errors.full_messages }, status: :unprocessable_entity
+        end
+      end
+
       private
 
       def set_user
@@ -102,39 +114,15 @@ module Api
         end
       end
 
-      # def set_organization_from_subdomain
-      #   subdomain = request.subdomain.presence || 'default'
-      #   @organization = Organization.find_by!(subdomain: subdomain)
-      # rescue ActiveRecord::RecordNotFound
-      #   render json: { error: 'Organization not found for this subdomain' }, status: :not_found
-      # end
-
-      # def set_organization_from_subdomain
-      #   # Prioritize `organization_subdomain` over `subdomain` and request subdomain
-      #   subdomain = params[:organization_subdomain].presence || params[:subdomain].presence || request.subdomain.presence || 'default'
-        
-      #   Rails.logger.info "Subdomain detected from params: '#{params[:subdomain]}'"
-      #   Rails.logger.info "Organization subdomain from params: '#{params[:organization_subdomain]}'"
-      #   Rails.logger.info "Subdomain detected from request: '#{request.subdomain}'"
-      #   Rails.logger.info "Final subdomain used: '#{subdomain}'"
-      
-      #   @organization = Organization.find_by!(subdomain: subdomain)
-      # rescue ActiveRecord::RecordNotFound
-      #   Rails.logger.error "Organization not found for subdomain: #{subdomain}"
-      #   render json: { error: 'Organization not found for this subdomain for user' }, status: :not_found
-      # end
-
       def set_organization_from_subdomain
-        # Only use params, not request.subdomain
-        subdomain = params[:organization_subdomain].presence || params[:subdomain].presence || 'default'
-        
-        Rails.logger.info "Organization subdomain from params: '#{params[:organization_subdomain]}'"
+        subdomain = params[:subdomain].presence || request.subdomain.presence || 'default'
+        Rails.logger.info "Organization subdomain from params: '#{params[:subdomain]}'"
+        Rails.logger.info "Subdomain from request: '#{request.subdomain}'"
         Rails.logger.info "Final subdomain used: '#{subdomain}'"
-        
         @organization = Organization.find_by!(subdomain: subdomain)
       rescue ActiveRecord::RecordNotFound
         Rails.logger.error "Organization not found for subdomain: #{subdomain}"
-        render json: { error: 'Organization not found for this subdomain for user' }, status: :not_found
+        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
       end
 
       def verify_user_organization
