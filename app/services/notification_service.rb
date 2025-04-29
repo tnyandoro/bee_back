@@ -1,7 +1,6 @@
 # Service object to create notifications for users
 # frozen_string_literal: true
-# 
-#
+
 class NotificationService
     def self.notify_user(user, organization, message, notifiable = nil)
       Notification.create!(

@@ -12,10 +12,49 @@ module Api
       VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
       VALID_CATEGORIES = %w[Technical Billing Support Hardware Software Other].freeze
 
+      # def index
+      #   @tickets = apply_filters(@organization.tickets)
+      #   Rails.logger.debug "Tickets fetched: #{@tickets.count}, Params: #{params.inspect}"
+
+      #   # Ensure pagination parameters are valid
+      #   page = (params[:page] || 1).to_i
+      #   per_page = (params[:per_page] || 10).to_i
+      #   per_page = [per_page, 100].min # Cap per_page to prevent abuse
+
+      #   if page < 1 || per_page < 1
+      #     Rails.logger.error "Invalid pagination params - page: #{page}, per_page: #{per_page}"
+      #     render json: { error: "Invalid pagination parameters" }, status: :unprocessable_entity
+      #     return
+      #   end
+
+      #   @tickets = @tickets.paginate(page: page, per_page: per_page)
+
+      #   # Include assignee and creator in the response
+      #   render json: {
+      #     tickets: @tickets.map { |ticket| ticket_attributes(ticket) },
+      #     pagination: {
+      #       current_page: @tickets.current_page,
+      #       total_pages: @tickets.total_pages,
+      #       total_entries: @tickets.total_entries
+      #     }
+      #   }, status: :ok
+      # end
+
       def index
         @tickets = apply_filters(@organization.tickets)
         Rails.logger.debug "Tickets fetched: #{@tickets.count}, Params: #{params.inspect}"
-        @tickets = @tickets.paginate(page: params[:page], per_page: 10)
+
+        page = (params[:page] || 1).to_i
+        per_page = (params[:per_page] || 10).to_i
+        per_page = [per_page, 100].min
+
+        if page < 1 || per_page < 1
+          render json: { error: "Invalid pagination parameters" }, status: :unprocessable_entity
+          return
+        end
+
+        @tickets = @tickets.paginate(page: page, per_page: per_page)
+
         render json: {
           tickets: @tickets.map { |ticket| ticket_attributes(ticket) },
           pagination: {
@@ -23,7 +62,7 @@ module Api
             total_pages: @tickets.total_pages,
             total_entries: @tickets.total_entries
           }
-        }
+        }, status: :ok
       end
 
       def show
@@ -31,29 +70,83 @@ module Api
         render json: ticket_attributes(@ticket)
       end
 
-      def create
-        Rails.logger.debug "Received ticket creation params: #{params.inspect}"
-        ticket_params_adjusted = ticket_params_with_enums
+      # def create
+      #   Rails.logger.debug "Received ticket creation params: #{params.inspect}"
+      #   ticket_params_adjusted = ticket_params_with_enums
 
-        if ticket_params_adjusted[:priority].present?
-          priority_value = ticket_params_adjusted[:priority].to_i
-          ticket_params_adjusted[:priority] = [0, [3, priority_value].min].max
-        end
+      #   if ticket_params_adjusted[:priority].present?
+      #     priority_value = ticket_params_adjusted[:priority].to_i
+      #     ticket_params_adjusted[:priority] = [0, [3, priority_value].min].max
+      #   end
+
+      #   @ticket = @organization.tickets.new(ticket_params_adjusted)
+      #   @ticket.creator = @creator
+      #   @ticket.requester = @creator
+      #   @ticket.user_id = @creator.id
+      #   @ticket.ticket_number = ticket_params_adjusted[:ticket_number] || SecureRandom.hex(5)
+      #   @ticket.reported_at = ticket_params_adjusted[:reported_at] ? Time.parse(ticket_params_adjusted[:reported_at]) : Time.current
+      #   @ticket.status = 'open'
+
+      #   Rails.logger.debug "Ticket attributes before save: #{@ticket.attributes.inspect}"
+
+      #   if ticket_params_adjusted[:team_id].present?
+      #     team = @organization.teams.find_by(id: ticket_params_adjusted[:team_id])
+      #     unless team
+      #       Rails.logger.error "Team ID #{ticket_params_adjusted[:team_id]} not found in organization #{@organization.id}"
+      #       render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity
+      #       return
+      #     end
+      #     @ticket.team = team
+
+      #     if ticket_params_adjusted[:assignee_id].present?
+      #       assignee = team.users.find_by(id: ticket_params_adjusted[:assignee_id])
+      #       unless assignee
+      #         Rails.logger.error "Assignee ID #{ticket_params_adjusted[:assignee_id]} not found in team #{team.id}"
+      #         render json: { error: 'Assignee not found in the selected team' }, status: :unprocessable_entity
+      #         return
+      #       end
+      #       @ticket.assignee = assignee
+      #       @ticket.status = 'assigned'
+      #     end
+      #   end
+
+      #   unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
+      #     Rails.logger.error "Invalid category: #{ticket_params_adjusted[:category]}"
+      #     render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
+      #     return
+      #   end
+
+      #   if @ticket.save
+      #     Rails.logger.debug "Ticket saved with status: #{@ticket.status}, ID: #{@ticket.id}"
+      #     render json: ticket_attributes(@ticket), status: :created,
+      #            location: api_v1_organization_ticket_url(@organization.subdomain, @ticket)
+      #   else
+      #     Rails.logger.error "Ticket save failed: #{@ticket.errors.full_messages}"
+      #     render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
+      #   end
+      # rescue ActionController::ParameterMissing => e
+      #   Rails.logger.error "Parameter missing: #{e.message}"
+      #   render json: { error: "Missing required parameter: #{e.param}" }, status: :unprocessable_entity
+      # rescue StandardError => e
+      #   Rails.logger.error "Unexpected error in ticket creation: #{e.message}, Backtrace: #{e.backtrace.join("\n")}"
+      #   render json: { error: "Internal server error: #{e.message}" }, status: :internal_server_error
+      # end
+
+      def create
+        ticket_params_adjusted = ticket_params_with_enums
+        priority_value = ticket_params_adjusted[:priority].to_i
+        ticket_params_adjusted[:priority] = [0, [3, priority_value].min].max
 
         @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = @creator
         @ticket.requester = @creator
-        @ticket.user_id = @creator.id
-        @ticket.ticket_number = ticket_params_adjusted[:ticket_number] || SecureRandom.hex(5)
-        @ticket.reported_at = ticket_params_adjusted[:reported_at] ? Time.parse(ticket_params_adjusted[:reported_at]) : Time.current
+        @ticket.ticket_number ||= SecureRandom.hex(5)
+        @ticket.reported_at ||= Time.current
         @ticket.status = 'open'
-
-        Rails.logger.debug "Ticket attributes before save: #{@ticket.attributes.inspect}"
 
         if ticket_params_adjusted[:team_id].present?
           team = @organization.teams.find_by(id: ticket_params_adjusted[:team_id])
           unless team
-            Rails.logger.error "Team ID #{ticket_params_adjusted[:team_id]} not found in organization #{@organization.id}"
             render json: { error: 'Team not found in this organization' }, status: :unprocessable_entity
             return
           end
@@ -62,7 +155,6 @@ module Api
           if ticket_params_adjusted[:assignee_id].present?
             assignee = team.users.find_by(id: ticket_params_adjusted[:assignee_id])
             unless assignee
-              Rails.logger.error "Assignee ID #{ticket_params_adjusted[:assignee_id]} not found in team #{team.id}"
               render json: { error: 'Assignee not found in the selected team' }, status: :unprocessable_entity
               return
             end
@@ -71,26 +163,11 @@ module Api
           end
         end
 
-        unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
-          Rails.logger.error "Invalid category: #{ticket_params_adjusted[:category]}"
-          render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
-          return
-        end
-
         if @ticket.save
-          Rails.logger.debug "Ticket saved with status: #{@ticket.status}, ID: #{@ticket.id}"
-          render json: ticket_attributes(@ticket), status: :created,
-                 location: api_v1_organization_ticket_url(@organization.subdomain, @ticket)
+          render json: ticket_attributes(@ticket), status: :created
         else
-          Rails.logger.error "Ticket save failed: #{@ticket.errors.full_messages}"
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
         end
-      rescue ActionController::ParameterMissing => e
-        Rails.logger.error "Parameter missing: #{e.message}"
-        render json: { error: "Missing required parameter: #{e.param}" }, status: :unprocessable_entity
-      rescue StandardError => e
-        Rails.logger.error "Unexpected error in ticket creation: #{e.message}, Backtrace: #{e.backtrace.join("\n")}"
-        render json: { error: "Internal server error: #{e.message}" }, status: :internal_server_error
       end
 
       def update
@@ -195,7 +272,7 @@ module Api
       end
 
       def resolve
-        unless current_user.teamlead? || current_user.assignee == @ticket.assignee || current_user.admin?
+        unless current_user.teamlead? || current_user == @ticket.assignee || current_user.admin?
           return render json: { error: 'You are not authorized to resolve this ticket' }, status: :forbidden
         end
 
@@ -239,6 +316,7 @@ module Api
       def ticket_attributes(ticket)
         {
           id: ticket.id,
+          ticket_number: ticket.ticket_number,
           title: ticket.title,
           description: ticket.description,
           ticket_type: ticket.ticket_type,
@@ -250,8 +328,7 @@ module Api
           assignee_id: ticket.assignee_id,
           requester_id: ticket.requester_id,
           creator_id: ticket.creator_id,
-          ticket_number: ticket.ticket_number,
-          reported_at: ticket.reported_at,
+          reported_at: ticket.reported_at&.iso8601, # Format for JavaScript Date parsing
           caller_name: ticket.caller_name,
           caller_surname: ticket.caller_surname,
           caller_email: ticket.caller_email,
@@ -259,13 +336,15 @@ module Api
           customer: ticket.customer,
           source: ticket.source,
           category: ticket.category,
-          response_due_at: ticket.response_due_at,
-          resolution_due_at: ticket.resolution_due_at,
+          response_due_at: ticket.response_due_at&.iso8601,
+          resolution_due_at: ticket.resolution_due_at&.iso8601,
           escalation_level: ticket.escalation_level,
           sla_breached: ticket.sla_breached,
           calculated_priority: ticket.calculated_priority,
-          resolved_at: ticket.resolved_at,
-          resolution_note: ticket.resolution_note
+          resolved_at: ticket.resolved_at&.iso8601,
+          resolution_note: ticket.resolution_note,
+          assignee: ticket.assignee ? { id: ticket.assignee.id, name: ticket.assignee.name } : nil,
+          creator: ticket.creator ? { id: ticket.creator.id, name: ticket.creator.name } : nil
         }
       end
 

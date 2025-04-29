@@ -68,6 +68,8 @@ Rails.application.configure do
   config.action_controller.raise_on_missing_callback_actions = true
 
   # Allow lvh.me and its subdomains for subdomain-based routing in development
+  config.hosts << "watoli.localhost"      # Allows localhost:3000
   config.hosts << "lvh.me"           # Allows lvh.me:3000
   config.hosts << /.+\.lvh\.me/      # Allows subdomains like example-org-5.lvh.me:3000
+  config.action_dispatch.tld_length = 1
 end

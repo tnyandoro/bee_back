@@ -3,68 +3,34 @@ module Api
   module V1
     class TeamsController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_organization_from_subdomain
+      # before_action :set_organization_from_subdomain
       before_action :authorize_admin_or_super_user, except: [:index, :show, :users]
       before_action :set_team, only: [:show, :update, :destroy, :users]
 
       # GET /api/v1/organizations/:subdomain/teams
       def index
         @teams = @organization.teams
-        render json: @teams.map { |team| { id: team.id, name: team.name } }
+        render json: @teams.map { |team| team_attributes(team) }, status: :ok
       end
 
       # GET /api/v1/organizations/:subdomain/teams/:id
       def show
-        render json: team_attributes(@team)
+        render json: team_attributes(@team), status: :ok
       end
 
       # GET /api/v1/organizations/:subdomain/teams/:team_id/users
       def users
         @users = @team.users
-        render json: @users.map { |user| { id: user.id, name: user.name || user.username, team_id: user.team_id } }
+        render json: @users.map { |user| user_attributes(user) }, status: :ok
       end
 
       # POST /api/v1/organizations/:subdomain/teams
-      # def create
-      #   @team = @organization.teams.new(team_params.except(:user_ids))
-
-      #   if team_params[:user_ids].present?
-      #     users = @organization.users.where(id: team_params[:user_ids])
-      #     if users.count != team_params[:user_ids].size
-      #       render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
-      #       return
-      #     end
-      #     @team.users = users
-      #   end
-
-      #   if @team.save
-      #     render json: team_attributes(@team), status: :created, 
-      #            location: api_v1_organization_team_url(@organization.subdomain, @team)
-      #   else
-      #     render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
-      #   end
-      # end
-
       def create
         @team = @organization.teams.new(team_params.except(:user_ids))
-      
-        Rails.logger.info "🔥 Attempting to create team: #{@team.inspect}"
-        
+        Rails.logger.info "🔥 Creating team: #{@team.inspect}"
+
         if @team.save
-          Rails.logger.info "✅ Team created successfully with ID: #{@team.id}"
-          
-          if team_params[:user_ids].present?
-            users = @organization.users.where(id: team_params[:user_ids])
-            if users.count != team_params[:user_ids].size
-              Rails.logger.warn "⚠️ Some user IDs are invalid or missing."
-              render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
-              return
-            end
-            # ✅ Directly assign team_id to users
-            users.update_all(team_id: @team.id)
-            Rails.logger.info "✅ Assigned team_id to users: #{users.pluck(:id)}"
-          end
-      
+          assign_users_to_team(@team, team_params[:user_ids]) if team_params[:user_ids].present?
           render json: team_attributes(@team), status: :created,
                  location: api_v1_organization_team_url(@organization.subdomain, @team)
         else
@@ -72,21 +38,15 @@ module Api
           render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
         end
       end
-      
 
       # PATCH/PUT /api/v1/organizations/:subdomain/teams/:id
       def update
         if team_params[:user_ids].present?
-          users = @organization.users.where(id: team_params[:user_ids])
-          if users.count != team_params[:user_ids].size
-            render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
-            return
-          end
-          @team.users = users
+          assign_users_to_team(@team, team_params[:user_ids])
         end
 
         if @team.update(team_params.except(:user_ids))
-          render json: team_attributes(@team)
+          render json: team_attributes(@team), status: :ok
         else
           render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
         end
@@ -116,22 +76,18 @@ module Api
         end
       end
 
-      # def set_organization_from_subdomain
-      #   subdomain = request.subdomain.presence || 'default'
-      #   @organization = Organization.find_by!(subdomain: subdomain)
-      # rescue ActiveRecord::RecordNotFound
-      #   render json: { error: 'Organization not found for this subdomain' }, status: :not_found
-      # end
+      def assign_users_to_team(team, user_ids)
+        users = @organization.users.where(id: user_ids)
+        if users.count != user_ids.size
+          Rails.logger.warn "⚠️ Invalid user IDs: Expected #{user_ids.size}, found #{users.count}"
+          render json: { error: 'One or more users not found in this organization' }, status: :unprocessable_entity
+          return
+        end
 
-      def set_organization_from_subdomain
-        subdomain = params[:organization_subdomain].presence || request.subdomain.presence || 'default'
-        Rails.logger.info "Subdomain detected: #{subdomain}"
-        @organization = Organization.find_by!(subdomain: subdomain)
-      rescue ActiveRecord::RecordNotFound
-        Rails.logger.error "Organization not found for subdomain: #{subdomain}"
-        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
+        # Clear current assignments for those users to avoid conflicts
+        User.where(id: user_ids).update_all(team_id: team.id)
+        Rails.logger.info "✅ Assigned users to team #{team.id}: #{user_ids}"
       end
-      
 
       def team_attributes(team)
         {
@@ -147,9 +103,10 @@ module Api
       def user_attributes(user)
         {
           id: user.id,
-          name: user.name,
+          name: user.name || user.username,
           email: user.email,
-          role: user.role
+          role: user.role,
+          team_id: user.team_id
         }
       end
     end

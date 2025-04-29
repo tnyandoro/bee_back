@@ -1,59 +1,50 @@
 Rails.application.routes.draw do
-  # Health check route
   get "up" => "rails/health#show", as: :rails_health_check
 
   namespace :api do
     namespace :v1 do
-      # Session management (global, as it’s needed for login before organization scoping)
+      # Global routes
+      post 'validate_subdomain', to: 'organizations#validate_subdomain'
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
-
-      # Registration routes (global, as they’re needed for initial setup)
+      get '/verify', to: 'sessions#verify'
       post '/register', to: 'registrations#create'
+      get '/verify_admin', to: 'sessions#verify_admin'
 
-      # Organization management routes with proper scoping
-      resources :organizations, param: :subdomain, only: %i[index show update destroy] do
-        # Profile route
-        get 'profile', to: 'users#profile'
+      # Organization resources
+      resources :organizations, param: :subdomain do
+        member do
+          get 'profile', to: 'users#profile'
+          get 'tickets', to: 'organizations#tickets'
+          get 'users', to: 'organizations#users'
+          post 'add_user', to: 'organizations#add_user'
+        end
 
-        # Register admin for an organization
-        post 'register_admin', to: 'registrations#register_admin', as: :register_admin
+        post 'register_admin', to: 'registrations#register_admin'
 
-        # Users scoped to organization
-        resources :users, only: %i[index show create update destroy] do
-          # Removed the add_user route since the method doesn't exist in UsersController
-          # If needed, you can implement the add_user method and uncomment this
-          # collection do
-          #   post :add_user
-          # end
+        # Nested resources
+        resources :users, only: [:index, :show, :create, :update, :destroy] do
           resources :tickets, only: [:index]
           resources :problems, only: [:index]
         end
 
-        # Teams scoped to organization
-        resources :teams, only: %i[index show create update destroy] do
-          get 'users', to: 'teams#users', on: :member
+        resources :teams, only: [:index, :show, :create, :update, :destroy] do
+          get 'users', on: :member
         end
 
-        # Tickets scoped to organization
-        resources :tickets, only: %i[index show create update destroy] do
-          member do
-            post :assign_to_user
-            post :escalate_to_problem
-            post :resolve
-          end
+        resources :tickets, only: [:index, :show, :create, :update, :destroy] do
+          post :assign_to_user, on: :member
+          post :escalate_to_problem, on: :member
+          post :resolve, on: :member
         end
 
-        # Problems scoped to organization
-        resources :problems, only: %i[index show create update destroy]
-
-        # Notifications scoped to organization
-        resources :notifications, only: [:index] do
-          member do
-            patch :mark_as_read
-          end
+        resources :problems, only: [:index, :show, :create, :update, :destroy]
+        
+        resources :notifications, only: [:index, :show, :create, :update, :destroy] do
+          patch :mark_as_read, on: :member
         end
       end
     end
   end
+  get '*path', to: 'static#index', constraints: ->(req) { !req.path.start_with?('/api') }
 end

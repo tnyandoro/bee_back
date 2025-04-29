@@ -3,7 +3,7 @@
 class Organization < ApplicationRecord
   # Validations
   validates :name, :email, presence: true
-  validates :subdomain, presence: true, uniqueness: true
+  validates :subdomain, presence: true, uniqueness: { case_sensitive: false }
 
   # Ensure subdomain format
   validate :subdomain_format, on: :create
@@ -44,6 +44,18 @@ class Organization < ApplicationRecord
     users.count
   end
 
+  def total_agents
+    users.where(role: :agent).count
+  end
+
+  def total_team_leads
+    users.where(role: :team_lead).count
+  end
+
+  def average_ticket_resolution_time
+    tickets.closed.average(:resolution_time) || 0
+  end
+
   private
 
   # Generate subdomain from the organization name if not provided
@@ -65,8 +77,20 @@ class Organization < ApplicationRecord
 
   # Ensure at least one admin user exists before saving the organization (now on update)
   def must_have_admin_user
-    return unless users.none? { |user| user.admin? }
+    if users.reject(&:marked_for_destruction?).none?(&:admin?)
+      errors.add(:base, "An organization must have at least one admin user")
+    end
+  end
 
-    errors.add(:base, "An organization must have at least one admin user")
+  # Logging
+  after_create :log_organization_creation
+  after_update :log_organization_update
+
+  def log_organization_creation
+    Rails.logger.info "Organization created: #{name} (ID: #{id})"
+  end
+
+  def log_organization_update
+    Rails.logger.info "Organization updated: #{name} (ID: #{id})"
   end
 end
