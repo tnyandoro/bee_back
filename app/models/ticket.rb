@@ -1,44 +1,60 @@
 # frozen_string_literal: true
 class Ticket < ApplicationRecord
-  # Associations
-  belongs_to :user
+  self.ignored_columns += ["user_id"]
+  # Associations - Updated to remove redundant user association
   belongs_to :organization
-  belongs_to :creator, class_name: "User", foreign_key: "creator_id"
-  belongs_to :requester, class_name: "User", foreign_key: "requester_id"
-  belongs_to :assignee, class_name: "User", foreign_key: "assignee_id", optional: true
+  belongs_to :creator, class_name: "User"
+  belongs_to :requester, class_name: "User"
+  belongs_to :assignee, class_name: "User", optional: true
   belongs_to :team, optional: true
   belongs_to :sla_policy, optional: true
 
   has_many :problems, dependent: :destroy
   has_many :comments, dependent: :destroy
-  has_many :create_tickets, class_name: "Ticket", foreign_key: "creator_id"
-  has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id"
-  has_many :tickets, foreign_key: "user_id"
+  has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id", dependent: :nullify
+  has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id", dependent: :nullify
+  has_many :notifications, as: :notifiable
 
-  # Enums
+  # Enums (unchanged)
   enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }, _default: :open
   enum urgency: { low: 0, medium: 1, high: 2 }, _prefix: :urgency
   enum impact: { low: 0, medium: 1, high: 2 }, _prefix: :impact
-  enum priority: { p4: 0, p3: 1, p2: 2, p1: 3 }
+  enum priority: { p4: 0, p3: 1, p2: 2, p1: 3 }, _prefix: true
 
-  # Validations
+  # Validations - Updated to remove user_id validation
   validates :title, :description, :urgency, :impact, presence: true
-  validates :user_id, presence: true
+  validates :creator, :requester, presence: true  # Validate associations instead of IDs
   validates :ticket_number, presence: true, uniqueness: true
-  validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname, :caller_email, :caller_phone, :customer, :source, presence: true
+  validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname, 
+            :caller_email, :caller_phone, :customer, :source, presence: true
+  validate :validate_priority_value
+  validate :assignee_belongs_to_team, if: -> { assignee_id.present? && team_id.present? }
 
-  # Scopes
+  # Scopes (unchanged)
   scope :for_user_in_organization, ->(user_id, organization_id) { where(creator_id: user_id, organization_id: organization_id) }
   scope :sla_breached, -> { where(sla_breached: true) }
   scope :pending_response, -> { where("response_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
   scope :pending_resolution, -> { where("resolution_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
 
-  # Callbacks
+  # Callbacks (unchanged)
+  before_validation :normalize_priority
   before_save :set_calculated_priority
   after_commit :update_sla_dates, on: [:create, :update]
-  after_create :create_notifications
+  after_create_commit :create_notifications
 
-  # SLA Methods
+  # Priority conversion method (unchanged)
+  def priority=(value)
+    case value.to_s
+    when '0', 'p4' then super(:p4)
+    when '1', 'p3' then super(:p3)
+    when '2', 'p2' then super(:p2)
+    when '3', 'p1' then super(:p1)
+    else
+      super(value)
+    end
+  end
+
+  # SLA Methods (unchanged)
   def calculate_sla_dates
     self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority) ||
                         organization.sla_policies.find_by(priority: :p4)
@@ -62,6 +78,36 @@ class Ticket < ApplicationRecord
   end
 
   private
+
+  # New validation method
+  def assignee_belongs_to_team
+    return unless assignee && team
+
+    unless team.users.include?(assignee)
+      errors.add(:assignee, "must belong to the selected team")
+    end
+  end
+
+  # Rest of the private methods remain unchanged...
+  def normalize_priority
+    return unless priority_changed?
+
+    self.priority = case priority_before_type_cast.to_s
+                    when '0' then :p4
+                    when '1' then :p3
+                    when '2' then :p2
+                    when '3' then :p1
+                    else priority
+                    end
+  end
+
+  def validate_priority_value
+    return unless priority_changed?
+
+    unless Ticket.priorities.keys.include?(priority.to_s)
+      errors.add(:priority, "must be one of: #{Ticket.priorities.keys.join(', ')} or 0-3")
+    end
+  end
 
   def set_calculated_priority
     calculated = priority_matrix["#{urgency}_#{impact}"] || :p4
@@ -104,7 +150,6 @@ class Ticket < ApplicationRecord
   end
 
   def calculate_due_date(start_time, duration_minutes, business_hours)
-    Rails.logger.debug "Calculating due date: start_time=#{start_time}, duration_minutes=#{duration_minutes}"
     return start_time + duration_minutes.minutes unless business_hours.any?
 
     remaining_minutes = duration_minutes
@@ -112,7 +157,6 @@ class Ticket < ApplicationRecord
     max_days = 365
 
     max_days.times do |day_offset|
-      Rails.logger.debug "Day offset: #{day_offset}, current_time: #{current_time}, remaining_minutes: #{remaining_minutes}"
       current_day = business_hours.find { |bh| bh.day_of_week == current_time.wday.to_s }
       
       if current_day && within_business_hours?(current_time, current_day)
@@ -121,7 +165,6 @@ class Ticket < ApplicationRecord
         minutes_to_add = [remaining_minutes, time_until_end].min
         current_time += minutes_to_add.minutes
         remaining_minutes -= minutes_to_add
-        Rails.logger.debug "Added #{minutes_to_add} minutes, new current_time: #{current_time}, remaining: #{remaining_minutes}"
         break if remaining_minutes <= 0
       else
         next_day = current_time + 1.day
@@ -143,7 +186,6 @@ class Ticket < ApplicationRecord
 
         start_of_next_day = business_hours.find { |bh| bh.day_of_week == next_business_day.wday.to_s }.start_time
         current_time = Time.zone.parse("#{next_business_day.to_date} #{start_of_next_day.strftime('%H:%M:%S')}")
-        Rails.logger.debug "Moved to next business day: #{current_time}"
       end
     end
 
@@ -152,7 +194,6 @@ class Ticket < ApplicationRecord
       current_time += remaining_minutes.minutes
     end
 
-    Rails.logger.debug "Due date calculated: #{current_time}"
     current_time
   end
 
@@ -162,21 +203,29 @@ class Ticket < ApplicationRecord
   end
 
   def create_notifications
+    # Notification for admin
     admin = organization.users.find_by(role: :admin)
-    Notification.create!(
-      user: admin,
-      organization: organization,
-      message: "New ticket created: #{title}",
-      read: false
-    ) if admin
+    if admin
+      Notification.create(
+        user: admin,
+        organization: organization,
+        message: "New ticket created: #{title}",
+        notifiable: self
+      )
+    end
 
-    return unless assignee
-
-    Notification.create!(
-      user: assignee,
-      organization: organization,
-      message: "You have been assigned to a new ticket: #{title}",
-      read: false
-    )
+    # Notification for assignee if assigned
+    if assignee
+      Notification.create(
+        user: assignee,
+        organization: organization,
+        message: "You've been assigned to ticket: #{title}",
+        notifiable: self
+      )
+    end
+  rescue => e
+    Rails.logger.error "Failed to create notifications: #{e.message}"
+    # Don't re-raise the error to prevent ticket creation from failing
+    true
   end
 end

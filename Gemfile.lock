@@ -78,6 +78,8 @@ GEM
       mutex_m
       securerandom (>= 0.3)
       tzinfo (~> 2.0)
+    addressable (2.8.7)
+      public_suffix (>= 2.0.2, < 7.0)
     base64 (0.2.0)
     bcrypt (3.1.20)
     benchmark (0.4.0)
@@ -88,6 +90,8 @@ GEM
     business_time (0.13.0)
       activesupport (>= 3.2.0)
       tzinfo
+    childprocess (5.1.0)
+      logger (~> 1.5)
     cloudinary (2.3.0)
       faraday (>= 2.0.1, < 3.0.0)
       faraday-follow_redirects (~> 0.3.0)
@@ -135,6 +139,12 @@ GEM
       activesupport (>= 4.2)
     jwt (2.10.1)
       base64
+    launchy (3.1.1)
+      addressable (~> 2.8)
+      childprocess (~> 5.0)
+      logger (~> 1.6)
+    letter_opener (1.10.0)
+      launchy (>= 2.2, < 4)
     logger (1.6.6)
     loofah (2.24.0)
       crass (~> 1.0.2)
@@ -189,6 +199,7 @@ GEM
     psych (5.2.3)
       date
       stringio
+    public_suffix (6.0.2)
     puma (6.6.0)
       nio4r (~> 2.0)
     pundit (2.4.0)
@@ -239,6 +250,8 @@ GEM
     rake (13.2.1)
     rdoc (6.12.0)
       psych (>= 4.0.0)
+    redis (5.4.0)
+      redis-client (>= 0.22.0)
     redis-client (0.23.2)
       connection_pool
     reline (0.6.0)
@@ -290,12 +303,14 @@ DEPENDENCIES
   dotenv-rails
   jsonapi-serializer (~> 2.2)
   jwt (~> 2.10, >= 2.10.1)
+  letter_opener
   pg (~> 1.1)
   puma (>= 5.0)
   pundit
   rack-attack
   rack-cors
   rails (~> 7.1.5, >= 7.1.5.1)
+  redis (>= 4.0.1)
   sidekiq-cron
   stringio (~> 3.1.2)
   strong_migrations

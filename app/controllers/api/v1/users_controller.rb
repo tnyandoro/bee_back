@@ -1,20 +1,21 @@
 module Api
   module V1
     class UsersController < ApplicationController
-      before_action :set_organization_from_subdomain
+      # before_action :set_organization_from_subdomain
       before_action :authenticate_user!, except: []
       before_action :set_user, only: %i[show update destroy]
       before_action :authorize_admin, only: %i[create update destroy]
 
       def profile
-        return render_unauthorized unless current_user
-
-        user = @organization.users.find_by(id: current_user.id)
-        return render_not_found('User') unless user
-
-        render_profile(user)
+        user = @organization.users.find_by(id: params[:id]) # Assuming you are passing the user ID
+        if user
+          render json: user
+        else
+          render json: { error: 'User not found' }, status: :not_found
+        end
       end
 
+# 
       def index
         @users = @organization.users
         apply_filters
@@ -83,20 +84,20 @@ module Api
 
       private
 
-      def set_organization_from_subdomain
-        subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
+      # def set_organization_from_subdomain
+      #   subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
         
-        # Ensure subdomain is not nil before downcasing
-        if subdomain.nil?
-          Rails.logger.error "No subdomain found in request"
-          return render_not_found('Organization')
-        end
+      #   # Ensure subdomain is not nil before downcasing
+      #   if subdomain.nil?
+      #     Rails.logger.error "No subdomain found in request"
+      #     return render_not_found('Organization')
+      #   end
         
-        @organization = Organization.find_by("LOWER(subdomain) = ?", subdomain.downcase)
-        return if @organization
+      #   @organization = Organization.find_by("LOWER(subdomain) = ?", subdomain.downcase)
+      #   return if @organization
 
-        render_not_found('Organization')
-      end
+      #   render_not_found('Organization')
+      # end
 
       def set_user
         @user = @organization.users.find(params[:id])

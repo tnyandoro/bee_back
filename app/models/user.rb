@@ -22,10 +22,10 @@ class User < ApplicationRecord
   enum role: { 
     admin: 0, 
     super_user: 1, 
-    team_lead: 2,  # Changed from teamlead to team_lead
+    team_lead: 2, 
     agent: 3, 
     viewer: 4 
-  }, _prefix: :role
+  }, _default: :agent
 
   # Validations
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
@@ -40,15 +40,12 @@ class User < ApplicationRecord
   before_save :downcase_email
   before_save :ensure_auth_token
 
+  after_update :notify_team_assignment, if: :saved_change_to_team_id?
+
   # Role-specific methods
-  def admin?
-    role_admin? || role_super_user?
+  def is_admin?
+  admin? || super_user?
   end
-  
-  def super_user? = role_super_user?
-  def teamlead? = role_team_lead?
-  def agent? = role_agent?
-  def viewer? = role_viewer?
 
   def can_create_teams?
     admin? || super_user?
@@ -95,6 +92,10 @@ class User < ApplicationRecord
     user&.authenticate(password) ? user : nil
   end
 
+  def unread_notifications_count(organization)
+    notifications.for_organization(organization).unread.count
+  end
+
   private
 
   def set_default_role
@@ -122,5 +123,15 @@ class User < ApplicationRecord
         self.auth_token = "default_#{Time.now.to_i}"
       end
     end
+  end
+
+  def notify_team_assignment
+  return if team.nil?
+
+  notifications.create!(
+    title: "Team Assigned",
+    message: "You've been added to the team: #{team.name}",
+    organization: organization
+  )
   end
 end
