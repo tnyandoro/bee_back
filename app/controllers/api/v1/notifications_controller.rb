@@ -1,47 +1,42 @@
-# app/controllers/api/v1/notifications_controller.rb
-module Api
-  module V1
-    class NotificationsController < ApplicationController
-      before_action :authenticate_user!
-      before_action :set_organization
+# frozen_string_literal: true
 
-      # GET /organizations/:organization_id/notifications
-      def index
-        @notifications = current_user.notifications
-                                   .where(organization: @organization, read: false)
-                                   .includes(:notifiable)
-                                   .order(created_at: :desc)
-        
-        render json: @notifications.as_json(
-          include: {
-            notifiable: {
-              only: [:id, :title, :ticket_number],
-              methods: [:notification_type]
-            }
-          }
-        ), status: :ok
-      end
+class Notification < ApplicationRecord
+  belongs_to :user
+  belongs_to :organization
+  belongs_to :notifiable, polymorphic: true, optional: true
 
-      # PATCH /organizations/:organization_id/notifications/:id/mark_as_read
-      def mark_as_read
-        @notification = current_user.notifications
-                                  .find_by(id: params[:id], organization: @organization)
-        
-        unless @notification
-          return render json: { error: "Notification not found" }, status: :not_found
-        end
+  validates :user, :organization, :message, presence: true
+  validates :read, inclusion: { in: [true, false] }
 
-        @notification.update!(read: true)
-        render json: @notification.as_json(include: :notifiable), status: :ok
-      end
+  before_validation :set_defaults
+  after_create_commit :broadcast_to_user
 
-      private
+  scope :unread, -> { where(read: false) }
+  scope :for_organization, ->(org) { where(organization_id: org.id) }
 
-      def set_organization
-        @organization = Organization.find(params[:organization_id])
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Organization not found' }, status: :not_found
-      end
-    end
+  self.ignored_columns += ["ticket_id"]
+
+  private
+
+  def broadcast_to_user
+    NotificationChannel.broadcast_to(
+      user,
+      {
+        id: id,
+        message: message,
+        read: read,
+        created_at: created_at,
+        notifiable: {
+          id: notifiable&.id,
+          type: notifiable&.class&.name,
+          ticket_number: notifiable&.try(:ticket_number),
+          title: notifiable&.try(:title)
+        }
+      }
+    )
+  end
+
+  def set_defaults
+    self.read ||= false
   end
 end
