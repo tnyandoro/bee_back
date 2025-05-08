@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
+ActiveRecord::Schema[7.1].define(version: 2025_05_01_100455) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -42,7 +42,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.boolean "read", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "ticket_id"
     t.index ["organization_id"], name: "index_notifications_on_organization_id"
+    t.index ["ticket_id"], name: "index_notifications_on_ticket_id"
     t.index ["user_id"], name: "index_notifications_on_user_id"
   end
 
@@ -52,6 +54,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.string "email"
     t.string "web_address"
     t.string "subdomain"
+    t.string "phone_number"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["subdomain"], name: "index_organizations_on_subdomain", unique: true
@@ -107,7 +110,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.string "caller_phone", null: false
     t.string "customer", null: false
     t.string "source", null: false
-    t.bigint "user_id", null: false
     t.integer "status", default: 6, null: false
     t.bigint "creator_id"
     t.datetime "response_due_at"
@@ -118,11 +120,14 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.integer "urgency", default: 0, null: false
     t.integer "impact", default: 0, null: false
     t.integer "calculated_priority"
+    t.datetime "resolved_at"
+    t.text "resolution_note"
+    t.bigint "user_id"
+    t.string "some_field"
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["sla_policy_id"], name: "index_tickets_on_sla_policy_id"
     t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
-    t.index ["user_id"], name: "index_tickets_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -138,6 +143,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
     t.bigint "team_id"
     t.string "auth_token"
     t.string "username"
+    t.string "phone_number"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
   end
@@ -146,6 +152,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
   add_foreign_key "comments", "tickets"
   add_foreign_key "comments", "users"
   add_foreign_key "notifications", "organizations"
+  add_foreign_key "notifications", "tickets", validate: false
   add_foreign_key "notifications", "users"
   add_foreign_key "problems", "tickets"
   add_foreign_key "problems", "users"
@@ -156,7 +163,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_03_13_113834) do
   add_foreign_key "tickets", "teams"
   add_foreign_key "tickets", "users"
   add_foreign_key "tickets", "users", column: "assignee_id"
-  add_foreign_key "tickets", "users", column: "creator_id"
   add_foreign_key "tickets", "users", column: "requester_id"
   add_foreign_key "users", "organizations"
   add_foreign_key "users", "teams"

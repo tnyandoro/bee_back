@@ -1,40 +1,45 @@
 class UserPolicy < ApplicationPolicy
-  attr_reader :current_user, :user
+  # Inherits user/record from ApplicationPolicy
+  # user = current_user
+  # record = target user being authorized
 
-  def initialize(current_user, user)
-    @current_user = current_user
-    @user = user
-  end
-
-  # Rename `current_user` to `user` in methods if aligning with ApplicationPolicy
   def index?
-    user.role_admin? || user.role_teamlead?
+    # Allow admins/super_users and team_leads
+    user.admin? || user.role_team_lead?
   end
 
   def show?
-    user.role_admin? || user.role_teamlead? || user == user  # Adjust if current_user comparison is intentional
+    # Allow admins, team_leads, or users viewing themselves
+    user.admin? || user.role_team_lead? || user == record
   end
 
   def create?
-    user.role_admin?
+    # Only allow admins/super_users
+    user.admin?
   end
 
   def update?
-    user.role_admin? || (user.role_teamlead? && record.role_agent?)
+    # Admins can update anyone, team_leads can only update agents
+    user.admin? || (user.role_team_lead? && record.role_agent?)
   end
 
   def destroy?
-    user.role_admin?
+    # Only allow admins/super_users
+    user.admin?
   end
 
-  class Scope < ApplicationPolicy::Scope
-    # Define resolve if needed, e.g.:
-    # def resolve
-    #   if user.role_admin?
-    #     scope.all
-    #   else
-    #     scope.where(team_id: user.team_id)
-    #   end
-    # end
+  class Scope < Scope
+    def resolve
+      if user.admin?
+        # Admins see all users in the organization
+        scope.where(organization: user.organization)
+      elsif user.role_team_lead?
+        # Team leads see users in their team
+        scope.where(team: user.team)
+      else
+        # Regular users only see themselves
+        scope.where(id: user.id)
+      end
+    end
   end
 end

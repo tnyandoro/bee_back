@@ -19,11 +19,13 @@ gem 'jwt', '~> 2.10', '>= 2.10.1'
 
 gem 'stringio', '~> 3.1.2'
 
+gem 'cloudinary'
+
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 
 # Use Redis adapter to run Action Cable in production
-# gem "redis", ">= 4.0.1"
+gem "redis", ">= 4.0.1"
 
 # Use Kredis to get higher-level data types in Redis [https://github.com/rails/kredis]
 # gem "kredis"
@@ -65,5 +67,9 @@ end
 group :development do
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
+  gem 'letter_opener'
 end
 
+group :test do
+  gem "factory_bot_rails"
+end

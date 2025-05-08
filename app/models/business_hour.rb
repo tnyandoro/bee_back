@@ -18,4 +18,4 @@ class BusinessHour < ApplicationRecord
     def working_hours
       (start_time.seconds_since_midnight..end_time.seconds_since_midnight)
     end
-  end
+end

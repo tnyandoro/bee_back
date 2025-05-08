@@ -1,4 +1,3 @@
-# Description: User model that includes authentication, roles, and associations.
 class User < ApplicationRecord
   # Authentication
   has_secure_password
@@ -20,26 +19,33 @@ class User < ApplicationRecord
   has_many :notifications, dependent: :destroy
 
   # Roles (updated to match your schema where role is an integer)
-  enum role: { admin: 0, super_user: 1, teamlead: 2, agent: 3, viewer: 4 }, _prefix: :role
+  enum role: { 
+    admin: 0, 
+    super_user: 1, 
+    team_lead: 2, 
+    agent: 3, 
+    viewer: 4 
+  }, _default: :agent
 
   # Validations
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
   validates :role, presence: true, inclusion: { in: roles.keys }
   validates :name, presence: true
-  validates :username, presence: true, uniqueness: true, allow_nil: true
+  validates :username, presence: true, uniqueness: { scope: :organization_id }, allow_nil: true
   validates :password, length: { minimum: 8 }, if: -> { password.present? || new_record? }
   validate :team_organization_matches_user_organization
 
   # Callbacks
   before_validation :set_default_role, on: :create
   before_save :downcase_email
+  before_save :ensure_auth_token
+
+  after_update :notify_team_assignment, if: :saved_change_to_team_id?
 
   # Role-specific methods
-  def admin? = role_admin?
-  def super_user? = role_super_user?
-  def teamlead? = role_teamlead?
-  def agent? = role_agent?
-  def viewer? = role_viewer?
+  def is_admin?
+  admin? || super_user?
+  end
 
   def can_create_teams?
     admin? || super_user?
@@ -52,10 +58,12 @@ class User < ApplicationRecord
   # User status management
   def deactivate!
     update!(active: false, auth_token: nil)
+    Rails.logger.info "User #{email} (ID: #{id}) has been deactivated."
   end
 
   def activate!
     update!(active: true)
+    Rails.logger.info "User #{email} (ID: #{id}) has been activated."
   end
 
   # User info
@@ -64,7 +72,9 @@ class User < ApplicationRecord
   end
 
   def avatar_url
-    nil # Implement if you add avatar support
+    return "https://example.com/default-avatar.png" unless avatar.attached?
+
+    avatar.service_url rescue "https://example.com/default-avatar.png"
   end
 
   # Token management
@@ -82,6 +92,10 @@ class User < ApplicationRecord
     user&.authenticate(password) ? user : nil
   end
 
+  def unread_notifications_count(organization)
+    notifications.for_organization(organization).unread.count
+  end
+
   private
 
   def set_default_role
@@ -89,6 +103,7 @@ class User < ApplicationRecord
   end
 
   def downcase_email
+    # Enhanced nil protection
     self.email = email.downcase if email.present?
   end
 
@@ -97,8 +112,26 @@ class User < ApplicationRecord
     errors.add(:team, "must belong to the same organization as the user")
   end
 
-  # Note: If not using has_secure_token gem, uncomment and use this instead
-  # def generate_auth_token
-  #   self.auth_token = SecureRandom.hex(20) if auth_token.nil? && !skip_auth_token?
-  # end
+  def ensure_auth_token
+    # Only generate token if it's nil and we're not skipping token generation
+    if auth_token.nil? && !skip_auth_token
+      begin
+        self.auth_token = SecureRandom.hex(20)
+      rescue StandardError => e
+        Rails.logger.error "Error generating auth token: #{e.message}"
+        # Set a default token in case of error
+        self.auth_token = "default_#{Time.now.to_i}"
+      end
+    end
+  end
+
+  def notify_team_assignment
+  return if team.nil?
+
+  notifications.create!(
+    title: "Team Assigned",
+    message: "You've been added to the team: #{team.name}",
+    organization: organization
+  )
+  end
 end
