@@ -70,3 +70,6 @@ group :development do
   gem 'letter_opener'
 end
 
+group :test do
+  gem "factory_bot_rails"
+end
