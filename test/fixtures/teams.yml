@@ -1,9 +1,5 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
-
 one:
-  name: MyString
-  organization: one
-
-two:
-  name: MyString
-  organization: two
+  name: Team One
+  organization_id: 1
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>

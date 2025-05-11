@@ -44,7 +44,7 @@ class User < ApplicationRecord
 
   # Role-specific methods
   def is_admin?
-  admin? || super_user?
+    admin? || super_user?
   end
 
   def can_create_teams?
@@ -126,12 +126,13 @@ class User < ApplicationRecord
   end
 
   def notify_team_assignment
-  return if team.nil?
+    return if team.nil?
 
-  notifications.create!(
-    title: "Team Assigned",
-    message: "You've been added to the team: #{team.name}",
-    organization: organization
-  )
+    notifications.create!(
+      message: "You've been added to the team: #{team.name}",
+      organization: organization,
+      read: false,
+      skip_email: true
+    )
   end
 end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 class Ticket < ApplicationRecord
   self.ignored_columns += ["user_id"]
-  # Associations - Updated to remove redundant user association
+  # Associations
   belongs_to :organization
   belongs_to :creator, class_name: "User"
   belongs_to :requester, class_name: "User"
@@ -13,36 +13,45 @@ class Ticket < ApplicationRecord
   has_many :comments, dependent: :destroy
   has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id", dependent: :nullify
   has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id", dependent: :nullify
-  has_many :notifications, as: :notifiable
+  has_many :notifications, as: :notifiable, dependent: :destroy
 
-  # Enums (unchanged)
+  # Enums
   enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }, _default: :open
   enum urgency: { low: 0, medium: 1, high: 2 }, _prefix: :urgency
   enum impact: { low: 0, medium: 1, high: 2 }, _prefix: :impact
   enum priority: { p4: 0, p3: 1, p2: 2, p1: 3 }, _prefix: true
 
-  # Validations - Updated to remove user_id validation
+  # Validations
   validates :title, :description, :urgency, :impact, presence: true
-  validates :creator, :requester, presence: true  # Validate associations instead of IDs
-  validates :ticket_number, presence: true, uniqueness: true
+  validates :creator, :requester, presence: true
+  validates :ticket_number, presence: true, uniqueness: true, format: { with: /\A(INC|REQ|PRB|TKT)[A-Z0-9]{8}\z/, message: "must start with INC, REQ, PRB, or TKT followed by 8 uppercase alphanumeric characters" }
   validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname, 
             :caller_email, :caller_phone, :customer, :source, presence: true
+  validates :ticket_type, inclusion: { in: %w[Incident Request Problem], message: "must be one of: Incident, Request, Problem" }
+  validates :category, inclusion: { in: %w[Technical Billing Support Hardware Software Other], message: "must be one of: Technical, Billing, Support, Hardware, Software, Other" }
+  validates :status, inclusion: { in: statuses.keys }
   validate :validate_priority_value
   validate :assignee_belongs_to_team, if: -> { assignee_id.present? && team_id.present? }
 
-  # Scopes (unchanged)
+  # Scopes
   scope :for_user_in_organization, ->(user_id, organization_id) { where(creator_id: user_id, organization_id: organization_id) }
   scope :sla_breached, -> { where(sla_breached: true) }
   scope :pending_response, -> { where("response_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
   scope :pending_resolution, -> { where("resolution_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
 
-  # Callbacks (unchanged)
+  # Callbacks
   before_validation :normalize_priority
   before_save :set_calculated_priority
   after_commit :update_sla_dates, on: [:create, :update]
-  after_create_commit :create_notifications
 
-  # Priority conversion method (unchanged)
+  # Public Methods
+  def resolve(resolved_by:)
+    raise ArgumentError, "resolved_by must be a User" unless resolved_by.is_a?(User)
+    update!(status: :resolved, assignee: resolved_by)
+    create_resolution_notifications(resolved_by)
+  end
+
+  # Priority conversion method
   def priority=(value)
     case value.to_s
     when '0', 'p4' then super(:p4)
@@ -54,7 +63,7 @@ class Ticket < ApplicationRecord
     end
   end
 
-  # SLA Methods (unchanged)
+  # SLA Methods
   def calculate_sla_dates
     self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority) ||
                         organization.sla_policies.find_by(priority: :p4)
@@ -79,19 +88,15 @@ class Ticket < ApplicationRecord
 
   private
 
-  # New validation method
   def assignee_belongs_to_team
     return unless assignee && team
-
     unless team.users.include?(assignee)
       errors.add(:assignee, "must belong to the selected team")
     end
   end
 
-  # Rest of the private methods remain unchanged...
   def normalize_priority
     return unless priority_changed?
-
     self.priority = case priority_before_type_cast.to_s
                     when '0' then :p4
                     when '1' then :p3
@@ -103,7 +108,6 @@ class Ticket < ApplicationRecord
 
   def validate_priority_value
     return unless priority_changed?
-
     unless Ticket.priorities.keys.include?(priority.to_s)
       errors.add(:priority, "must be one of: #{Ticket.priorities.keys.join(', ')} or 0-3")
     end
@@ -131,7 +135,6 @@ class Ticket < ApplicationRecord
 
   def update_sla_dates
     return if destroyed?
-
     begin
       calculate_sla_dates
       update_columns(
@@ -151,14 +154,11 @@ class Ticket < ApplicationRecord
 
   def calculate_due_date(start_time, duration_minutes, business_hours)
     return start_time + duration_minutes.minutes unless business_hours.any?
-
     remaining_minutes = duration_minutes
     current_time = start_time.dup
     max_days = 365
-
     max_days.times do |day_offset|
       current_day = business_hours.find { |bh| bh.day_of_week == current_time.wday.to_s }
-      
       if current_day && within_business_hours?(current_time, current_day)
         end_of_day = Time.zone.parse("#{current_time.to_date} #{current_day.end_time.strftime('%H:%M:%S')}")
         time_until_end = ((end_of_day - current_time) / 60).floor
@@ -170,7 +170,6 @@ class Ticket < ApplicationRecord
         next_day = current_time + 1.day
         next_day_start = Time.zone.parse("#{next_day.to_date} 00:00:00")
         next_business_day = nil
-        
         7.times do |i|
           check_day = next_day_start + i.days
           if business_hours.any? { |bh| bh.day_of_week == check_day.wday.to_s }
@@ -178,22 +177,18 @@ class Ticket < ApplicationRecord
             break
           end
         end
-
         unless next_business_day
           Rails.logger.warn "No business hours found within a week from #{next_day_start} for Ticket ##{id}"
           return current_time + remaining_minutes.minutes
         end
-
         start_of_next_day = business_hours.find { |bh| bh.day_of_week == next_business_day.wday.to_s }.start_time
         current_time = Time.zone.parse("#{next_business_day.to_date} #{start_of_next_day.strftime('%H:%M:%S')}")
       end
     end
-
     if remaining_minutes > 0
       Rails.logger.warn "SLA calculation exceeded #{max_days} days for Ticket ##{id}, remaining: #{remaining_minutes} minutes"
       current_time += remaining_minutes.minutes
     end
-
     current_time
   end
 
@@ -202,30 +197,32 @@ class Ticket < ApplicationRecord
     business_hour.working_hours.cover?(time_of_day)
   end
 
-  def create_notifications
-    # Notification for admin
-    admin = organization.users.find_by(role: :admin)
-    if admin
-      Notification.create(
-        user: admin,
+  def create_resolution_notifications(resolved_by)
+    begin
+      # Notification for requester
+      notification = Notification.create!(
+        user: requester,
         organization: organization,
-        message: "New ticket created: #{title}",
+        message: "Ticket resolved: #{title} (#{ticket_number})",
+        read: false,
         notifiable: self
       )
-    end
+      Rails.logger.info "Created resolution notification for requester #{requester.email} for Ticket ##{id}: #{notification.message}"
 
-    # Notification for assignee if assigned
-    if assignee
-      Notification.create(
-        user: assignee,
-        organization: organization,
-        message: "You've been assigned to ticket: #{title}",
-        notifiable: self
-      )
+      # Notification for admin
+      admin = organization.users.find_by(role: :admin)
+      if admin
+        notification = Notification.create!(
+          user: admin,
+          organization: organization,
+          message: "Ticket resolved by #{resolved_by.name}: #{title} (#{ticket_number})",
+          read: false,
+          notifiable: self
+        )
+        Rails.logger.info "Created resolution notification for admin #{admin.email} for Ticket ##{id}: #{notification.message}"
+      end
+    rescue => e
+      Rails.logger.error "Failed to create resolution notifications for Ticket ##{id}: #{e.message}"
     end
-  rescue => e
-    Rails.logger.error "Failed to create notifications: #{e.message}"
-    # Don't re-raise the error to prevent ticket creation from failing
-    true
   end
 end

@@ -1,9 +1,14 @@
 class NotificationMailer < ApplicationMailer
-    default from: "itsm@example.com"
+    default from: 'no-reply@itsm-system.com'
   
     def ticket_created_notification(ticket, recipient)
       @ticket = ticket
       @recipient = recipient
       mail(to: recipient.email, subject: "New Ticket Created: #{@ticket.title}")
     end
-  end
+
+    def notify_user(notification)
+      @notification = notification
+      mail(to: @notification.user.email, subject: "ITSM Notification: #{@notification.message.truncate(50)}")
+    end
+end

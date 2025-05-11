@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta content='text/html; charset=UTF-8' http-equiv='Content-Type' />
+</head>
+
+<body>
+    <h1>ITSM Notification</h1>
+    <p><%= @notification.message %></p>
+    <p>
+        Ticket: <%= @notification.notifiable&.ticket_number || 'N/A' %>
+        <br>
+        Organization: <%= @notification.organization&.name || 'N/A' %>
+        <br>
+        Created at: <%= @notification.created_at.strftime("%Y-%m-%d %H:%M:%S") %>
+    </p>
+    <p>View details in the ITSM system at: <a href="<%= ENV['FRONTEND_URL'] %>/incident-overview">Incident Overview</a></p>
+</body>
+
+</html>

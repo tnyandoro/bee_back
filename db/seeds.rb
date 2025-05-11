@@ -1,227 +1,173 @@
-# db/seeds.rb
-puts "Clearing existing data..."
-[Problem, Comment, Ticket, User, Team, Organization, BusinessHour, SlaPolicy].each(&:destroy_all)
+# frozen_string_literal: true
 
-# Create the organization
-puts "Creating organization..."
-organization = Organization.create!(
-  name: "Example Corp",
-  address: "123 Tech Park",
-  email: "info@example.com",
-  web_address: "https://example.com",
-  subdomain: "example",
-  phone_number: "+1234567890"
+# Create organization
+greensoft_org = Organization.create!(
+  name: "GreenSoft Solutions",
+  subdomain: "greensoft-solutions",
+  email: "contact@greensoft.com",
+  phone_number: "555-123-4567",
+  address: "123 Tech Lane, Innovation City",
+  web_address: "https://greensoft.com"
 )
 
-# Create teams
-puts "Creating teams..."
-teams = [
-  { name: "IT Support" },
-  { name: "Network Operations" },
-  { name: "Help Desk" }
-]
+# Create users
+it_manager = User.create!(
+  name: "IT Manager",
+  email: "it.manager@greensoft.com",
+  password: "password123",
+  password_confirmation: "password123",
+  role: :team_lead,
+  organization: greensoft_org,
+  auth_token: "itmanager_token_456"
+)
 
-teams.each do |team_data|
-  Team.create!(
-    name: team_data[:name],
-    organization: organization
-  )
-end
+support_tech = User.create!(
+  name: "Support Tech",
+  email: "support.tech@greensoft.com",
+  password: "password123",
+  password_confirmation: "password123",
+  role: :agent,
+  organization: greensoft_org,
+  auth_token: "supporttech_token_789"
+)
 
-it_support = Team.find_by(name: "IT Support")
-network_ops = Team.find_by(name: "Network Operations")
-help_desk = Team.find_by(name: "Help Desk")
+network_tech = User.create!(
+  name: "Network Tech",
+  email: "network@greensoft.com",
+  password: "password123",
+  password_confirmation: "password123",
+  role: :agent,
+  organization: greensoft_org,
+  auth_token: "networktech_token_012"
+)
+
+helpdesk = User.create!(
+  name: "Helpdesk",
+  email: "helpdesk@greensoft.com",
+  password: "password123",
+  password_confirmation: "password123",
+  role: :agent,
+  organization: greensoft_org,
+  auth_token: "helpdesk_token_345"
+)
+
+admin = User.create!(
+  name: "Admin",
+  email: "admin@greensoft.com",
+  password: "password123",
+  password_confirmation: "password123",
+  role: :admin,
+  organization: greensoft_org,
+  auth_token: "admin_token_123"
+)
+
+# Create team
+it_team = Team.create!(
+  name: "IT Support",
+  organization: greensoft_org
+)
+
+# Assign users to team
+it_team.users << [it_manager, support_tech, network_tech, helpdesk]
+
+# Create SLA policy
+sla_policy = SlaPolicy.create!(
+  organization: greensoft_org,
+  priority: :p3,
+  response_time: 60, # minutes
+  resolution_time: 480 # minutes (8 hours)
+)
 
 # Create business hours
-puts "Creating business hours..."
-(0..4).each do |day| # Weekdays only
+(1..5).each do |day|
   BusinessHour.create!(
-    organization: organization,
+    organization: greensoft_org,
     day_of_week: day,
     start_time: "09:00",
     end_time: "17:00"
   )
 end
 
-# Create SLA policies
-puts "Creating SLA policies..."
-{
-  p1: { response_time: 60, resolution_time: 240 },   # 1hr response, 4hr resolve
-  p2: { response_time: 240, resolution_time: 480 },  # 4hr response, 8hr resolve
-  p3: { response_time: 480, resolution_time: 1440 }, # 8hr response, 24hr resolve
-  p4: { response_time: 1440, resolution_time: 2880 } # 24hr response, 48hr resolve
-}.each do |priority, times|
-  SlaPolicy.create!(
-    organization: organization,
-    priority: SlaPolicy.priorities[priority],
-    response_time: times[:response_time],
-    resolution_time: times[:resolution_time]
-  )
-end
-
-# Create users with proper team assignments
-puts "Creating users..."
-users = [
-  # Admin (no team)
-  {
-    name: "Admin User",
-    email: "admin@example.com",
-    username: "admin",
-    role: :admin,
-    team: nil,
-    department: "Executive",
-    position: "System Administrator"
-  },
-
-  # IT Support Team
-  {
-    name: "IT Manager",
-    email: "it.manager@example.com",
-    username: "itmanager",
-    role: :agent,
-    team: it_support,
-    department: "IT",
-    position: "IT Manager"
-  },
-  {
-    name: "Support Technician",
-    email: "support.tech@example.com",
-    username: "supporttech",
-    role: :agent,
-    team: it_support,
-    department: "IT",
-    position: "Support Technician"
-  },
-
-  # Network Operations Team
-  {
-    name: "Network Engineer",
-    email: "network@example.com",
-    username: "networkeng",
-    role: :agent,
-    team: network_ops,
-    department: "IT",
-    position: "Network Engineer"
-  },
-
-  # Help Desk Team
-  {
-    name: "Help Desk Agent",
-    email: "helpdesk@example.com",
-    username: "helpdesk",
-    role: :agent,
-    team: help_desk,
-    department: "Support",
-    position: "Help Desk Agent"
-  },
-
-  # Viewer (no team)
-  {
-    name: "Auditor",
-    email: "auditor@example.com",
-    username: "auditor",
-    role: :viewer,
-    team: nil,
-    department: "Compliance",
-    position: "Auditor"
-  }
-]
-
-users.each do |user_data|
-  User.create!(
-    name: user_data[:name],
-    email: user_data[:email],
-    password: "password123",
-    username: user_data[:username],
-    role: user_data[:role],
-    department: user_data[:department],
-    position: user_data[:position],
-    organization: organization,
-    team: user_data[:team]
-  )
-  puts "Created #{user_data[:role]} user: #{user_data[:email]}"
-end
-
-admin = User.find_by(email: "admin@example.com")
-it_manager = User.find_by(email: "it.manager@example.com")
-support_tech = User.find_by(email: "support.tech@example.com")
-network_eng = User.find_by(email: "network@example.com")
-helpdesk = User.find_by(email: "helpdesk@example.com")
-
-# Create tickets with proper team assignments
-puts "Creating tickets..."
+# Create tickets
 tickets = [
-  # IT Support Ticket
   {
     title: "Email Client Not Working",
-    description: "Outlook keeps crashing when opening attachments",
-    ticket_type: :incident,
-    status: :open,
-    priority: 2,
-    urgency: :high,
+    description: "User reports email client crashing on launch.",
+    ticket_type: "Incident",
+    status: :assigned,
+    priority: :p3,
+    urgency: :medium,
     impact: :medium,
-    creator: admin,
+    creator: it_manager,
     requester: it_manager,
     assignee: support_tech,
-    reported_at: 2.hours.ago,
+    reported_at: Time.current - 2.hours,
     category: "Software",
-    caller_name: "Sarah",
-    caller_surname: "Johnson",
-    caller_email: "sarah.j@example.com",
-    caller_phone: "555-0101",
-    customer: "Marketing",
+    caller_name: "Jane",
+    caller_surname: "Smith",
+    caller_email: "jane.smith@greensoft.com",
+    caller_phone: "555-987-6543",
+    customer: "Internal IT",
     source: "Email",
-    team: it_support
+    team: it_team,
+    sla_policy: sla_policy
   },
-
-  # Network Operations Ticket
   {
     title: "VPN Connection Issues",
-    description: "Cannot connect to corporate VPN from remote locations",
-    ticket_type: :incident,
-    status: :open,
-    priority: 1,
+    description: "User cannot connect to VPN from home office.",
+    ticket_type: "Incident",
+    status: :assigned,
+    priority: :p2,
     urgency: :high,
-    impact: :high,
-    creator: admin,
+    impact: :medium,
+    creator: it_manager,
     requester: it_manager,
-    assignee: network_eng,
-    reported_at: 1.hour.ago,
-    category: "Network",
-    caller_name: "Michael",
-    caller_surname: "Brown",
-    caller_email: "michael.b@example.com",
-    caller_phone: "555-0202",
-    customer: "Remote Team",
+    assignee: network_tech,
+    reported_at: Time.current - 1.hour,
+    category: "Software",
+    caller_name: "John",
+    caller_surname: "Doe",
+    caller_email: "john.doe@greensoft.com",
+    caller_phone: "555-123-4567",
+    customer: "Internal IT",
     source: "Phone",
-    team: network_ops
+    team: it_team,
+    sla_policy: sla_policy
   },
-
-  # Help Desk Ticket
   {
     title: "New Employee Setup",
-    description: "Need laptop and account setup for new hire starting Monday",
-    ticket_type: :service_request,
-    status: :open,
-    priority: 3,
-    urgency: :medium,
+    description: "Setup workstation and accounts for new hire.",
+    ticket_type: "Request",
+    status: :assigned,
+    priority: :p4,
+    urgency: :low,
     impact: :low,
-    creator: admin,
+    creator: it_manager,
     requester: it_manager,
     assignee: helpdesk,
-    reported_at: Time.current,
-    category: "Onboarding",
-    caller_name: "Jessica",
-    caller_surname: "Wilson",
-    caller_email: "jessica.w@example.com",
-    caller_phone: "555-0303",
+    reported_at: Time.current - 30.minutes,
+    category: "Software",
+    caller_name: "HR",
+    caller_surname: "Manager",
+    caller_email: "hr@greensoft.com",
+    caller_phone: "555-456-7890",
     customer: "HR",
-    source: "Portal",
-    team: help_desk
+    source: "Email",
+    team: it_team,
+    sla_policy: sla_policy
   }
 ]
 
+Rails.logger.info "Creating tickets..."
 tickets.each_with_index do |ticket_data, index|
+  prefix = case ticket_data[:ticket_type].to_s
+           when 'Incident' then 'INC'
+           when 'Request' then 'REQ'
+           when 'Problem' then 'PRB'
+           else 'TKT'
+           end
+  ticket_number = "#{prefix}#{SecureRandom.alphanumeric(8).upcase}"
+  
   ticket = Ticket.create!(
     title: ticket_data[:title],
     description: ticket_data[:description],
@@ -230,10 +176,10 @@ tickets.each_with_index do |ticket_data, index|
     priority: ticket_data[:priority],
     urgency: ticket_data[:urgency],
     impact: ticket_data[:impact],
-    creator_id: ticket_data[:creator].id,
-    requester_id: ticket_data[:requester].id,
-    assignee_id: ticket_data[:assignee]&.id,
-    organization: organization,
+    creator: ticket_data[:creator],
+    requester: ticket_data[:requester],
+    assignee: ticket_data[:assignee],
+    organization: greensoft_org,
     reported_at: ticket_data[:reported_at],
     category: ticket_data[:category],
     caller_name: ticket_data[:caller_name],
@@ -242,42 +188,38 @@ tickets.each_with_index do |ticket_data, index|
     caller_phone: ticket_data[:caller_phone],
     customer: ticket_data[:customer],
     source: ticket_data[:source],
-    team_id: ticket_data[:team].id,
-    ticket_number: "TICKET-#{Time.current.to_i + index}"
+    team: ticket_data[:team],
+    ticket_number: ticket_number,
+    sla_policy: ticket_data[:sla_policy],
+    response_due_at: ticket_data[:reported_at] + ticket_data[:sla_policy].response_time.minutes,
+    resolution_due_at: ticket_data[:reported_at] + ticket_data[:sla_policy].resolution_time.minutes
   )
-  puts "Created ticket: #{ticket.title} (#{ticket.ticket_number})"
+  Rails.logger.info "Created ticket: #{ticket.title} (#{ticket.ticket_number})"
+  
+  # Create creation notification for requester
+  Notification.create!(
+    user: ticket.requester,
+    organization: greensoft_org,
+    message: "New ticket created: #{ticket.title} (#{ticket.ticket_number})",
+    notifiable: ticket,
+    read: false,
+    skip_email: true
+  )
+  Rails.logger.info "Created creation notification for ticket #{ticket.ticket_number} to #{ticket.requester.email}"
 end
 
-# Create comments
-puts "Creating comments..."
-ticket = Ticket.first
-if ticket
-  Comment.create!(
-    content: "I've tried reinstalling Outlook but the issue persists.",
-    user: support_tech,
-    ticket: ticket
-  )
-  Comment.create!(
-    content: "Please check for Windows updates and try again.",
-    user: it_manager,
-    ticket: ticket
-  )
-  puts "Created sample comments for ticket #{ticket.ticket_number}"
+# Create assignment notifications
+Rails.logger.info "Creating assignment notifications..."
+Ticket.where(organization: greensoft_org).each do |ticket|
+  if ticket.assignee
+    Notification.create!(
+      user: ticket.assignee,
+      organization: greensoft_org,
+      message: "You have been assigned a new ticket: #{ticket.title} (#{ticket.ticket_number})",
+      notifiable: ticket,
+      read: false,
+      skip_email: true
+    )
+    Rails.logger.info "Created assignment notification for ticket #{ticket.ticket_number} assigned to #{ticket.assignee.email}"
+  end
 end
-
-# Create problems
-puts "Creating problems..."
-ticket = Ticket.second # Use the VPN ticket
-if ticket
-  Problem.create!(
-    description: "VPN server capacity issue during peak hours",
-    ticket: ticket,
-    user: network_eng,
-    creator: network_eng,
-    team: network_ops,
-    organization: organization
-  )
-  puts "Created problem for ticket #{ticket.ticket_number}"
-end
-
-puts "Seeding completed successfully!"

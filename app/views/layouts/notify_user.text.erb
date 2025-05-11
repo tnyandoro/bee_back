@@ -1,0 +1,7 @@
+ITSM Notification: <%= @notification.message %>
+
+Ticket: <%= @notification.notifiable&.ticket_number || 'N/A' %>
+Organization: <%= @notification.organization&.name || 'N/A' %>
+Created at: <%= @notification.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+View details in the ITSM system at: <%= ENV['FRONTEND_URL'] %>/incident-overview

@@ -65,16 +65,13 @@ module Api
         # Validate category
         unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
           return render json: { 
-                  error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" 
-                }, status: :unprocessable_entity
+            error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" 
+          }, status: :unprocessable_entity
         end
 
         if @ticket.save
           create_initial_comment
-          
-          # Notification creation happens in after_create_commit callback
-          # Errors are already handled there
-          
+          create_notifications
           render json: ticket_attributes(@ticket), status: :created
         else
           render json: { 
@@ -100,11 +97,25 @@ module Api
 
         if ticket_params_adjusted[:category].present? && !VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
           return render json: { 
-                   error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" 
-                 }, status: :unprocessable_entity
+            error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" 
+          }, status: :unprocessable_entity
+        end
+
+        # Handle resolution fields if provided (for fallback PUT request)
+        if params[:ticket].present?
+          resolution_fields = params[:ticket].slice(
+            :status, :resolved_at, :resolution_note, :reason, :resolution_method,
+            :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer
+          )
+          ticket_params_adjusted.merge!(resolution_fields) if resolution_fields.present?
         end
 
         if @ticket.update(ticket_params_adjusted)
+          if ticket_params_adjusted[:status] == 'resolved' && !@ticket.resolved_at_was
+            @ticket.update!(resolved_at: Time.current)
+            create_resolution_comment(ticket_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
+            create_resolution_notification
+          end
           render json: ticket_attributes(@ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
@@ -117,7 +128,7 @@ module Api
       end
 
       def assign_to_user
-        unless current_user.teamlead? && current_user.team == @ticket.team
+        unless current_user.team_lead? && current_user.team == @ticket.team
           return render json: { error: 'You are not authorized to assign this ticket' }, status: :unauthorized
         end
 
@@ -141,7 +152,7 @@ module Api
       end
 
       def escalate_to_problem
-        unless current_user.teamlead?
+        unless current_user.team_lead?
           return render json: { error: 'Only team leads can escalate tickets to problems' }, status: :forbidden
         end
 
@@ -163,25 +174,47 @@ module Api
       end
 
       def resolve
-        unless current_user.teamlead? || current_user == @ticket.assignee || current_user.admin?
+        unless current_user.team_lead? || current_user == @ticket.assignee || current_user.is_admin?
           return render json: { error: 'You are not authorized to resolve this ticket' }, status: :forbidden
         end
 
         if @ticket.resolved? || @ticket.closed?
-          return render json: { error: "Ticket is already resolved or closed" }, status: :unprocessable_entity
+          return render json: { error: 'Ticket is already resolved or closed' }, status: :unprocessable_entity
         end
 
-        resolution_note = params[:resolution_note].presence || "Resolved by #{current_user.name}"
-        if @ticket.update(status: 'resolved', resolved_at: Time.current, resolution_note: resolution_note)
-          create_resolution_comment(resolution_note)
-          notify_requester_and_assignee(current_user)
+        resolution_params_adjusted = resolve_params
+        resolution_params_adjusted[:status] = 'resolved'
+        resolution_params_adjusted[:resolved_at] = Time.current
+
+        begin
+          ActiveRecord::Base.transaction do
+            @ticket.update!(resolution_params_adjusted)
+            create_resolution_comment(resolution_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
+            create_resolution_notification
+          end
           render json: ticket_attributes(@ticket), status: :ok
-        else
-          render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
+        rescue ActiveRecord::RecordInvalid => e
+          render json: { error: e.message }, status: :unprocessable_entity
         end
       end
 
       private
+
+      def create_notifications
+        notification = Notification.create!(
+          user: @ticket.requester,
+          organization: @ticket.organization,
+          message: "New ticket created: #{@ticket.title} (#{@ticket.ticket_number})",
+          notifiable: @ticket,
+          read: false
+        )
+        NotificationMailer.notify_user(notification).deliver_later
+        if @ticket.assignee
+          notification = create_assignment_notification(@ticket.assignee)
+          NotificationMailer.notify_user(notification).deliver_later
+          SendTicketAssignmentEmailsJob.perform_later(@ticket, @ticket.team, @ticket.assignee) if defined?(SendTicketAssignmentEmailsJob)
+        end
+      end
 
       def ticket_attributes(ticket)
         {
@@ -213,6 +246,13 @@ module Api
           calculated_priority: ticket.calculated_priority,
           resolved_at: ticket.resolved_at&.iso8601,
           resolution_note: ticket.resolution_note,
+          reason: ticket.reason,
+          resolution_method: ticket.resolution_method,
+          cause_code: ticket.cause_code,
+          resolution_details: ticket.resolution_details,
+          end_customer: ticket.end_customer,
+          support_center: ticket.support_center,
+          total_kilometer: ticket.total_kilometer,
           assignee: ticket.assignee ? { id: ticket.assignee.id, name: ticket.assignee.name } : nil,
           creator: ticket.creator ? { id: ticket.creator.id, name: ticket.creator.name } : nil,
           requester: ticket.requester ? { id: ticket.requester.id, name: ticket.requester.name } : nil,
@@ -231,8 +271,17 @@ module Api
         params.require(:ticket).permit(
           :title, :description, :ticket_type, :urgency, :priority, :impact,
           :team_id, :caller_name, :caller_surname, :caller_email, :caller_phone,
-          :customer, :source, :category, :assignee_id, :ticket_number, :reported_at
-          # Removed :creator_id and :requester_id from permitted params as they're set by the controller
+          :customer, :source, :category, :assignee_id, :ticket_number, :reported_at,
+          :creator_id, :requester_id,
+          :status, :resolved_at, :resolution_note, :reason, :resolution_method,
+          :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer
+        )
+      end
+
+      def resolve_params
+        params.require(:ticket).permit(
+          :resolution_note, :reason, :resolution_method, :cause_code,
+          :resolution_details, :end_customer, :support_center, :total_kilometer
         )
       end
 
@@ -240,7 +289,6 @@ module Api
         @creator = current_user
         render json: { error: 'User not authenticated' }, status: :unauthorized unless @creator
       end
-
 
       def set_organization_from_subdomain
         subdomain = params[:organization_subdomain].presence || request.subdomain.presence || 'default'
@@ -250,8 +298,8 @@ module Api
       end
 
       def validate_params
-        return if validate_status && validate_ticket_type
-        false
+        return unless validate_status && validate_ticket_type
+        true
       end
 
       def validate_status
@@ -279,15 +327,6 @@ module Api
         @ticket = @organization.tickets.find_by!(ticket_number: params[:id])
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Ticket not found' }, status: :not_found
-      end
-
-      def ticket_params
-        params.require(:ticket).permit(
-          :title, :description, :ticket_type, :urgency, :priority, :impact,
-          :team_id, :caller_name, :caller_surname, :caller_email, :caller_phone,
-          :customer, :source, :category, :assignee_id, :ticket_number, :reported_at,
-          :creator_id, :requester_id
-        )
       end
 
       def ticket_params_with_enums
@@ -321,7 +360,7 @@ module Api
                  end
 
         loop do
-          number = "#{prefix}/#{SecureRandom.alphanumeric(8).upcase}"
+          number = "#{prefix}#{SecureRandom.alphanumeric(8).upcase}"
           break number unless Ticket.exists?(ticket_number: number)
         end
       end
@@ -335,13 +374,11 @@ module Api
           @ticket.team = team
 
           if params[:assignee_id].present?
-            # Check if assignee exists in organization first
             assignee = @organization.users.find_by(id: params[:assignee_id])
             unless assignee
               raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"
             end
             
-            # Then verify they belong to the specified team
             unless team.users.exists?(id: assignee.id)
               raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in team #{team.id}"
             end
@@ -351,7 +388,32 @@ module Api
           end
         end
       end
-      
+
+      def process_team_and_assignee_for_update(params)
+        if params[:team_id].present?
+          team = @organization.teams.find_by(id: params[:team_id])
+          unless team
+            raise ActiveRecord::RecordNotFound, 'Team not found inDuke University'
+            raise ActiveRecord::RecordNotFound, 'Team not found in this organization'
+          end
+          @ticket.team = team
+
+          if params[:assignee_id].present?
+            assignee = @organization.users.find_by(id: params[:assignee_id])
+            unless assignee
+              raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"
+            end
+            
+            unless team.users.exists?(id: assignee.id)
+              raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in team #{team.id}"
+            end
+            
+            @ticket.assignee = assignee
+            @ticket.status = 'assigned'
+          end
+        end
+      end
+
       def create_initial_comment
         @ticket.comments.create!(
           content: "Ticket created by #{@creator.name}",
@@ -359,23 +421,11 @@ module Api
         )
       end
 
-      def notify_assignee_if_present
-        return unless @ticket.assignee
-        
-        Notification.create!(
-          user: @ticket.assignee,
-          organization: @organization,
-          message: "You have been assigned a new ticket: #{@ticket.title}",
-          read: false,
-          notifiable: @ticket
-        )
-      end
-
       def create_assignment_notification(assignee)
         Notification.create!(
           user: assignee,
           organization: @ticket.organization,
-          message: "You have been assigned a new ticket: #{@ticket.title}",
+          message: "You have been assigned a new ticket: #{@ticket.title} (#{@ticket.ticket_number})",
           read: false,
           notifiable: @ticket
         )
@@ -385,7 +435,7 @@ module Api
         Notification.create!(
           user: @ticket.assignee,
           organization: @ticket.organization,
-          message: "Ticket #{@ticket.ticket_number} has been escalated to a problem.",
+          message: "Ticket #{@ticket.ticket_number} has been escalated to a problem",
           read: false,
           notifiable: @problem
         )
@@ -398,25 +448,16 @@ module Api
         )
       end
 
-      def notify_requester_and_assignee(resolver)
-        if @ticket.requester
-          Notification.create!(
-            user: @ticket.requester,
-            organization: @ticket.organization,
-            message: "Ticket #{@ticket.ticket_number} has been resolved by #{resolver.name}",
-            read: false,
-            notifiable: @ticket
-          )
-        end
-
-        if @ticket.assignee && @ticket.assignee != resolver
-          Notification.create!(
+      def create_resolution_notification
+        if @ticket.assignee && @ticket.assignee != current_user && @ticket.assignee != @ticket.requester
+          notification = Notification.create!(
             user: @ticket.assignee,
             organization: @ticket.organization,
-            message: "Ticket #{@ticket.ticket_number} has been resolved by #{resolver.name}",
+            message: "Ticket resolved by #{current_user.name}: #{@ticket.title} (#{@ticket.ticket_number})",
             read: false,
             notifiable: @ticket
           )
+          NotificationMailer.notify_user(notification).deliver_later
         end
       end
     end

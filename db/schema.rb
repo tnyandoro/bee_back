@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_05_01_100455) do
+ActiveRecord::Schema[7.1].define(version: 2025_05_10_215624) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -42,9 +42,10 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_01_100455) do
     t.boolean "read", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "ticket_id"
+    t.bigint "notifiable_id"
+    t.string "notifiable_type"
+    t.index ["notifiable_id", "notifiable_type"], name: "index_notifications_on_notifiable_id_and_type"
     t.index ["organization_id"], name: "index_notifications_on_organization_id"
-    t.index ["ticket_id"], name: "index_notifications_on_ticket_id"
     t.index ["user_id"], name: "index_notifications_on_user_id"
   end
 
@@ -124,6 +125,13 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_01_100455) do
     t.text "resolution_note"
     t.bigint "user_id"
     t.string "some_field"
+    t.string "reason"
+    t.string "resolution_method"
+    t.string "cause_code"
+    t.text "resolution_details"
+    t.string "end_customer"
+    t.string "support_center"
+    t.string "total_kilometer"
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["sla_policy_id"], name: "index_tickets_on_sla_policy_id"
@@ -144,6 +152,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_01_100455) do
     t.string "auth_token"
     t.string "username"
     t.string "phone_number"
+    t.boolean "receive_email_notifications", default: true, null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
   end
@@ -152,7 +161,6 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_01_100455) do
   add_foreign_key "comments", "tickets"
   add_foreign_key "comments", "users"
   add_foreign_key "notifications", "organizations"
-  add_foreign_key "notifications", "tickets", validate: false
   add_foreign_key "notifications", "users"
   add_foreign_key "problems", "tickets"
   add_foreign_key "problems", "users"

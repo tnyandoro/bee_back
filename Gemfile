@@ -27,6 +27,9 @@ gem 'cloudinary'
 # Use Redis adapter to run Action Cable in production
 gem "redis", ">= 4.0.1"
 
+# SendGrid integration for ActionMailer
+gem 'sendgrid-actionmailer', '~> 3.2'
+
 # Use Kredis to get higher-level data types in Redis [https://github.com/rails/kredis]
 # gem "kredis"
 
@@ -38,7 +41,6 @@ gem 'will_paginate', '~> 3.3'
 
 gem 'strong_migrations' 
 
-# Gemfile
 gem 'sidekiq-cron'
 gem 'business_time'
 
@@ -54,7 +56,7 @@ gem "bootsnap", require: false
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 gem "rack-cors"
 
-# Use Rack Attack to throttle and block abusive requests [
+# Use Rack Attack to throttle and block abusive requests
 gem "rack-attack"
 
 gem 'dotenv-rails', groups: [:development, :test]

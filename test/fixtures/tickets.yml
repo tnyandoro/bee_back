@@ -1,17 +1,24 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
-
 one:
-  title: MyString
-  description: MyText
-  status: 1
+  title: Test Ticket
+  description: This is a test ticket
+  ticket_number: INC/TEST12345678
+  ticket_type: Incident
+  organization_id: 1
+  creator_id: 1
+  requester_id: 1
+  status: 6
+  urgency: 2
+  impact: 2
   priority: 1
-  user: one
-  organization: one
-
-two:
-  title: MyString
-  description: MyText
-  status: 1
-  priority: 1
-  user: two
-  organization: two
+  team_id: 1
+  assignee_id: 2
+  reported_at: <%= Time.now %>
+  caller_name: Boris
+  caller_surname: Johnson
+  caller_email: boris@example.com
+  caller_phone: "07720938746"
+  customer: Johannesburg
+  source: Web
+  category: Software
+  created_at: <%= Time.now %>
+  updated_at: <%= Time.now %>
