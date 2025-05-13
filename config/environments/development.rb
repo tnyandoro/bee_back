@@ -28,12 +28,23 @@ Rails.application.configure do
   config.active_storage.service = :local
 
   # MAILER SETTINGS
+  config.action_mailer.perform_deliveries = true
   config.action_mailer.raise_delivery_errors = true
   config.action_mailer.perform_caching = false
-  config.action_mailer.perform_deliveries = true
-  config.action_mailer.delivery_method = :letter_opener
-  config.action_mailer.default_url_options = { host: 'localhost', port: 3000 }
-  config.action_mailer.asset_host = 'http://localhost:3000'
+  config.action_mailer.delivery_method = :smtp
+  config.action_mailer.smtp_settings = {
+    address: 'localhost',
+    port: 1025
+  }
+  config.action_mailer.default_url_options = { host: 'lvh.me', port: 3001, protocol: 'http' }
+  config.action_mailer.asset_host = 'http://lvh.me:3001'
+
+  # Alternative: Use Mailcatcher for SMTP testing
+  # config.action_mailer.delivery_method = :smtp
+  # config.action_mailer.smtp_settings = {
+  #   address: 'localhost',
+  #   port: 1025
+  # }
 
   # Print deprecation notices
   config.active_support.deprecation = :log
@@ -74,24 +85,4 @@ Rails.application.configure do
     "http://localhost:3001",
     /http:\/\/localhost:\d+/
   ]
-
-  # config.action_mailer.delivery_method = :smtp
-  # config.action_mailer.smtp_settings = {
-  #   address: "smtp.sendgrid.net",
-  #   port: 587,
-  #   authentication: :plain,
-  #   user_name: "apikey",
-  #   password: "your-sendgrid-api-key", # From SendGrid dashboard
-  #   domain: "example.lvh.me"
-  # }
-config.action_mailer.delivery_method = :smtp
-config.action_mailer.smtp_settings = {
-  address: 'localhost',
-  port: 1025
-}
-config.action_mailer.perform_deliveries = true
-config.action_mailer.raise_delivery_errors = true
-config.action_mailer.default_url_options = { host: 'localhost', port: 3000 }
-  config.action_mailer.perform_deliveries = true
-  config.action_mailer.default_url_options = { host: "example.lvh.me:3000" }
 end

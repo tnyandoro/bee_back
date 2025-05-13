@@ -40,6 +40,10 @@ module Api
       end
 
       def create
+        unless current_user.can_create_tickets?(ticket_params[:ticket_type])
+          return render_forbidden("Unauthorized to create #{ticket_params[:ticket_type]} ticket")
+        end
+
         ticket_params_adjusted = ticket_params_with_enums
         
         @ticket = @organization.tickets.new(ticket_params_adjusted)
@@ -82,9 +86,16 @@ module Api
       end
 
       def update
+        unless current_user.can_resolve_tickets?(@ticket.ticket_type) || current_user.can_reassign_tickets? || current_user.can_change_urgency?
+          return render_forbidden("Unauthorized to update this ticket")
+        end
+
         ticket_params_adjusted = ticket_params_with_enums
         
         if ticket_params_adjusted[:priority].present?
+          unless current_user.can_change_urgency?
+            return render_forbidden("Unauthorized to change ticket urgency")
+          end
           priority_value = ticket_params_adjusted[:priority].to_i
           ticket_params_adjusted[:priority] = Ticket.priorities.key([0, [3, priority_value].min].max)
         end
@@ -112,6 +123,9 @@ module Api
 
         if @ticket.update(ticket_params_adjusted)
           if ticket_params_adjusted[:status] == 'resolved' && !@ticket.resolved_at_was
+            unless current_user.can_resolve_tickets?(@ticket.ticket_type)
+              return render_forbidden("Unauthorized to resolve #{@ticket.ticket_type} ticket")
+            end
             @ticket.update!(resolved_at: Time.current)
             create_resolution_comment(ticket_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
             create_resolution_notification
@@ -123,13 +137,16 @@ module Api
       end
 
       def destroy
+        unless current_user.is_admin? || current_user.domain_admin?
+          return render_forbidden("Only admins can delete tickets")
+        end
         @ticket.destroy!
         head :no_content
       end
 
       def assign_to_user
-        unless current_user.team_lead? && current_user.team == @ticket.team
-          return render json: { error: 'You are not authorized to assign this ticket' }, status: :unauthorized
+        unless current_user.can_reassign_tickets? || (current_user.team_lead? && current_user.team == @ticket.team)
+          return render json: { error: 'You are not authorized to assign this ticket' }, status: :forbidden
         end
 
         assignee = @ticket.team.users.find_by(id: params[:user_id])
@@ -152,8 +169,8 @@ module Api
       end
 
       def escalate_to_problem
-        unless current_user.team_lead?
-          return render json: { error: 'Only team leads can escalate tickets to problems' }, status: :forbidden
+        unless current_user.team_lead? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin?
+          return render json: { error: 'Only team leads or higher can escalate tickets to problems' }, status: :forbidden
         end
 
         @problem = Problem.new(
@@ -174,8 +191,8 @@ module Api
       end
 
       def resolve
-        unless current_user.team_lead? || current_user == @ticket.assignee || current_user.is_admin?
-          return render json: { error: 'You are not authorized to resolve this ticket' }, status: :forbidden
+        unless current_user.can_resolve_tickets?(@ticket.ticket_type)
+          return render json: { error: "You are not authorized to resolve this #{@ticket.ticket_type} ticket" }, status: :forbidden
         end
 
         if @ticket.resolved? || @ticket.closed?
@@ -320,6 +337,17 @@ module Api
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
+
+        # Restrict ticket visibility based on role
+        unless current_user.general_manager? || current_user.admin? || current_user.domain_admin?
+          scope = scope.where(
+            "assignee_id = :user_id OR team_id IN (:team_ids) OR department_id = :department_id",
+            user_id: current_user.id,
+            team_ids: current_user.team&.id || [],
+            department_id: current_user.department_id
+          )
+        end
+
         scope
       end
 
@@ -374,6 +402,9 @@ module Api
           @ticket.team = team
 
           if params[:assignee_id].present?
+            unless current_user.can_reassign_tickets? || (current_user.team_lead? && current_user.team == team)
+              raise ArgumentError, 'Unauthorized to assign this ticket'
+            end
             assignee = @organization.users.find_by(id: params[:assignee_id])
             unless assignee
               raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"
@@ -393,12 +424,14 @@ module Api
         if params[:team_id].present?
           team = @organization.teams.find_by(id: params[:team_id])
           unless team
-            raise ActiveRecord::RecordNotFound, 'Team not found inDuke University'
             raise ActiveRecord::RecordNotFound, 'Team not found in this organization'
           end
           @ticket.team = team
 
           if params[:assignee_id].present?
+            unless current_user.can_reassign_tickets? || (current_user.team_lead? && current_user.team == team)
+              raise ArgumentError, 'Unauthorized to assign this ticket'
+            end
             assignee = @organization.users.find_by(id: params[:assignee_id])
             unless assignee
               raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"

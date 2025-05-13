@@ -103,6 +103,7 @@ GEM
     cronex (0.15.0)
       tzinfo
       unicode (>= 0.4.4.5)
+    daemons (1.4.1)
     date (3.4.1)
     dotenv (3.1.7)
     dotenv-rails (3.1.7)
@@ -112,6 +113,7 @@ GEM
     erubi (1.13.1)
     et-orbi (1.2.11)
       tzinfo
+    eventmachine (1.0.9.1)
     factory_bot (6.5.1)
       activesupport (>= 6.1.0)
     factory_bot_rails (6.4.4)
@@ -132,6 +134,10 @@ GEM
       raabro (~> 1.4)
     globalid (1.2.1)
       activesupport (>= 6.1)
+    haml (6.3.0)
+      temple (>= 0.8.2)
+      thor
+      tilt
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
     io-console (0.8.0)
@@ -159,11 +165,23 @@ GEM
       net-imap
       net-pop
       net-smtp
+    mailcatcher (0.2.4)
+      eventmachine
+      haml
+      i18n
+      json
+      mail
+      sinatra
+      skinny (>= 0.1.2)
+      sqlite3-ruby
+      thin
     marcel (1.0.4)
     mini_mime (1.1.5)
     minitest (5.25.4)
     msgpack (1.8.0)
     multipart-post (2.4.1)
+    mustermann (3.0.3)
+      ruby2_keywords (~> 0.0.1)
     mutex_m (0.3.0)
     net-http (0.6.0)
       uri
@@ -216,6 +234,10 @@ GEM
       rack (>= 1.0, < 4)
     rack-cors (2.0.2)
       rack (>= 2.0.0)
+    rack-protection (4.1.1)
+      base64 (>= 0.1.0)
+      logger (>= 1.6.0)
+      rack (>= 3.0.0, < 4)
     rack-session (2.1.0)
       base64 (>= 0.1.0)
       rack (>= 3.0.0)
@@ -261,6 +283,7 @@ GEM
       connection_pool
     reline (0.6.0)
       io-console (~> 0.5)
+    ruby2_keywords (0.0.5)
     ruby_http_client (3.5.5)
     securerandom (0.4.1)
     sendgrid-actionmailer (3.2.0)
@@ -279,10 +302,37 @@ GEM
       fugit (~> 1.8, >= 1.11.1)
       globalid (>= 1.0.1)
       sidekiq (>= 6.5.0)
+    sinatra (4.1.1)
+      logger (>= 1.6.0)
+      mustermann (~> 3.0)
+      rack (>= 3.0.0, < 4)
+      rack-protection (= 4.1.1)
+      rack-session (>= 2.0.0, < 3)
+      tilt (~> 2.0)
+    skinny (0.2.4)
+      eventmachine (~> 1.0.0)
+      thin (>= 1.5, < 1.7)
+    sqlite3 (2.6.0-aarch64-linux-gnu)
+    sqlite3 (2.6.0-aarch64-linux-musl)
+    sqlite3 (2.6.0-arm-linux-gnu)
+    sqlite3 (2.6.0-arm-linux-musl)
+    sqlite3 (2.6.0-arm64-darwin)
+    sqlite3 (2.6.0-x64-mingw-ucrt)
+    sqlite3 (2.6.0-x86_64-darwin)
+    sqlite3 (2.6.0-x86_64-linux-gnu)
+    sqlite3 (2.6.0-x86_64-linux-musl)
+    sqlite3-ruby (1.3.3)
+      sqlite3 (>= 1.3.3)
     stringio (3.1.3)
     strong_migrations (2.2.0)
       activerecord (>= 7)
+    temple (0.10.3)
+    thin (1.6.2)
+      daemons (>= 1.0.9)
+      eventmachine (>= 1.0.0)
+      rack (>= 1.0.0)
     thor (1.3.2)
+    tilt (2.6.0)
     timeout (0.4.3)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
@@ -316,6 +366,7 @@ DEPENDENCIES
   jsonapi-serializer (~> 2.2)
   jwt (~> 2.10, >= 2.10.1)
   letter_opener
+  mailcatcher
   pg (~> 1.1)
   puma (>= 5.0)
   pundit

@@ -80,21 +80,26 @@ Rails.application.configure do
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
 
-config.action_mailer.delivery_method = :smtp
-config.action_mailer.smtp_settings = {
-  address: 'smtp.sendgrid.net',
-  port: 587,
-  domain: 'yourdomain.com',
-  user_name: ENV['SENDGRID_USERNAME'],
-  password: ENV['SENDGRID_PASSWORD'],
-  authentication: 'plain'
-}
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
+  config.action_mailer.perform_deliveries = true
+  config.action_mailer.raise_delivery_errors = true
+  config.action_mailer.delivery_method = :smtp
+  config.action_mailer.smtp_settings = {
+    address: "smtp.sendgrid.net",
+    port: 587,
+    authentication: :plain,
+    user_name: "apikey",
+    password: ENV["SENDGRID_API_KEY"],
+    domain: "yourdomain.com"
+  }
+  config.action_mailer.default_url_options = { host: "yourdomain.com", protocol: "https" }
+  config.action_mailer.asset_host = "https://yourdomain.com"
+    # Enable DNS rebinding protection and other `Host` header attacks.
+    # config.hosts = [
+    #   "example.com",     # Allow requests from example.com
+    #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
+    # ]
+    # Skip DNS rebinding protection for the default health check endpoint.
+    # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end

@@ -1,7 +1,7 @@
 class User < ApplicationRecord
   # Authentication
   has_secure_password
-  has_secure_token :auth_token # Note: This requires the `has_secure_token` gem or custom implementation
+  has_secure_token :auth_token
 
   # Add an accessor to skip auth_token generation
   attr_accessor :skip_auth_token
@@ -18,13 +18,16 @@ class User < ApplicationRecord
   has_many :comments, dependent: :destroy
   has_many :notifications, dependent: :destroy
 
-  # Roles (updated to match your schema where role is an integer)
+  # Roles
   enum role: { 
     admin: 0, 
     super_user: 1, 
     team_lead: 2, 
     agent: 3, 
-    viewer: 4 
+    viewer: 4,
+    department_manager: 5,
+    general_manager: 6,
+    domain_admin: 7
   }, _default: :agent
 
   # Validations
@@ -33,6 +36,8 @@ class User < ApplicationRecord
   validates :name, presence: true
   validates :username, presence: true, uniqueness: { scope: :organization_id }, allow_nil: true
   validates :password, length: { minimum: 8 }, if: -> { password.present? || new_record? }
+  validates :password_confirmation, presence: true, if: -> { password.present? }
+  
   validate :team_organization_matches_user_organization
 
   # Callbacks
@@ -44,15 +49,55 @@ class User < ApplicationRecord
 
   # Role-specific methods
   def is_admin?
-    admin? || super_user?
+    admin? || domain_admin?
   end
 
   def can_create_teams?
-    admin? || super_user?
+    admin? || super_user? || domain_admin?
   end
 
   def can_manage_organization?
-    admin? || super_user?
+    admin? || super_user? || general_manager? || domain_admin?
+  end
+
+  def can_create_tickets?(ticket_type)
+    case ticket_type
+    when "Incident", "Request"
+      agent? || team_lead? || super_user? || department_manager? || general_manager? || domain_admin?
+    when "Problem"
+      super_user? || department_manager? || general_manager? || domain_admin?
+    else
+      false
+    end
+  end
+
+  def can_resolve_tickets?(ticket_type)
+    can_create_tickets?(ticket_type)
+  end
+
+  def can_reassign_tickets?
+    super_user? || department_manager? || general_manager? || domain_admin?
+  end
+
+  def can_change_urgency?
+    team_lead? || super_user? || department_manager? || general_manager? || domain_admin?
+  end
+
+  def can_view_reports?(scope)
+    case scope
+    when :team
+      team_lead? || super_user? || department_manager? || general_manager? || domain_admin?
+    when :department
+      department_manager? || general_manager? || domain_admin?
+    when :organization
+      general_manager? || domain_admin?
+    else
+      false
+    end
+  end
+
+  def can_manage_users?
+    department_manager? || general_manager? || admin? || domain_admin?
   end
 
   # User status management
@@ -73,7 +118,6 @@ class User < ApplicationRecord
 
   def avatar_url
     return "https://example.com/default-avatar.png" unless avatar.attached?
-
     avatar.service_url rescue "https://example.com/default-avatar.png"
   end
 
@@ -84,7 +128,7 @@ class User < ApplicationRecord
 
   # Class methods
   def self.admins
-    where(role: :admin)
+    where(role: [:admin, :domain_admin])
   end
 
   def self.find_by_credentials(email, password)
@@ -99,11 +143,10 @@ class User < ApplicationRecord
   private
 
   def set_default_role
-    self.role ||= :viewer
+    self.role ||= :agent
   end
 
   def downcase_email
-    # Enhanced nil protection
     self.email = email.downcase if email.present?
   end
 
@@ -113,13 +156,11 @@ class User < ApplicationRecord
   end
 
   def ensure_auth_token
-    # Only generate token if it's nil and we're not skipping token generation
     if auth_token.nil? && !skip_auth_token
       begin
         self.auth_token = SecureRandom.hex(20)
       rescue StandardError => e
         Rails.logger.error "Error generating auth token: #{e.message}"
-        # Set a default token in case of error
         self.auth_token = "default_#{Time.now.to_i}"
       end
     end
@@ -127,7 +168,6 @@ class User < ApplicationRecord
 
   def notify_team_assignment
     return if team.nil?
-
     notifications.create!(
       message: "You've been added to the team: #{team.name}",
       organization: organization,
