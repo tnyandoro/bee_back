@@ -1,43 +1,77 @@
 class UserPolicy < ApplicationPolicy
-  # Inherits user/record from ApplicationPolicy
-  # user = current_user
-  # record = target user being authorized
+  attr_reader :user, :record
+
+  def initialize(user, record)
+    @user = user
+    @record = record
+  end
 
   def index?
-    # Allow admins/super_users and team_leads
-    user.admin? || user.role_team_lead?
+    # System Admin: Full access
+    # Domain Admin, General Manager, Department Manager: View users in their organization
+    user.system_admin? || user.domain_admin? || user.general_manager? || user.department_manager?
   end
 
   def show?
-    # Allow admins, team_leads, or users viewing themselves
-    user.admin? || user.role_team_lead? || user == record
+    # System Admin: View any user
+    # Domain Admin, General Manager: View users in their organization
+    # Department Manager: View users in their department
+    # Others: View themselves only
+    user.system_admin? ||
+      (user.domain_admin? && user.organization_id == record.organization_id) ||
+      (user.general_manager? && user.organization_id == record.organization_id) ||
+      (user.department_manager? && user.department_id == record.department_id) ||
+      user == record
   end
 
   def create?
-    # Only allow admins/super_users
-    user.admin?
+    # System Admin: Create any user
+    # Domain Admin: Create users in their organization
+    # Department Manager: Create users in their department
+    # General Manager: Create users in their organization
+    user.system_admin? ||
+      (user.domain_admin? && record.organization_id == user.organization_id) ||
+      (user.department_manager? && record.department_id == user.department_id) ||
+      (user.general_manager? && record.organization_id == user.organization_id)
   end
 
   def update?
-    # Admins can update anyone, team_leads can only update agents
-    user.admin? || (user.role_team_lead? && record.role_agent?)
+    # System Admin: Update any user
+    # Domain Admin: Update users in their organization
+    # Department Manager: Update users in their department
+    # General Manager: Update users in their organization
+    # Others: Update themselves
+    user.system_admin? ||
+      (user.domain_admin? && user.organization_id == record.organization_id) ||
+      (user.department_manager? && user.department_id == record.department_id) ||
+      (user.general_manager? && user.organization_id == record.organization_id) ||
+      user == record
   end
 
   def destroy?
-    # Only allow admins/super_users
-    user.admin?
+    # System Admin: Delete any user
+    # Domain Admin: Delete users in their organization
+    # Department Manager: Delete users in their department
+    # General Manager: Delete users in their organization
+    user.system_admin? ||
+      (user.domain_admin? && user.organization_id == record.organization_id) ||
+      (user.department_manager? && user.department_id == record.department_id) ||
+      (user.general_manager? && user.organization_id == record.organization_id)
   end
 
   class Scope < Scope
     def resolve
-      if user.admin?
-        # Admins see all users in the organization
-        scope.where(organization: user.organization)
-      elsif user.role_team_lead?
-        # Team leads see users in their team
-        scope.where(team: user.team)
+      if user.system_admin?
+        # System Admin: All users
+        scope.all
+      elsif user.domain_admin? || user.general_manager?
+        # Domain Admin, General Manager: Users in their organization
+        scope.where(organization_id: user.organization_id)
+      elsif user.department_manager?
+        # Department Manager: Users in their department
+        scope.where(department_id: user.department_id)
       else
-        # Regular users only see themselves
+        # Others (e.g., service_desk_agent): Only themselves
         scope.where(id: user.id)
       end
     end

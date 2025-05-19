@@ -17,9 +17,7 @@ module Api
             name: user.name,
             role: user.role,
             is_admin: user.is_admin?,
-            is_super_user: user.super_user?,
             username: user.username,
-            department: user.department,
             position: user.position,
             team_id: user.team_id
           },

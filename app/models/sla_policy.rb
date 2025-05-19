@@ -11,4 +11,4 @@ class SlaPolicy < ApplicationRecord
     def business_hours
       organization.business_hours
     end
-  end
+end

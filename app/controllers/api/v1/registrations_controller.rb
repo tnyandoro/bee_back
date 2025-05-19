@@ -13,8 +13,8 @@ module Api
           organization = Organization.new(organization_params)
           organization.save!
 
-          admin = organization.users.new(admin_params)
-          admin.role = :admin
+          admin = organization.users.new(admin_params.except(:department))
+          admin.role = :domain_admin # Changed from :admin
           admin.auth_token = generate_auth_token
           admin.save!
 
