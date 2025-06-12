@@ -76,3 +76,7 @@ end
 group :test do
   gem "factory_bot_rails"
 end
+
+group :production do
+  gem 'rails_12factor' # Helps with logging and static assets on Heroku-like platforms
+end

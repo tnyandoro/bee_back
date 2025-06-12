@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_05_15_084250) do
+ActiveRecord::Schema[7.1].define(version: 2025_05_24_141902) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -168,10 +168,16 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_15_084250) do
     t.string "end_customer"
     t.string "support_center"
     t.string "total_kilometer"
+    t.index ["assignee_id"], name: "index_tickets_on_assignee_id"
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
+    t.index ["impact"], name: "index_tickets_on_impact"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
+    t.index ["priority"], name: "index_tickets_on_priority"
     t.index ["sla_policy_id"], name: "index_tickets_on_sla_policy_id"
+    t.index ["status"], name: "index_tickets_on_status"
+    t.index ["team_id"], name: "index_tickets_on_team_id"
     t.index ["ticket_number"], name: "index_tickets_on_ticket_number", unique: true
+    t.index ["urgency"], name: "index_tickets_on_urgency"
   end
 
   create_table "users", force: :cascade do |t|

@@ -1,15 +1,16 @@
+# app/models/user.rb
 class User < ApplicationRecord
   # Authentication
   has_secure_password
   has_secure_token :auth_token
   has_one_attached :avatar
 
-  # Add an accessor to skip auth_token generation
   attr_accessor :skip_auth_token
 
   # Associations
   belongs_to :organization
   belongs_to :team, optional: true
+  belongs_to :department, optional: true
 
   has_many :tickets, dependent: :destroy
   has_many :assigned_tickets, class_name: "Ticket", foreign_key: "assignee_id", dependent: :nullify
@@ -38,7 +39,7 @@ class User < ApplicationRecord
 
   # Validations
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
-  validates :role, presence: true, inclusion: { in: roles.keys }
+  validates :role, inclusion: { in: roles.keys }, presence: true
   validates :name, presence: true
   validates :username, presence: true, uniqueness: { scope: :organization_id }, allow_nil: true
   validates :password, length: { minimum: 8 }, if: -> { password.present? || new_record? }
@@ -75,9 +76,9 @@ class User < ApplicationRecord
   def can_create_tickets?(ticket_type)
     case ticket_type
     when "Incident", "Request"
-      level_3_support? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+      system_admin? || level_3_support? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
     when "Problem"
-      level_1_2_support? || department_manager? || general_manager? || domain_admin?
+      system_admin? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
     else
       false
     end
@@ -88,7 +89,7 @@ class User < ApplicationRecord
   end
 
   def can_reassign_tickets?
-    level_1_2_support? || department_manager? || general_manager? || domain_admin?
+    system_admin? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
   end
 
   def can_change_urgency?
@@ -98,11 +99,11 @@ class User < ApplicationRecord
   def can_view_reports?(scope)
     case scope
     when :team
-      team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+      system_admin? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
     when :department
-      department_manager? || general_manager? || domain_admin?
+      system_admin? || department_manager? || general_manager? || domain_admin?
     when :organization
-      general_manager? || domain_admin?
+      system_admin? || general_manager? || domain_admin?
     else
       false
     end
@@ -112,7 +113,22 @@ class User < ApplicationRecord
     department_manager? || general_manager? || system_admin? || domain_admin?
   end
 
-  # User status management
+  def can_access_settings?
+    system_admin? || domain_admin?
+  end
+
+  def can_access_dashboard?
+    system_admin? || domain_admin?
+  end
+
+  def can_view_all_tickets?
+    service_desk_agent? || system_admin? || domain_admin? || general_manager? || department_manager?
+  end
+
+  def can_view_user_profiles?
+    service_desk_agent? || system_admin? || domain_admin? || general_manager? || department_manager?
+  end
+
   def deactivate!
     update!(active: false, auth_token: nil)
     Rails.logger.info "User #{email} (ID: #{id}) has been deactivated."
@@ -123,22 +139,19 @@ class User < ApplicationRecord
     Rails.logger.info "User #{email} (ID: #{id}) has been activated."
   end
 
-  # User info
   def full_name
     name
   end
 
   def avatar_url
-    return "https://example.com/default-avatar.png" unless avatar.attached?
-    avatar.service_url rescue "https://example.com/default-avatar.png"
+    return "https://example.com/default-avatar.png " unless avatar.attached?
+    avatar.service_url rescue "https://example.com/default-avatar.png "
   end
 
-  # Token management
   def regenerate_auth_token
     update!(auth_token: SecureRandom.hex(20))
   end
 
-  # Class methods
   def self.admins
     where(role: [:system_admin, :domain_admin])
   end
@@ -191,7 +204,7 @@ class User < ApplicationRecord
   def fix_invalid_role
     db_role = attributes['role']
     if db_role.present? && !self.class.roles.values.include?(db_role.to_i)
-      Rails.logger.warn "Fixing invalid role for user #{id}: #{db_role} not in #{self.class.roles.values}"
+      Rails.logger.warn "Fixing invalid role for user #{id}: #{db_role} not in #{self.class.roles.inspect}"
       self.role = :service_desk_agent
     end
   end

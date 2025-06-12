@@ -1,6 +1,13 @@
 # frozen_string_literal: true
+class InvalidPriorityError < StandardError; end
+class SlaCalculationError < StandardError; end
+
 class Ticket < ApplicationRecord
+  # Optional: For audit trail
+  has_paper_trail class_name: 'TicketVersion'
+
   self.ignored_columns += ["user_id"]
+
   # Associations
   belongs_to :organization
   belongs_to :creator, class_name: "User"
@@ -24,22 +31,27 @@ class Ticket < ApplicationRecord
   # Validations
   validates :title, :description, :urgency, :impact, presence: true
   validates :creator, :requester, presence: true
-  validates :ticket_number, presence: true, uniqueness: true, format: { with: /\A(INC|REQ|PRB|TKT)[A-Z0-9]{8}\z/, message: "must start with INC, REQ, PRB, or TKT followed by 8 uppercase alphanumeric characters" }
-  validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname, 
+  validates :ticket_number, presence: true, uniqueness: true
+  validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname,
             :caller_email, :caller_phone, :customer, :source, presence: true
   validates :ticket_type, inclusion: { in: %w[Incident Request Problem], message: "must be one of: Incident, Request, Problem" }
   validates :category, inclusion: { in: %w[Technical Billing Support Hardware Software Other], message: "must be one of: Technical, Billing, Support, Hardware, Software, Other" }
   validates :status, inclusion: { in: statuses.keys }
-  validate :validate_priority_value
   validate :assignee_belongs_to_team, if: -> { assignee_id.present? && team_id.present? }
 
   # Scopes
-  scope :for_user_in_organization, ->(user_id, organization_id) { where(creator_id: user_id, organization_id: organization_id) }
+  scope :for_user_in_organization, ->(user_id, organization_id) do
+    where(creator_id: user_id, organization_id: organization_id)
+  end
   scope :sla_breached, -> { where(sla_breached: true) }
   scope :pending_response, -> { where("response_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
   scope :pending_resolution, -> { where("resolution_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
+  scope :search_by_title_or_description, ->(query) do
+    where("title ILIKE ? OR description ILIKE ?", "%#{query}%", "%#{query}%")
+  end
 
   # Callbacks
+  before_validation :generate_ticket_number, on: :create
   before_validation :normalize_priority
   before_save :set_calculated_priority
   after_commit :update_sla_dates, on: [:create, :update]
@@ -49,6 +61,12 @@ class Ticket < ApplicationRecord
     raise ArgumentError, "resolved_by must be a User" unless resolved_by.is_a?(User)
     update!(status: :resolved, assignee: resolved_by)
     create_resolution_notifications(resolved_by)
+  end
+
+  def reopen(reopened_by:)
+    raise ArgumentError, "reopened_by must be a User" unless reopened_by.is_a?(User)
+    update!(status: :open, assignee: nil)
+    create_reopen_notification(reopened_by)
   end
 
   # Priority conversion method
@@ -82,11 +100,25 @@ class Ticket < ApplicationRecord
 
   def sla_breached?
     return false if status.in?(['closed', 'resolved'])
-    (response_due_at && Time.current > response_due_at) || 
+    (response_due_at && Time.current > response_due_at) ||
     (resolution_due_at && Time.current > resolution_due_at)
   end
 
   private
+
+  def generate_ticket_number
+    return if ticket_number.present?
+
+    prefix = case ticket_type
+             when "Incident" then "INC"
+             when "Request" then "REQ"
+             when "Problem" then "PRB"
+             else "TKT"
+             end
+
+    sequence = Ticket.where(organization_id: organization_id).count + 1
+    self.ticket_number = "#{prefix}#{Time.current.strftime('%Y%m')}-#{sequence.to_s.rjust(5, '0')}"
+  end
 
   def assignee_belongs_to_team
     return unless assignee && team
@@ -148,7 +180,7 @@ class Ticket < ApplicationRecord
   end
 
   def sla_attributes_changed?
-    saved_change_to_urgency? || saved_change_to_impact? || saved_change_to_priority? || 
+    saved_change_to_urgency? || saved_change_to_impact? || saved_change_to_priority? ||
     saved_change_to_sla_policy_id? || reported_at_changed?
   end
 
@@ -199,30 +231,36 @@ class Ticket < ApplicationRecord
 
   def create_resolution_notifications(resolved_by)
     begin
-      # Notification for requester
-      notification = Notification.create!(
+      Notification.create!(
         user: requester,
         organization: organization,
         message: "Ticket resolved: #{title} (#{ticket_number})",
         read: false,
         notifiable: self
       )
-      Rails.logger.info "Created resolution notification for requester #{requester.email} for Ticket ##{id}: #{notification.message}"
 
-      # Notification for admin
-      admin = organization.users.find_by(role: :admin)
+      admin = organization.users.find_by(role: :system_admin)
       if admin
-        notification = Notification.create!(
+        Notification.create!(
           user: admin,
           organization: organization,
           message: "Ticket resolved by #{resolved_by.name}: #{title} (#{ticket_number})",
           read: false,
           notifiable: self
         )
-        Rails.logger.info "Created resolution notification for admin #{admin.email} for Ticket ##{id}: #{notification.message}"
       end
     rescue => e
       Rails.logger.error "Failed to create resolution notifications for Ticket ##{id}: #{e.message}"
     end
+  end
+
+  def create_reopen_notification(user)
+    Notification.create!(
+      user: requester,
+      organization: organization,
+      message: "Ticket reopened: #{title} (#{ticket_number})",
+      read: false,
+      notifiable: self
+    )
   end
 end
