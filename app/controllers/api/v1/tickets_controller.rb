@@ -49,7 +49,6 @@ module Api
         @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = current_user
         @ticket.requester = current_user
-        @ticket.ticket_number ||= generate_unique_ticket_number(ticket_params_adjusted[:ticket_type])
         @ticket.reported_at ||= Time.current
         @ticket.status = 'open'
 
@@ -374,20 +373,6 @@ module Api
         end
         
         permitted_params
-      end
-
-      def generate_unique_ticket_number(ticket_type = 'Incident')
-        prefix = case ticket_type
-                 when 'Incident' then 'INC'
-                 when 'Request' then 'REQ'
-                 when 'Problem' then 'PRB'
-                 else 'TKT'
-                 end
-
-        loop do
-          number = "#{prefix}#{SecureRandom.alphanumeric(8).upcase}"
-          break number unless Ticket.exists?(ticket_number: number)
-        end
       end
 
       def process_team_and_assignee(params)
