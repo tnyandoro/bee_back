@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_06_12_100112) do
+ActiveRecord::Schema[7.1].define(version: 2025_06_12_134713) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -68,6 +68,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_12_100112) do
     t.bigint "organization_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["organization_id", "name"], name: "index_departments_on_org_id_and_name", unique: true
     t.index ["organization_id"], name: "index_departments_on_organization_id"
   end
 
@@ -168,8 +169,10 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_12_100112) do
     t.string "end_customer"
     t.string "support_center"
     t.string "total_kilometer"
+    t.bigint "department_id"
     t.index ["assignee_id"], name: "index_tickets_on_assignee_id"
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
+    t.index ["department_id"], name: "index_tickets_on_department_id"
     t.index ["impact"], name: "index_tickets_on_impact"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["priority"], name: "index_tickets_on_priority"
@@ -194,9 +197,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_12_100112) do
     t.string "username", null: false
     t.string "phone_number"
     t.boolean "receive_email_notifications", default: true, null: false
-    t.string "reset_password_token"
     t.datetime "reset_password_sent_at", null: false
     t.bigint "department_id"
+    t.string "reset_password_token", limit: 64
     t.index ["department_id"], name: "index_users_on_department_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
@@ -216,6 +219,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_12_100112) do
   add_foreign_key "problems", "users"
   add_foreign_key "sla_policies", "organizations"
   add_foreign_key "teams", "organizations"
+  add_foreign_key "tickets", "departments"
   add_foreign_key "tickets", "organizations"
   add_foreign_key "tickets", "sla_policies"
   add_foreign_key "tickets", "teams"

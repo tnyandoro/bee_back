@@ -108,16 +108,30 @@ class Ticket < ApplicationRecord
 
   def generate_ticket_number
     return if ticket_number.present?
-
+  
     prefix = case ticket_type
              when "Incident" then "INC"
              when "Request" then "REQ"
              when "Problem" then "PRB"
              else "TKT"
              end
-
-    sequence = Ticket.where(organization_id: organization_id).count + 1
-    self.ticket_number = "#{prefix}#{Time.current.strftime('%Y%m')}-#{sequence.to_s.rjust(5, '0')}"
+  
+    sequence_name = case ticket_type
+                    when "Incident" then "tickets_inc_organization_#{organization_id}_seq"
+                    when "Request" then "tickets_req_organization_#{organization_id}_seq"
+                    when "Problem" then "tickets_prb_organization_#{organization_id}_seq"
+                    else "tickets_tkt_organization_#{organization_id}_seq"
+                    end
+  
+    begin
+      sequence_value = ActiveRecord::Base.connection.execute(
+        "SELECT nextval('#{ActiveRecord::Base.connection.quote_table_name(sequence_name)}')"
+      ).first["nextval"]
+      self.ticket_number = "#{prefix}#{Time.current.strftime('%Y%m')}-#{sequence_value.to_s.rjust(5, '0')}"
+    rescue ActiveRecord::StatementInvalid => e
+      Rails.logger.error "Failed to generate ticket number for organization_id #{organization_id}: #{e.message}"
+      raise ActiveRecord::RecordInvalid, self, "Sequence #{sequence_name} does not exist."
+    end
   end
 
   def assignee_belongs_to_team

@@ -336,14 +336,14 @@ module Api
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
-
-        # Restrict ticket visibility based on role
+      
         unless current_user.general_manager? || current_user.admin? || current_user.domain_admin?
-          scope = scope.where(assignee_id: current_user.id)
-                       .or(scope.where(team_id: current_user.team_id))
-                       .or(scope.where(department_id: current_user.department_id))
+          conditions = [scope.where(assignee_id: current_user.id)]
+          conditions << scope.where(team_id: current_user.team_id) if current_user.team_id.present?
+          conditions << scope.where(department_id: current_user.department_id) if current_user.department_id.present?
+          scope = conditions.reduce { |combined, condition| combined.or(condition) } if conditions.any?
         end
-
+      
         scope
       end
 
