@@ -13,7 +13,8 @@ module Api
           organization = Organization.new(organization_params)
           organization.save!
 
-          admin = organization.users.new(admin_params.except(:department))
+          # admin = organization.users.new(admin_params.except(:department))
+          admin = organization.users.new(admin_params.except(:department, :department_id))
           admin.role = :domain_admin # Changed from :admin
           admin.auth_token = generate_auth_token
           admin.save!
@@ -52,8 +53,7 @@ module Api
 
       def admin_params
         params.require(:admin).permit(
-          :name, :email, :phone_number, :password, 
-          :password_confirmation, :department, 
+          :password_confirmation, :department_id, 
           :position, :username
         ).tap do |p|
           p[:email] = p[:email].downcase

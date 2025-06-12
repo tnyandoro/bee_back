@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_05_24_141902) do
+ActiveRecord::Schema[7.1].define(version: 2025_06_12_100112) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -195,11 +195,12 @@ ActiveRecord::Schema[7.1].define(version: 2025_05_24_141902) do
     t.string "phone_number"
     t.boolean "receive_email_notifications", default: true, null: false
     t.string "reset_password_token"
-    t.datetime "reset_password_sent_at"
+    t.datetime "reset_password_sent_at", null: false
     t.bigint "department_id"
     t.index ["department_id"], name: "index_users_on_department_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
+    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["username", "organization_id"], name: "index_users_on_username_and_organization_id", unique: true
   end
 

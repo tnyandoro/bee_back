@@ -340,12 +340,9 @@ module Api
 
         # Restrict ticket visibility based on role
         unless current_user.general_manager? || current_user.admin? || current_user.domain_admin?
-          scope = scope.where(
-            "assignee_id = :user_id OR team_id IN (:team_ids) OR department_id = :department_id",
-            user_id: current_user.id,
-            team_ids: current_user.team&.id || [],
-            department_id: current_user.department_id
-          )
+          scope = scope.where(assignee_id: current_user.id)
+                       .or(scope.where(team_id: current_user.team_id))
+                       .or(scope.where(department_id: current_user.department_id))
         end
 
         scope
