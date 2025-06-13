@@ -28,8 +28,10 @@
 #       enabled: "ON"
 
 en:
-  hello: "Hello world"
-  en:
-mailers:
-  password_reset:
-    subject: "Reset Your Password"
+  mailers:
+    welcome_email:
+      subject: "Welcome to Our Service"
+    password_reset:
+      subject: "Reset Your Password"
+    "yes": "yup"
+    enabled: "ON"
