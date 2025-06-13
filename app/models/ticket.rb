@@ -3,12 +3,9 @@ class InvalidPriorityError < StandardError; end
 class SlaCalculationError < StandardError; end
 
 class Ticket < ApplicationRecord
-  # Optional: For audit trail
   has_paper_trail class_name: 'TicketVersion'
-
   self.ignored_columns += ["user_id"]
 
-  # Associations
   belongs_to :organization
   belongs_to :creator, class_name: "User"
   belongs_to :requester, class_name: "User"
@@ -22,13 +19,11 @@ class Ticket < ApplicationRecord
   has_many :requested_tickets, class_name: "Ticket", foreign_key: "requester_id", dependent: :nullify
   has_many :notifications, as: :notifiable, dependent: :destroy
 
-  # Enums
   enum status: { open: 0, assigned: 1, escalated: 2, closed: 3, suspended: 4, resolved: 5, pending: 6 }, _default: :open
   enum urgency: { low: 0, medium: 1, high: 2 }, _prefix: :urgency
   enum impact: { low: 0, medium: 1, high: 2 }, _prefix: :impact
   enum priority: { p4: 0, p3: 1, p2: 2, p1: 3 }, _prefix: true
 
-  # Validations
   validates :title, :description, :urgency, :impact, presence: true
   validates :creator, :requester, presence: true
   validates :ticket_number, presence: true, uniqueness: true
@@ -39,7 +34,6 @@ class Ticket < ApplicationRecord
   validates :status, inclusion: { in: statuses.keys }
   validate :assignee_belongs_to_team, if: -> { assignee_id.present? && team_id.present? }
 
-  # Scopes
   scope :for_user_in_organization, ->(user_id, organization_id) do
     where(creator_id: user_id, organization_id: organization_id)
   end
@@ -50,13 +44,11 @@ class Ticket < ApplicationRecord
     where("title ILIKE ? OR description ILIKE ?", "%#{query}%", "%#{query}%")
   end
 
-  # Callbacks
   before_validation :generate_ticket_number, on: :create
   before_validation :normalize_priority
   before_save :set_calculated_priority
   after_commit :update_sla_dates, on: [:create, :update]
 
-  # Public Methods
   def resolve(resolved_by:)
     raise ArgumentError, "resolved_by must be a User" unless resolved_by.is_a?(User)
     update!(status: :resolved, assignee: resolved_by)
@@ -69,7 +61,6 @@ class Ticket < ApplicationRecord
     create_reopen_notification(reopened_by)
   end
 
-  # Priority conversion method
   def priority=(value)
     case value.to_s
     when '0', 'p4' then super(:p4)
@@ -81,7 +72,6 @@ class Ticket < ApplicationRecord
     end
   end
 
-  # SLA Methods
   def calculate_sla_dates
     self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority) ||
                         organization.sla_policies.find_by(priority: :p4)
@@ -108,30 +98,37 @@ class Ticket < ApplicationRecord
 
   def generate_ticket_number
     return if ticket_number.present?
-  
-    prefix = case ticket_type
-             when "Incident" then "INC"
-             when "Request" then "REQ"
-             when "Problem" then "PRB"
-             else "TKT"
-             end
-  
-    sequence_name = case ticket_type
-                    when "Incident" then "tickets_inc_organization_#{organization_id}_seq"
-                    when "Request" then "tickets_req_organization_#{organization_id}_seq"
-                    when "Problem" then "tickets_prb_organization_#{organization_id}_seq"
-                    else "tickets_tkt_organization_#{organization_id}_seq"
-                    end
-  
+
+    prefix = prefix_for_type(ticket_type)
+    sequence_name = sequence_for_type(ticket_type, organization_id)
+
     begin
-      sequence_value = ActiveRecord::Base.connection.execute(
-        "SELECT nextval('#{ActiveRecord::Base.connection.quote_table_name(sequence_name)}')"
-      ).first["nextval"]
+      sequence_value = ActiveRecord::Base.connection.select_value(
+        "SELECT nextval(#{ActiveRecord::Base.connection.quote(sequence_name)})"
+      )
       self.ticket_number = "#{prefix}#{Time.current.strftime('%Y%m')}-#{sequence_value.to_s.rjust(5, '0')}"
     rescue ActiveRecord::StatementInvalid => e
       Rails.logger.error "Failed to generate ticket number for organization_id #{organization_id}: #{e.message}"
       raise ActiveRecord::RecordInvalid, self, "Sequence #{sequence_name} does not exist."
     end
+  end
+
+  def prefix_for_type(type)
+    {
+      "Incident" => "INC",
+      "Request" => "REQ",
+      "Problem" => "PRB"
+    }.fetch(type, "TKT")
+  end
+
+  def sequence_for_type(type, org_id)
+    base = {
+      "Incident" => "tickets_inc",
+      "Request" => "tickets_req",
+      "Problem" => "tickets_prb"
+    }.fetch(type, "tickets_tkt")
+
+    "#{base}_organization_#{org_id}_seq"
   end
 
   def assignee_belongs_to_team
@@ -193,17 +190,12 @@ class Ticket < ApplicationRecord
     end
   end
 
-  def sla_attributes_changed?
-    saved_change_to_urgency? || saved_change_to_impact? || saved_change_to_priority? ||
-    saved_change_to_sla_policy_id? || reported_at_changed?
-  end
-
   def calculate_due_date(start_time, duration_minutes, business_hours)
     return start_time + duration_minutes.minutes unless business_hours.any?
     remaining_minutes = duration_minutes
     current_time = start_time.dup
     max_days = 365
-    max_days.times do |day_offset|
+    max_days.times do
       current_day = business_hours.find { |bh| bh.day_of_week == current_time.wday.to_s }
       if current_day && within_business_hours?(current_time, current_day)
         end_of_day = Time.zone.parse("#{current_time.to_date} #{current_day.end_time.strftime('%H:%M:%S')}")

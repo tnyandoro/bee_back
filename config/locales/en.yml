@@ -29,3 +29,7 @@
 
 en:
   hello: "Hello world"
+  en:
+mailers:
+  password_reset:
+    subject: "Reset Your Password"

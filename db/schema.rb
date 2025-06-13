@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_06_12_134713) do
+ActiveRecord::Schema[7.1].define(version: 2025_06_13_062441) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -197,12 +197,15 @@ ActiveRecord::Schema[7.1].define(version: 2025_06_12_134713) do
     t.string "username", null: false
     t.string "phone_number"
     t.boolean "receive_email_notifications", default: true, null: false
-    t.datetime "reset_password_sent_at", null: false
+    t.datetime "reset_password_sent_at"
     t.bigint "department_id"
     t.string "reset_password_token", limit: 64
+    t.string "new_reset_password_token", limit: 128
     t.index ["department_id"], name: "index_users_on_department_id"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["new_reset_password_token"], name: "index_users_on_new_reset_password_token", unique: true
     t.index ["organization_id"], name: "index_users_on_organization_id"
+    t.index ["reset_password_sent_at"], name: "index_users_on_reset_password_sent_at_when_token_present", where: "(reset_password_token IS NOT NULL)"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["username", "organization_id"], name: "index_users_on_username_and_organization_id", unique: true
   end

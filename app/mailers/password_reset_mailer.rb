@@ -1,8 +1,20 @@
 class PasswordResetMailer < ApplicationMailer
     def reset_password(user, token, subdomain)
-        @user = user
-        @token = token
-        @reset_url = "http://#{subdomain}.lvh.me:3001/reset-password/#{token}"
-        mail(to: @user.email, subject: "Reset Your Password")
+      @user = user
+      @token = token
+  
+      host = ENV.fetch("DEFAULT_MAILER_HOST") { "#{subdomain}.example.com" }
+      protocol = Rails.env.production? ? "https" : "http"
+  
+      @reset_url = Rails.application.routes.url_helpers.reset_password_url(
+        token,
+        host: host,
+        protocol: protocol
+      )
+  
+      mail(
+        to: @user.email,
+        subject: I18n.t("mailers.password_reset.subject")
+      )
     end
 end
