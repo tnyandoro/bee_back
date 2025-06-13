@@ -2,76 +2,74 @@
 
 # Set Ruby version
 ARG RUBY_VERSION=3.3.6
-FROM registry.docker.com/library/ruby:$RUBY_VERSION-slim AS base
+FROM registry.docker.com/library/ruby:$RUBY_VERSION-slim-bookworm AS base
 
 # Set working directory
 WORKDIR /rails
 
 # Set environment variables for production
 ENV RAILS_ENV="production" \
+    RAILS_LOG_TO_STDOUT="true" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development"
+    BUNDLE_WITHOUT="development:test"
 
-# Build stage to install dependencies and precompile assets
+# Build stage
 FROM base AS build
 
-# Install build dependencies for gems
+# Install build dependencies
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git libpq-dev libvips pkg-config
+    apt-get install --no-install-recommends -y build-essential git libpq-dev libvips pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install gems
 COPY Gemfile Gemfile.lock ./
-RUN gem install rails && \
-    bundle install && \
+RUN bundle install --jobs=4 && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
     bundle exec bootsnap precompile --gemfile
 
-# Copy the application code
+# Copy application code
 COPY . .
 
-# Copy docker-entrypoint script
-COPY ./bin/docker-entrypoint /rails/bin/docker-entrypoint
+# Precompile assets (if applicable)
+RUN bundle exec rails assets:precompile
 
-# Copy render-build.sh script
-COPY ./bin/render-build.sh /rails/bin/render-build.sh
-
-# Precompile bootsnap code for faster boot time
+# Precompile bootsnap code
 RUN bundle exec bootsnap precompile app/ lib/
 
-# Final stage for the production image
+# Final stage
 FROM base
 
 # Install runtime dependencies
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libvips postgresql-client && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+    apt-get install --no-install-recommends -y libvips postgresql-client && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy built gems and application code
+# Copy built artifacts
 COPY --from=build /usr/local/bundle /usr/local/bundle
 COPY --from=build /rails /rails
 
-# Ensure correct file ownership and permissions
+# Create non-root user and set permissions
 RUN useradd rails --create-home --shell /bin/bash && \
     mkdir -p /rails/db /rails/log /rails/storage /rails/tmp && \
     chown -R rails:rails /rails/db /rails/log /rails/storage /rails/tmp /rails/bin
 
-# Make sure the entrypoint script is executable
+# Copy and set executable permissions for entrypoint
+COPY --chown=rails:rails ./bin/docker-entrypoint /rails/bin/docker-entrypoint
 RUN chmod +x /rails/bin/docker-entrypoint
 
-# Make sure the render-build.sh script is executable
-RUN chmod +x /rails/bin/render-build.sh
-
-# Add the Rails binary to the PATH
+# Add Rails binary to PATH
 ENV PATH="/usr/local/bundle/bin:$PATH"
 
+# Run as non-root user
 USER rails:rails
 
-# Set entrypoint to run the entrypoint script
-ENTRYPOINT ["/rails/bin/docker-entrypoint"]
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s CMD curl --fail http://localhost:3000/health || exit 1
 
-# Expose the Rails default port
+# Expose port
 EXPOSE 3000
 
-# Default command to start the Rails server
+# Set entrypoint and default command
+ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 CMD ["rails", "server", "-b", "0.0.0.0"]

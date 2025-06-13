@@ -1,38 +1,46 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
-    image: postgres:latest
+    image: postgres:16
     container_name: itsm_postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: tendai
-      POSTGRES_PASSWORD: Mybreak28#
+      POSTGRES_USER: ${DB_USERNAME:-tendai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-Mybreak28#}
       POSTGRES_DB: itsm_api_development
     ports:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    networks:
+      - itsm_network
 
   app:
-    build: .
-    context: #uses the Dockerfile in the current directory
-    dockerfile: Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: itsm_api
     depends_on:
       - db
     environment:
-      DB_USERNAME: tendai
-      DB_PASSWORD: Mybreak28#
+      DB_USERNAME: ${DB_USERNAME:-tendai}
+      DB_PASSWORD: ${DB_PASSWORD:-Mybreak28#}
       DB_HOST: db
       DB_PORT: 5432
       RAILS_ENV: development
-      SECRET_KEY_BASE: "4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916}
     ports:
       - "3000:3000"
     volumes:
-      - .:/rails  # Changed from /app to /rails to match Dockerfile WORKDIR
-    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails db:create db:migrate && bundle exec rails s -b 0.0.0.0"
+      - .:/rails
+    command: bash -c "/rails/bin/docker-entrypoint"
+    networks:
+      - itsm_network
 
 volumes:
   pg_data:
+
+networks:
+  itsm_network:
+    driver: bridge

@@ -1,14 +1,16 @@
+# app/models/user.rb
 class User < ApplicationRecord
   # Authentication
   has_secure_password
-  has_secure_token :auth_token # Note: This requires the `has_secure_token` gem or custom implementation
+  has_secure_token :auth_token
+  has_one_attached :avatar
 
-  # Add an accessor to skip auth_token generation
   attr_accessor :skip_auth_token
 
   # Associations
   belongs_to :organization
   belongs_to :team, optional: true
+  belongs_to :department, optional: true
 
   has_many :tickets, dependent: :destroy
   has_many :assigned_tickets, class_name: "Ticket", foreign_key: "assignee_id", dependent: :nullify
@@ -18,25 +20,37 @@ class User < ApplicationRecord
   has_many :comments, dependent: :destroy
   has_many :notifications, dependent: :destroy
 
-  # Roles (updated to match your schema where role is an integer)
-  enum role: { 
-    admin: 0, 
-    super_user: 1, 
-    team_lead: 2, 
-    agent: 3, 
-    viewer: 4 
-  }, _default: :agent
+  # Roles
+  enum role: {
+    service_desk_agent: 0,
+    level_1_2_support: 1,
+    team_leader: 2,
+    level_3_support: 3,
+    incident_manager: 4,
+    problem_manager: 5,
+    problem_coordinator: 6,
+    change_manager: 7,
+    change_coordinator: 8,
+    department_manager: 9,
+    general_manager: 10,
+    system_admin: 11,
+    domain_admin: 12
+  }, _default: :service_desk_agent
 
   # Validations
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
-  validates :role, presence: true, inclusion: { in: roles.keys }
+  validates :role, inclusion: { in: roles.keys }, presence: true
   validates :name, presence: true
   validates :username, presence: true, uniqueness: { scope: :organization_id }, allow_nil: true
   validates :password, length: { minimum: 8 }, if: -> { password.present? || new_record? }
+  validates :password_confirmation, presence: true, if: -> { password.present? }
+
   validate :team_organization_matches_user_organization
 
   # Callbacks
   before_validation :set_default_role, on: :create
+  before_validation :fix_invalid_role
+  before_validation :log_role
   before_save :downcase_email
   before_save :ensure_auth_token
 
@@ -44,18 +58,77 @@ class User < ApplicationRecord
 
   # Role-specific methods
   def is_admin?
-    admin? || super_user?
+    system_admin? || domain_admin?
+  end
+
+  def super_user?
+    system_admin? || domain_admin?
   end
 
   def can_create_teams?
-    admin? || super_user?
+    system_admin? || level_1_2_support? || domain_admin?
   end
 
   def can_manage_organization?
-    admin? || super_user?
+    system_admin? || level_1_2_support? || general_manager? || domain_admin?
   end
 
-  # User status management
+  def can_create_tickets?(ticket_type)
+    case ticket_type
+    when "Incident", "Request"
+      system_admin? || level_3_support? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+    when "Problem"
+      system_admin? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+    else
+      false
+    end
+  end
+
+  def can_resolve_tickets?(ticket_type)
+    can_create_tickets?(ticket_type)
+  end
+
+  def can_reassign_tickets?
+    system_admin? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+  end
+
+  def can_change_urgency?
+    team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+  end
+
+  def can_view_reports?(scope)
+    case scope
+    when :team
+      system_admin? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+    when :department
+      system_admin? || department_manager? || general_manager? || domain_admin?
+    when :organization
+      system_admin? || general_manager? || domain_admin?
+    else
+      false
+    end
+  end
+
+  def can_manage_users?
+    department_manager? || general_manager? || system_admin? || domain_admin?
+  end
+
+  def can_access_settings?
+    system_admin? || domain_admin?
+  end
+
+  def can_access_dashboard?
+    system_admin? || domain_admin?
+  end
+
+  def can_view_all_tickets?
+    service_desk_agent? || system_admin? || domain_admin? || general_manager? || department_manager?
+  end
+
+  def can_view_user_profiles?
+    service_desk_agent? || system_admin? || domain_admin? || general_manager? || department_manager?
+  end
+
   def deactivate!
     update!(active: false, auth_token: nil)
     Rails.logger.info "User #{email} (ID: #{id}) has been deactivated."
@@ -66,25 +139,21 @@ class User < ApplicationRecord
     Rails.logger.info "User #{email} (ID: #{id}) has been activated."
   end
 
-  # User info
   def full_name
     name
   end
 
   def avatar_url
-    return "https://example.com/default-avatar.png" unless avatar.attached?
-
-    avatar.service_url rescue "https://example.com/default-avatar.png"
+    return "https://example.com/default-avatar.png " unless avatar.attached?
+    avatar.service_url rescue "https://example.com/default-avatar.png "
   end
 
-  # Token management
   def regenerate_auth_token
     update!(auth_token: SecureRandom.hex(20))
   end
 
-  # Class methods
   def self.admins
-    where(role: :admin)
+    where(role: [:system_admin, :domain_admin])
   end
 
   def self.find_by_credentials(email, password)
@@ -99,11 +168,10 @@ class User < ApplicationRecord
   private
 
   def set_default_role
-    self.role ||= :viewer
+    self.role ||= :service_desk_agent
   end
 
   def downcase_email
-    # Enhanced nil protection
     self.email = email.downcase if email.present?
   end
 
@@ -113,13 +181,11 @@ class User < ApplicationRecord
   end
 
   def ensure_auth_token
-    # Only generate token if it's nil and we're not skipping token generation
     if auth_token.nil? && !skip_auth_token
       begin
         self.auth_token = SecureRandom.hex(20)
       rescue StandardError => e
         Rails.logger.error "Error generating auth token: #{e.message}"
-        # Set a default token in case of error
         self.auth_token = "default_#{Time.now.to_i}"
       end
     end
@@ -127,12 +193,23 @@ class User < ApplicationRecord
 
   def notify_team_assignment
     return if team.nil?
-
     notifications.create!(
       message: "You've been added to the team: #{team.name}",
       organization: organization,
       read: false,
       skip_email: true
     )
+  end
+
+  def fix_invalid_role
+    db_role = attributes['role']
+    if db_role.present? && !self.class.roles.values.include?(db_role.to_i)
+      Rails.logger.warn "Fixing invalid role for user #{id}: #{db_role} not in #{self.class.roles.inspect}"
+      self.role = :service_desk_agent
+    end
+  end
+
+  def log_role
+    Rails.logger.info "User #{id || 'new'} role before validation: #{role.inspect}, db value: #{attributes['role'].inspect}, enum: #{self.class.roles.inspect}"
   end
 end

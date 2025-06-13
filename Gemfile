@@ -70,8 +70,13 @@ group :development do
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
   gem 'letter_opener'
+  gem 'mailcatcher'
 end
 
 group :test do
   gem "factory_bot_rails"
+end
+
+group :production do
+  # gem 'rails_12factor' # Helps with logging and static assets on Heroku-like platforms
 end

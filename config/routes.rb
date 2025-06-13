@@ -11,10 +11,12 @@ Rails.application.routes.draw do
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
       get '/verify', to: 'sessions#verify'
-      post '/register', to: 'registrations#create' # Moved outside organization scope
+      post '/register', to: 'registrations#create'
       get '/verify_admin', to: 'sessions#verify_admin'
+      post '/password/reset', to: 'passwords#reset'      # New: Request password reset
+      post '/password/update', to: 'passwords#update'    # New: Update password with token
 
-      # Profile route (should be scoped under organization or user)
+      # Profile route
       resource :profile, only: [:show]
 
       # Organization resources
@@ -27,7 +29,7 @@ Rails.application.routes.draw do
           post 'add_user', to: 'organizations#add_user'
         end
 
-        # Registration route for admin (organization-specific)
+        # Registration route for admin
         post 'register_admin', to: 'registrations#register_admin'
 
         # Nested resources
@@ -55,6 +57,6 @@ Rails.application.routes.draw do
     end
   end
 
-  # Catch-all route for React SPA (excluding ActionCable and API routes)
+  # Catch-all route for React SPA
   get '*path', to: 'static#index', constraints: ->(req) { !req.path.start_with?('/api', '/cable') }
 end
