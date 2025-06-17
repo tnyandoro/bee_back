@@ -31,9 +31,6 @@ RUN bundle install --jobs=4 && \
 # Copy application code
 COPY . .
 
-# Precompile assets (if applicable)
-RUN bundle exec rails assets:precompile
-
 # Precompile bootsnap code
 RUN bundle exec bootsnap precompile app/ lib/
 

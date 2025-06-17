@@ -214,6 +214,9 @@ GEM
     nokogiri (1.18.2-x86_64-linux-musl)
       racc (~> 1.4)
     ostruct (0.6.1)
+    paper_trail (16.0.0)
+      activerecord (>= 6.1)
+      request_store (~> 1.4)
     pg (1.5.9)
     pg (1.5.9-x64-mingw-ucrt)
     pp (0.6.2)
@@ -283,6 +286,8 @@ GEM
       connection_pool
     reline (0.6.0)
       io-console (~> 0.5)
+    request_store (1.7.0)
+      rack (>= 1.4)
     ruby2_keywords (0.0.5)
     ruby_http_client (3.5.5)
     securerandom (0.4.1)
@@ -367,6 +372,7 @@ DEPENDENCIES
   jwt (~> 2.10, >= 2.10.1)
   letter_opener
   mailcatcher
+  paper_trail
   pg (~> 1.1)
   puma (>= 5.0)
   pundit

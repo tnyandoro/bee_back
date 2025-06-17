@@ -3,7 +3,8 @@ class InvalidPriorityError < StandardError; end
 class SlaCalculationError < StandardError; end
 
 class Ticket < ApplicationRecord
-  has_paper_trail class_name: 'TicketVersion'
+  has_paper_trail class_name: 'TicketVersion' unless Ticket.included_modules.include?(PaperTrail::Model::InstanceMethods)
+
   self.ignored_columns += ["user_id"]
 
   belongs_to :organization

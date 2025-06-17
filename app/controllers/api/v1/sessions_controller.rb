@@ -52,9 +52,10 @@ module Api
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role, # Sends string role, e.g., "system_admin"
+            role: user.role,
             organization_id: user.organization_id,
-            team_id: user.team_id
+            team_id: user.team_id,
+            team_ids: user.team_id ? [user.team_id] : []
           },
           subdomain: params[:subdomain],
           organization_id: @organization.id

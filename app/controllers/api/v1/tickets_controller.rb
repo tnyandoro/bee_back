@@ -144,7 +144,7 @@ module Api
       end
 
       def assign_to_user
-        unless current_user.can_reassign_tickets? || (current_user.team_lead? && current_user.team == @ticket.team)
+        unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == @ticket.team)
           return render json: { error: 'You are not authorized to assign this ticket' }, status: :forbidden
         end
 
@@ -168,7 +168,7 @@ module Api
       end
 
       def escalate_to_problem
-        unless current_user.team_lead? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin?
+        unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin?
           return render json: { error: 'Only team leads or higher can escalate tickets to problems' }, status: :forbidden
         end
 
@@ -243,7 +243,7 @@ module Api
           urgency: ticket.urgency,
           priority: ticket.priority_before_type_cast,
           impact: ticket.impact,
-          team_id: ticket.team_id,
+          team: ticket.team ? { id: ticket.team.id, name: ticket.team.name } : nil,
           assignee_id: ticket.assignee_id,
           requester_id: ticket.requester_id,
           creator_id: ticket.creator_id,
@@ -281,7 +281,7 @@ module Api
             }
           end
         }
-      end
+      end      
 
       def ticket_params
         params.require(:ticket).permit(
@@ -333,19 +333,132 @@ module Api
       end
 
       def apply_filters(scope)
+        Rails.logger.info "Fetching tickets for organization: #{params[:organization_subdomain] || params[:subdomain]}"
+        Rails.logger.info "Current user: #{current_user&.id} - #{current_user&.email}"
+      
+        scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
+        scope = scope.where(team_id: params[:team_id]) if params[:team_id].present?
+        scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
       
+        # reported_at
+        if params[:reported_from].present? && params[:reported_to].present?
+          from = Time.zone.parse(params[:reported_from]) rescue nil
+          to = Time.zone.parse(params[:reported_to]) rescue nil
+          scope = scope.where(reported_at: from.beginning_of_day..to.end_of_day) if from && to
+        elsif params[:reported_from].present?
+          from = Time.zone.parse(params[:reported_from]) rescue nil
+          scope = scope.where("reported_at >= ?", from.beginning_of_day) if from
+        elsif params[:reported_to].present?
+          to = Time.zone.parse(params[:reported_to]) rescue nil
+          scope = scope.where("reported_at <= ?", to.end_of_day) if to
+        end
+      
+        # created_at
+        if params[:created_from].present? && params[:created_to].present?
+          from = Time.zone.parse(params[:created_from]) rescue nil
+          to = Time.zone.parse(params[:created_to]) rescue nil
+          scope = scope.where(created_at: from.beginning_of_day..to.end_of_day) if from && to
+        elsif params[:created_from].present?
+          from = Time.zone.parse(params[:created_from]) rescue nil
+          scope = scope.where("created_at >= ?", from.beginning_of_day) if from
+        elsif params[:created_to].present?
+          to = Time.zone.parse(params[:created_to]) rescue nil
+          scope = scope.where("created_at <= ?", to.end_of_day) if to
+        end
+      
+        # resolved_at
+        if params[:resolved_from].present? && params[:resolved_to].present?
+          from = Time.zone.parse(params[:resolved_from]) rescue nil
+          to = Time.zone.parse(params[:resolved_to]) rescue nil
+          scope = scope.where(resolved_at: from.beginning_of_day..to.end_of_day) if from && to
+        elsif params[:resolved_from].present?
+          from = Time.zone.parse(params[:resolved_from]) rescue nil
+          scope = scope.where("resolved_at >= ?", from.beginning_of_day) if from
+        elsif params[:resolved_to].present?
+          to = Time.zone.parse(params[:resolved_to]) rescue nil
+          scope = scope.where("resolved_at <= ?", to.end_of_day) if to
+        end
+      
+        # updated_at
+        if params[:updated_from].present? && params[:updated_to].present?
+          from = Time.zone.parse(params[:updated_from]) rescue nil
+          to = Time.zone.parse(params[:updated_to]) rescue nil
+          scope = scope.where(updated_at: from.beginning_of_day..to.end_of_day) if from && to
+        elsif params[:updated_from].present?
+          from = Time.zone.parse(params[:updated_from]) rescue nil
+          scope = scope.where("updated_at >= ?", from.beginning_of_day) if from
+        elsif params[:updated_to].present?
+          to = Time.zone.parse(params[:updated_to]) rescue nil
+          scope = scope.where("updated_at <= ?", to.end_of_day) if to
+        end
+      
+        # Role-based visibility filtering
         unless current_user.general_manager? || current_user.admin? || current_user.domain_admin?
-          conditions = [scope.where(assignee_id: current_user.id)]
+          conditions = []
+          conditions << scope.where(assignee_id: current_user.id)
           conditions << scope.where(team_id: current_user.team_id) if current_user.team_id.present?
           conditions << scope.where(department_id: current_user.department_id) if current_user.department_id.present?
-          scope = conditions.reduce { |combined, condition| combined.or(condition) } if conditions.any?
+          scope = conditions.reduce { |combined, cond| combined.or(cond) } if conditions.any?
         end
       
         scope
-      end
+      end     
+      
+      def stats
+        group_by = params[:group_by] || 'daily'
+        date_field = params[:date_field] || 'created_at' # allow created_at, resolved_at, updated_at
+      
+        unless %w[daily monthly].include?(group_by)
+          return render json: { error: "Invalid group_by parameter. Use 'daily' or 'monthly'" }, status: :bad_request
+        end
+      
+        unless %w[created_at resolved_at updated_at].include?(date_field)
+          return render json: { error: "Invalid date_field parameter. Use 'created_at', 'resolved_at', or 'updated_at'" }, status: :bad_request
+        end
+      
+        scope = @organization.tickets
+      
+        # Optional filter: status=resolved or ticket_type=Incident
+        scope = scope.where(status: params[:status]) if params[:status].present?
+        scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
+      
+        # Optional date range filtering
+        if params[:start_date].present? && params[:end_date].present?
+          start_date = Date.parse(params[:start_date]) rescue nil
+          end_date = Date.parse(params[:end_date]) rescue nil
+          if start_date && end_date
+            scope = scope.where("#{date_field} BETWEEN ? AND ?", start_date.beginning_of_day, end_date.end_of_day)
+          end
+        end
+      
+        # Grouping logic
+        case group_by
+        when 'daily'
+          data = scope
+                   .group("DATE(#{date_field})")
+                   .order("DATE(#{date_field})")
+                   .count
+        when 'monthly'
+          data = scope
+                   .group("DATE_TRUNC('month', #{date_field})")
+                   .order("DATE_TRUNC('month', #{date_field})")
+                   .count
+        end
+      
+        formatted = data.map do |date, count|
+          { date: date.to_date.to_s, count: count }
+        end
+      
+        render json: {
+          grouped_by: group_by,
+          field: date_field,
+          organization: @organization.subdomain,
+          data: formatted
+        }, status: :ok
+      end      
 
       def set_ticket
         @ticket = @organization.tickets.find_by!(ticket_number: params[:id])
@@ -384,7 +497,7 @@ module Api
           @ticket.team = team
 
           if params[:assignee_id].present?
-            unless current_user.can_reassign_tickets? || (current_user.team_lead? && current_user.team == team)
+            unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == team)
               raise ArgumentError, 'Unauthorized to assign this ticket'
             end
             assignee = @organization.users.find_by(id: params[:assignee_id])
@@ -411,7 +524,7 @@ module Api
           @ticket.team = team
 
           if params[:assignee_id].present?
-            unless current_user.can_reassign_tickets? || (current_user.team_lead? && current_user.team == team)
+            unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == team)
               raise ArgumentError, 'Unauthorized to assign this ticket'
             end
             assignee = @organization.users.find_by(id: params[:assignee_id])
