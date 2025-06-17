@@ -7,7 +7,7 @@ default: &default
   host: <%= ENV["DB_HOST"] %>
   port: <%= ENV["DB_PORT"] || 5432 %>
   variables:
-    lock_timeout: '5s'
+    lock_timeout: "5s"
 
 development:
   <<: *default
@@ -18,6 +18,9 @@ test:
   database: itsm_api_test
 
 production:
-  <<: *default
-  database: itsm_api_production
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
   url: <%= ENV['DATABASE_URL'] %>
+  variables:
+    lock_timeout: "5s"
