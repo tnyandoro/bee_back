@@ -62,6 +62,12 @@ class User < ApplicationRecord
 
   after_update :notify_team_assignment, if: :saved_change_to_team_id?
 
+  PROFILE_VIEW_ROLES = %w[
+    service_desk_agent assignee_lvl_1_2 assignee_lvl_3 assignment_group_tl
+    service_desk_manager incident_manager problem_manager department_manager
+    general_manager sub_domain_admin domain_admin system_admin
+  ].freeze
+
   # --- NEW PERMISSION METHODS BASED ON ROLE MATRIX ---
   
   # Dashboard access
@@ -139,13 +145,17 @@ class User < ApplicationRecord
   end
   
   # User profiles (view only for most)
+  # def can_view_user_profiles?
+  #   role_service_desk_agent? || role_assignee_lvl_1_2? || 
+  #   role_assignee_lvl_3? || role_assignment_group_tl? || 
+  #   role_service_desk_manager? || role_incident_manager? || 
+  #   role_problem_manager? || role_department_manager? || 
+  #   role_general_manager? || role_sub_domain_admin? || 
+  #   role_domain_admin? || role_system_admin?
+  # end
+
   def can_view_user_profiles?
-    role_service_desk_agent? || role_assignee_lvl_1_2? || 
-    role_assignee_lvl_3? || role_assignment_group_tl? || 
-    role_service_desk_manager? || role_incident_manager? || 
-    role_problem_manager? || role_department_manager? || 
-    role_general_manager? || role_sub_domain_admin? || 
-    role_domain_admin? || role_system_admin?
+    PROFILE_VIEW_ROLES.include?(role)
   end
 
   # --- EXISTING METHODS UPDATED FOR CONSISTENCY ---
