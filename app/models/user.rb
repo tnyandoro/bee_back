@@ -1,4 +1,3 @@
-# app/models/user.rb
 class User < ApplicationRecord
   # Authentication
   has_secure_password
@@ -22,20 +21,27 @@ class User < ApplicationRecord
 
   # Roles
   enum role: {
-    service_desk_agent: 0,
-    level_1_2_support: 1,
-    team_leader: 2,
-    level_3_support: 3,
-    incident_manager: 4,
-    problem_manager: 5,
-    problem_coordinator: 6,
-    change_manager: 7,
-    change_coordinator: 8,
-    department_manager: 9,
-    general_manager: 10,
-    system_admin: 11,
-    domain_admin: 12
-  }, _default: :service_desk_agent
+    # Basic support roles
+    call_center_agent: 0,          # Handles initial call screening
+    service_desk_agent: 1,         # First line of technical support
+    service_desk_tl: 2,            # Team lead for service desk
+    assignee_lvl_1_2: 3,           # Technical support levels 1-2
+    assignee_lvl_3: 4,             # Advanced technical support
+    assignment_group_tl: 5,        # Team lead for technical groups
+    
+    # Management roles
+    service_desk_manager: 6,       # Oversees service desk operations
+    incident_manager: 7,           # Manages incident resolution
+    problem_manager: 8,            # Oversees problem management
+    change_manager: 9,             # Manages change processes
+    department_manager: 10,        # Department-level oversight
+    general_manager: 11,           # Organization-wide management
+    
+    # Administrative roles
+    sub_domain_admin: 12,          # Manages specific domain areas
+    domain_admin: 13,              # Full domain administration
+    system_admin: 14               # Full system access
+  }, _prefix: :role, _default: :call_center_agent
 
   # Validations
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
@@ -56,29 +62,122 @@ class User < ApplicationRecord
 
   after_update :notify_team_assignment, if: :saved_change_to_team_id?
 
-  # Role-specific methods
+  # --- NEW PERMISSION METHODS BASED ON ROLE MATRIX ---
+  
+  # Dashboard access
+  def can_access_admin_dashboard?
+    role_domain_admin? || role_sub_domain_admin?
+  end
+  
+  def can_access_main_dashboard?
+    !role_domain_admin? && !role_sub_domain_admin?
+  end
+  
+  # Ticket permissions
+  def can_create_ticket?
+    role_call_center_agent? || role_service_desk_agent? || 
+    role_service_desk_tl? || role_service_desk_manager? || 
+    role_incident_manager?
+  end
+  
+  def can_view_all_tickets?
+    role_service_desk_agent? || role_service_desk_tl? || 
+    role_service_desk_manager? || role_incident_manager? || 
+    role_problem_manager?
+  end
+  
+  def can_view_assigned_tickets?
+    role_assignee_lvl_1_2? || role_assignee_lvl_3? || 
+    role_assignment_group_tl?
+  end
+  
+  # Incidents overview
+  def can_access_incidents_overview?
+    role_service_desk_agent? || role_service_desk_tl? || 
+    role_assignee_lvl_1_2? || role_assignee_lvl_3? || 
+    role_assignment_group_tl? || role_service_desk_manager? || 
+    role_incident_manager? || role_problem_manager?
+  end
+  
+  # Knowledge Base
+  def can_access_knowledge_base?
+    true # All roles can access KB
+  end
+  
+  # Problem management
+  def can_create_problem?
+    role_assignee_lvl_3? || role_assignment_group_tl? || role_problem_manager?
+  end
+  
+  def can_access_problems_overview?
+    role_assignee_lvl_1_2? || role_assignee_lvl_3? || 
+    role_assignment_group_tl? || role_service_desk_manager? || 
+    role_incident_manager? || role_problem_manager?
+  end
+  
+  def can_view_problems_only?
+    role_assignee_lvl_1_2? || role_service_desk_manager? || 
+    role_incident_manager?
+  end
+  
+  # Settings
+  def can_access_settings?
+    true # All roles can access user settings
+  end
+  
+  def can_access_admin_settings?
+    role_domain_admin? || role_sub_domain_admin?
+  end
+  
+  # Profile access
+  def can_view_own_profile?
+    true # All roles can view their profile
+  end
+  
+  def can_edit_own_profile?
+    role_domain_admin? || role_sub_domain_admin?
+  end
+  
+  # User profiles (view only for most)
+  def can_view_user_profiles?
+    role_service_desk_agent? || role_assignee_lvl_1_2? || 
+    role_assignee_lvl_3? || role_assignment_group_tl? || 
+    role_service_desk_manager? || role_incident_manager? || 
+    role_problem_manager? || role_department_manager? || 
+    role_general_manager? || role_sub_domain_admin? || 
+    role_domain_admin? || role_system_admin?
+  end
+
+  # --- EXISTING METHODS UPDATED FOR CONSISTENCY ---
+  
   def is_admin?
-    system_admin? || domain_admin?
+    role_system_admin? || role_domain_admin? || role_sub_domain_admin? || 
+    role_general_manager? || role_department_manager?
   end
-
+  
   def super_user?
-    system_admin? || domain_admin?
+    role_system_admin? || role_domain_admin?
   end
-
+  
   def can_create_teams?
-    system_admin? || level_1_2_support? || domain_admin?
+    role_system_admin? || role_domain_admin? || role_service_desk_manager? || 
+    role_department_manager?
   end
 
   def can_manage_organization?
-    system_admin? || level_1_2_support? || general_manager? || domain_admin?
+    role_system_admin? || role_domain_admin? || role_general_manager? || 
+    role_department_manager?
   end
 
   def can_create_tickets?(ticket_type)
     case ticket_type
     when "Incident", "Request"
-      system_admin? || level_3_support? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+      role_system_admin? || role_domain_admin? || role_assignee_lvl_3? || 
+      role_assignment_group_tl? || role_assignee_lvl_1_2? || 
+      role_department_manager? || role_general_manager?
     when "Problem"
-      system_admin? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+      role_system_admin? || role_domain_admin? || role_problem_manager? || 
+      role_department_manager? || role_general_manager?
     else
       false
     end
@@ -89,46 +188,89 @@ class User < ApplicationRecord
   end
 
   def can_reassign_tickets?
-    system_admin? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+    role_system_admin? || role_assignee_lvl_1_2? || role_department_manager? || 
+    role_general_manager? || role_domain_admin?
   end
-
+  
   def can_change_urgency?
-    team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+    role_service_desk_tl? || role_assignee_lvl_1_2? || role_department_manager? || 
+    role_general_manager? || role_domain_admin?
   end
-
+  
   def can_view_reports?(scope)
     case scope
     when :team
-      system_admin? || team_leader? || level_1_2_support? || department_manager? || general_manager? || domain_admin?
+      role_system_admin? || role_service_desk_tl? || role_assignee_lvl_1_2? || 
+      role_department_manager? || role_general_manager? || role_domain_admin?
     when :department
-      system_admin? || department_manager? || general_manager? || domain_admin?
+      role_system_admin? || role_department_manager? || role_general_manager? || 
+      role_domain_admin?
     when :organization
-      system_admin? || general_manager? || domain_admin?
+      role_system_admin? || role_general_manager? || role_domain_admin?
     else
       false
     end
   end
 
+  def can_manage_incidents?
+    role_incident_manager? || role_system_admin? || role_domain_admin? || 
+    role_service_desk_manager?
+  end
+
+  def can_manage_problems?
+    role_problem_manager? || role_system_admin? || role_domain_admin?
+  end
+
+  def can_manage_changes?
+    role_change_manager? || role_system_admin? || role_domain_admin?
+  end
+
+  def can_access_call_center?
+    role_call_center_agent? || role_service_desk_agent? || role_service_desk_tl? || 
+    role_service_desk_manager? || is_admin?
+  end
+
+  def can_escalate_tickets?
+    role_assignee_lvl_1_2? || role_assignee_lvl_3? || role_assignment_group_tl? || 
+    role_service_desk_tl? || is_admin?
+  end
+
   def can_manage_users?
-    department_manager? || general_manager? || system_admin? || domain_admin?
+    role_department_manager? || role_general_manager? || role_system_admin? || 
+    role_domain_admin?
   end
 
-  def can_access_settings?
-    system_admin? || domain_admin?
+  # --- SCOPES ---
+  
+  def self.management_team
+    where(role: [
+      :service_desk_manager, 
+      :incident_manager, 
+      :problem_manager, 
+      :change_manager,
+      :department_manager,
+      :general_manager
+    ])
   end
 
-  def can_access_dashboard?
-    system_admin? || domain_admin?
+  def self.technical_staff
+    where(role: [
+      :assignee_lvl_1_2,
+      :assignee_lvl_3,
+      :assignment_group_tl
+    ])
   end
 
-  def can_view_all_tickets?
-    service_desk_agent? || system_admin? || domain_admin? || general_manager? || department_manager?
+  def self.support_staff
+    where(role: [
+      :call_center_agent,
+      :service_desk_agent,
+      :service_desk_tl
+    ])
   end
 
-  def can_view_user_profiles?
-    service_desk_agent? || system_admin? || domain_admin? || general_manager? || department_manager?
-  end
-
+  # --- CORE USER METHODS ---
+  
   def deactivate!
     update!(active: false, auth_token: nil)
     Rails.logger.info "User #{email} (ID: #{id}) has been deactivated."
@@ -144,8 +286,8 @@ class User < ApplicationRecord
   end
 
   def avatar_url
-    return "https://example.com/default-avatar.png " unless avatar.attached?
-    avatar.service_url rescue "https://example.com/default-avatar.png "
+    return "https://example.com/default-avatar.png" unless avatar.attached?
+    avatar.service_url rescue "https://example.com/default-avatar.png"
   end
 
   def regenerate_auth_token
@@ -153,7 +295,7 @@ class User < ApplicationRecord
   end
 
   def self.admins
-    where(role: [:system_admin, :domain_admin])
+    where(role: [:system_admin, :domain_admin, :sub_domain_admin])
   end
 
   def self.find_by_credentials(email, password)
