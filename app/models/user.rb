@@ -62,14 +62,25 @@ class User < ApplicationRecord
 
   after_update :notify_team_assignment, if: :saved_change_to_team_id?
 
+  # --- NEW PERMISSION METHODS BASED ON ROLE MATRIX ---
+
   PROFILE_VIEW_ROLES = %w[
     service_desk_agent assignee_lvl_1_2 assignee_lvl_3 assignment_group_tl
     service_desk_manager incident_manager problem_manager department_manager
     general_manager sub_domain_admin domain_admin system_admin
   ].freeze
-
-  # --- NEW PERMISSION METHODS BASED ON ROLE MATRIX ---
   
+  REPORT_PERMISSIONS = {
+      team: %w[system_admin service_desk_tl assignee_lvl_1_2 department_manager general_manager domain_admin],
+      department: %w[system_admin department_manager general_manager domain_admin],
+      organization: %w[system_admin general_manager domain_admin]
+    }.freeze
+
+  INCIDENTS_OVERVIEW_ROLES = %w[
+      service_desk_agent service_desk_tl assignee_lvl_1_2 assignee_lvl_3
+      assignment_group_tl service_desk_manager incident_manager problem_manager
+    ].freeze
+
   # Dashboard access
   def can_access_admin_dashboard?
     role_domain_admin? || role_sub_domain_admin?
@@ -99,10 +110,11 @@ class User < ApplicationRecord
   
   # Incidents overview
   def can_access_incidents_overview?
-    role_service_desk_agent? || role_service_desk_tl? || 
-    role_assignee_lvl_1_2? || role_assignee_lvl_3? || 
-    role_assignment_group_tl? || role_service_desk_manager? || 
-    role_incident_manager? || role_problem_manager?
+    # role_service_desk_agent? || role_service_desk_tl? || 
+    # role_assignee_lvl_1_2? || role_assignee_lvl_3? || 
+    # role_assignment_group_tl? || role_service_desk_manager? || 
+    # role_incident_manager? || role_problem_manager?
+    INCIDENTS_OVERVIEW_ROLES.include?(role)
   end
   
   # Knowledge Base
@@ -208,18 +220,21 @@ class User < ApplicationRecord
   end
   
   def can_view_reports?(scope)
-    case scope
-    when :team
-      role_system_admin? || role_service_desk_tl? || role_assignee_lvl_1_2? || 
-      role_department_manager? || role_general_manager? || role_domain_admin?
-    when :department
-      role_system_admin? || role_department_manager? || role_general_manager? || 
-      role_domain_admin?
-    when :organization
-      role_system_admin? || role_general_manager? || role_domain_admin?
-    else
-      false
-    end
+    # case scope
+    # when :team
+    #   role_system_admin? || role_service_desk_tl? || role_assignee_lvl_1_2? || 
+    #   role_department_manager? || role_general_manager? || role_domain_admin?
+    # when :department
+    #   role_system_admin? || role_department_manager? || role_general_manager? || 
+    #   role_domain_admin?
+    # when :organization
+    #   role_system_admin? || role_general_manager? || role_domain_admin?
+    # else
+    #   false
+    # end
+    return false unless REPORT_PERMISSIONS.key?(scope)
+  
+    REPORT_PERMISSIONS[scope].include?(role)
   end
 
   def can_manage_incidents?
@@ -297,7 +312,12 @@ class User < ApplicationRecord
 
   def avatar_url
     return "https://example.com/default-avatar.png" unless avatar.attached?
-    avatar.service_url rescue "https://example.com/default-avatar.png"
+    # avatar.service_url rescue "https://example.com/default-avatar.png"
+    begin
+      avatar.service_url
+    rescue StandardError
+      "https://example.com/default-avatar.png"
+    end
   end
 
   def regenerate_auth_token
