@@ -16,7 +16,7 @@ it_manager = User.create!(
   email: "it.manager@greensoft.com",
   password: "password123",
   password_confirmation: "password123",
-  role: :team_lead,
+  role: :team_leader,
   organization: greensoft_org,
   auth_token: "itmanager_token_456"
 )
