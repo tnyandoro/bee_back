@@ -39,7 +39,7 @@ FROM base
 
 # Install runtime dependencies
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y libvips postgresql-client && \
+    apt-get install --no-install-recommends -y libvips postgresql-client curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy built artifacts
@@ -56,17 +56,17 @@ COPY --chown=rails:rails ./bin/docker-entrypoint /rails/bin/docker-entrypoint
 RUN chmod +x /rails/bin/docker-entrypoint
 
 # Add Rails binary to PATH
-ENV PATH="/usr/local/bundle/bin:$PATH"
+ENV PATH="/usr/local/bundle/bin:/rails/bin:$PATH"
 
 # Run as non-root user
 USER rails:rails
 
-# Healthcheck
+# Healthcheck endpoint
 HEALTHCHECK --interval=30s --timeout=3s CMD curl --fail http://localhost:3000/health || exit 1
 
 # Expose port
 EXPOSE 3000
 
-# Set entrypoint and default command
+# Entrypoint and command
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-CMD ["rails", "server", "-b", "0.0.0.0"]
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
