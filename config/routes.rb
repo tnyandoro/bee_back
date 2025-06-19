@@ -57,6 +57,13 @@ Rails.application.routes.draw do
     end
   end
 
-  # Catch-all route for React SPA
-  get '*path', to: 'static#index', constraints: ->(req) { !req.path.start_with?('/api', '/cable') }
+  # ✅ Root route returns simple confirmation for base GET /
+  root to: proc {
+    [200, { 'Content-Type' => 'application/json' }, [{ message: 'API is live' }.to_json]]
+  }
+
+  # ✅ Catch-all fallback route for frontend (e.g., React SPA)
+  get '*path', to: proc {
+    [404, { 'Content-Type' => 'application/json' }, [{ error: 'Not found' }.to_json]]
+  }, constraints: ->(req) { !req.path.start_with?('/api', '/cable', '/rails') }
 end
