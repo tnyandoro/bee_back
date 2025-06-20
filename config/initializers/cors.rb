@@ -23,12 +23,14 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
   end
 
   # Production environment settings
+  # config/initializers/cors.rb
+
   if Rails.env.production?
     allow do
       origins(
         'https://your-production-domain.com',
         'https://app.your-production-domain.com',
-        # Add other production domains/subdomains here
+        'https://itsm-gss.netlify.app'            
       )
 
       resource '*',
