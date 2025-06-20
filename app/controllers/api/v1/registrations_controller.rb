@@ -53,13 +53,13 @@ module Api
 
       def admin_params
         params.require(:admin).permit(
-          :email, :password, :password_confirmation,
+          :name, :email, :password, :password_confirmation,
           :department_id, :position, :username
         ).tap do |p|
           p[:email] = p[:email]&.downcase
           p[:username] = p[:username]&.downcase
         end
-      end      
+      end         
 
       def render_success_response(organization, admin)
         render json: {
