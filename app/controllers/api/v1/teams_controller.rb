@@ -53,21 +53,23 @@ module Api
         ActiveRecord::Base.transaction do
           if @team.save
             if team_params[:user_ids].present?
-              assign_users_to_team(@team, team_params[:user_ids]) 
+              assign_users_to_team(@team, team_params[:user_ids])
             end
             render json: team_attributes(@team), status: :created,
                    location: api_v1_organization_team_url(@organization.subdomain, @team)
           else
+            Rails.logger.error("Team save errors: #{@team.errors.full_messages.join(', ')}")
             render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
           end
         end
       rescue ActiveRecord::RecordInvalid => e
+        Rails.logger.error("ActiveRecord::RecordInvalid: #{e.record.errors.full_messages.join(', ')}")
         render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
       rescue StandardError => e
-        Rails.logger.error("TeamsController#create error: #{e.class} - #{e.message}")
+        Rails.logger.error("TeamsController#create StandardError: #{e.class} - #{e.message}")
         Rails.logger.error(e.backtrace.join("\n"))
         render json: { error: "Internal Server Error" }, status: :internal_server_error
-      end      
+      end          
       
       # PATCH/PUT /api/v1/organizations/:organization_subdomain/teams/:id
       def update
@@ -116,7 +118,7 @@ module Api
       end
 
       def authorize_admin_or_super_user
-        unless current_user&.admin? || current_user&.super_user?
+        unless current_user&.is_admin? || current_user&.super_user?
           render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
         end
       end

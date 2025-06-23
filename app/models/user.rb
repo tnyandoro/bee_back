@@ -171,6 +171,10 @@ class User < ApplicationRecord
   end
 
   # --- EXISTING METHODS UPDATED FOR CONSISTENCY ---
+  def admin?
+    role_system_admin? || role_domain_admin? || role_sub_domain_admin? || 
+    role_general_manager? || role_department_manager?
+  end
   
   def is_admin?
     role_system_admin? || role_domain_admin? || role_sub_domain_admin? || 
