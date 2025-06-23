@@ -90,14 +90,14 @@ module Api
       end
 
       def verify_admin
-        if current_user&.admin?
+        if current_user&.is_admin?
           Rails.logger.info "Admin token verified for user #{current_user.id}"
           head :ok
         else
           Rails.logger.warn "Admin verification failed: User not admin or invalid token"
           head :forbidden
         end
-      end
+      end      
 
       private
 
