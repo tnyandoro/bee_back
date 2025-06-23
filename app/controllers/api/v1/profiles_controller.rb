@@ -28,8 +28,8 @@ module Api
           position: user.position,
           role: user.role,
           is_admin: user.is_admin?,
-          team_id: user.team_id, # Already included, no change needed
-          team_ids: user.team_id ? [user.team_id] : [], # Return team_id as an array for backward compatibility
+          team_id: user.team_id,
+          team_ids: user.team_id ? [user.team_id] : [],
           department_id: user.department_id,
           organization_id: user.organization_id
         }
