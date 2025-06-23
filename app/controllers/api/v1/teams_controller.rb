@@ -26,9 +26,30 @@ module Api
       end
 
       # POST /api/v1/organizations/:organization_subdomain/teams
-      def create
-        @team = @organization.teams.new(team_params.except(:user_ids))
+      # def create
+      #   @team = @organization.teams.new(team_params.except(:user_ids))
         
+      #   ActiveRecord::Base.transaction do
+      #     if @team.save
+      #       if team_params[:user_ids].present?
+      #         assign_users_to_team(@team, team_params[:user_ids]) 
+      #       end
+      #       render json: team_attributes(@team), status: :created,
+      #              location: api_v1_organization_team_url(@organization.subdomain, @team)
+      #     else
+      #       render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
+      #     end
+      #   end
+      # rescue ActiveRecord::RecordInvalid => e
+      #   render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+      # end
+
+      def create
+        Rails.logger.info("Create Team Params: #{params.inspect}")
+        Rails.logger.info("Organization: #{@organization.inspect}")
+      
+        @team = @organization.teams.new(team_params.except(:user_ids))
+      
         ActiveRecord::Base.transaction do
           if @team.save
             if team_params[:user_ids].present?
@@ -42,8 +63,12 @@ module Api
         end
       rescue ActiveRecord::RecordInvalid => e
         render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
-      end
-
+      rescue StandardError => e
+        Rails.logger.error("TeamsController#create error: #{e.class} - #{e.message}")
+        Rails.logger.error(e.backtrace.join("\n"))
+        render json: { error: "Internal Server Error" }, status: :internal_server_error
+      end      
+      
       # PATCH/PUT /api/v1/organizations/:organization_subdomain/teams/:id
       def update
         ActiveRecord::Base.transaction do
