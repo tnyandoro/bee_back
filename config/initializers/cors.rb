@@ -9,8 +9,8 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
         'http://lvh.me:3000',
         'http://localhost:3001',
         'http://lvh.me:3001',
-        /\.lvh\.me(:\d+)?$/,  # All subdomains of lvh.me with any port
-        /\.localhost(:\d+)?$/ # All subdomains of localhost with any port
+        /\.lvh\.me(:\d+)?$/,
+        /\.localhost(:\d+)?$/
       )
 
       resource '*',
@@ -23,15 +23,13 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
   end
 
   # Production environment settings
-  # config/initializers/cors.rb
-
   if Rails.env.production?
     allow do
-      origins(
-        'https://your-production-domain.com',
-        'https://app.your-production-domain.com',
-        'https://itsm-gss.netlify.app'            
-      )
+      # This regex allows all subdomains of itsm-gss.netlify.app
+      origins do |origin, _env|
+        Rails.logger.info "🔵 Incoming CORS origin: #{origin}"
+        origin.present? && origin.match?(/^https:\/\/([a-z0-9-]+\.)?itsm-gss\.netlify\.app$/)
+      end
 
       resource '*',
         headers: :any,
