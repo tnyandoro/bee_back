@@ -1,4 +1,3 @@
-# app/policies/ticket_policy.rb
 class TicketPolicy < ApplicationPolicy
   attr_reader :user, :ticket
 
@@ -8,73 +7,53 @@ class TicketPolicy < ApplicationPolicy
   end
 
   def index?
-    # Service Desk Agent: All tickets in their org
-    # Admins/Managers: Full access within their scope
-    user.service_desk_agent? || user.can_view_all_tickets?
+    user.system_admin? || user.domain_admin? || user.general_manager? || user.department_manager? || user.service_desk_agent?
   end
 
   def show?
-    return true if user.system_admin?
-
-    # Domain Admin, General Manager, Department Manager: Same org
-    # Service Desk Agent: Same org
-    ticket.organization_id == user.organization_id
+    user.system_admin? || ticket.organization_id == user.organization_id
   end
 
   def create?
-    user.can_create_tickets?("Incident")
+    can_create_ticket?
   end
 
   def update?
     return true if user.system_admin?
 
-    # Admins and managers can edit tickets in same organization
     if user.domain_admin? || user.general_manager? || user.department_manager?
       ticket.organization_id == user.organization_id
     else
-      # Regular users (like service desk agents) can only edit tickets assigned to them or their team
       assigned_to_user_or_team?
     end
   end
 
   def destroy?
     user.system_admin? ||
-      (user.domain_admin? && ticket.organization_id == user.organization_id) ||
-      (user.general_manager? && ticket.organization_id == user.organization_id) ||
-      (user.department_manager? && ticket.organization_id == user.organization_id)
+      (user.domain_admin? && same_organization?) ||
+      (user.general_manager? && same_organization?) ||
+      (user.department_manager? && same_organization?)
   end
 
   def resolve?
-    return true if user.system_admin?
-
-    if user.domain_admin? || user.general_manager? || user.department_manager?
-      ticket.organization_id == user.organization_id
-    else
-      assigned_to_user_or_team?
-    end
+    update? # same logic as update
   end
 
   def assign?
-    user.can_reassign_tickets?
+    user.system_admin? || user.domain_admin? || user.general_manager?
   end
 
   def change_urgency?
-    user.can_change_urgency?
+    assign?
   end
 
   class Scope < Scope
     def resolve
       if user.system_admin?
-        # System Admin sees all tickets
         scope.all
-      elsif user.service_desk_agent? || user.can_view_all_tickets?
-        # Service Desk Agent and others with view-all access see all tickets in their org
-        scope.where(organization_id: user.organization_id)
-      elsif user.domain_admin? || user.general_manager? || user.department_manager?
-        # Admin roles also see all tickets in their org
+      elsif user.domain_admin? || user.general_manager? || user.department_manager? || user.service_desk_agent?
         scope.where(organization_id: user.organization_id)
       else
-        # Others (e.g., level support) may only see assigned tickets — handled separately
         scope.none
       end
     end
@@ -82,7 +61,23 @@ class TicketPolicy < ApplicationPolicy
 
   private
 
+  def same_organization?
+    ticket.organization_id == user.organization_id
+  end
+
   def assigned_to_user_or_team?
-    ticket.assignee_id == user.id || ticket.team_id == user.team_id
+    ticket.assignee_id == user.id || user.team_ids&.include?(ticket.team_id)
+  end
+
+  def can_create_ticket?
+    user.role_call_center_agent? ||
+      user.role_service_desk_agent? ||
+      user.role_service_desk_tl? ||
+      user.role_incident_manager? ||
+      user.role_problem_manager? ||
+      user.role_department_manager? ||
+      user.role_general_manager? ||
+      user.role_domain_admin? ||
+      user.role_system_admin?
   end
 end

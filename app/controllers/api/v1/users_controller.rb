@@ -53,6 +53,10 @@ module Api
         render_server_error(e)
       end
 
+      def roles
+        render json: User.roles.map { |key, _| { value: key, label: key.humanize } }
+      end
+
       def update
         authorize @user
         if @user.update(user_params)
