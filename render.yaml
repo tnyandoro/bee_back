@@ -10,13 +10,14 @@ services:
     name: itsm_api
     runtime: ruby
     plan: free
-    buildCommand: "bundle install && rails assets:precompile"
+    buildCommand: |
+      bundle install && rails assets:precompile
     startCommand: |
       bundle exec rails db:migrate && bundle exec rails server -b 0.0.0.0
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: itsm
+          name: itsm-db
           property: connectionString
       - key: RAILS_MASTER_KEY
         sync: false
