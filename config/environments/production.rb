@@ -70,10 +70,10 @@ Rails.application.configure do
     authentication: :plain,
     user_name: "apikey",
     password: ENV["SENDGRID_API_KEY"],
-    domain: "yourdomain.com"
+    domain: "https://itsm-api.onrender.com"
   }
-  config.action_mailer.default_url_options = { host: "yourdomain.com", protocol: "https" }
-  config.action_mailer.asset_host = "https://yourdomain.com"
+  config.action_mailer.default_url_options = { host: "https://itsm-api.onrender.com", protocol: "https" }
+  config.action_mailer.asset_host = "https://itsm-api.onrender.com"
 
   # Enable locale fallbacks for I18n.
   config.i18n.fallbacks = true

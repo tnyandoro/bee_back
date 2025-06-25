@@ -7,6 +7,8 @@ class Ticket < ApplicationRecord
 
   self.ignored_columns += ["user_id"]
 
+  after_create_commit :send_ticket_created_email
+
   belongs_to :organization
   belongs_to :creator, class_name: "User"
   belongs_to :requester, class_name: "User"
@@ -269,5 +271,9 @@ class Ticket < ApplicationRecord
       read: false,
       notifiable: self
     )
+  end
+
+  def send_ticket_created_email
+    TicketMailer.ticket_created(self).deliver_later
   end
 end
