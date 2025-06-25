@@ -56,6 +56,7 @@ Rails.application.configure do
 
   # Use Sidekiq for Active Job.
   config.active_job.queue_adapter = :sidekiq
+  
 
   config.action_mailer.perform_caching = false
 
