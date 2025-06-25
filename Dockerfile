@@ -69,6 +69,4 @@ EXPOSE 3000
 
 # Entrypoint and command
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-
-# 🔧 Temporarily run the specific migration before starting the server
-CMD bash -c "bundle exec rails db:migrate:up VERSION=20250619122026 && bundle exec rails server -b 0.0.0.0"
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
