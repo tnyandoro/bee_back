@@ -290,7 +290,7 @@ module Api
           :customer, :source, :category, :assignee_id, :ticket_number, :reported_at,
           :creator_id, :requester_id,
           :status, :resolved_at, :resolution_note, :reason, :resolution_method,
-          :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer
+          :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer, :attachment 
         )
       end
 
