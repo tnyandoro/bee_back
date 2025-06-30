@@ -126,7 +126,7 @@ module Api
       end              
 
       def set_organization_from_subdomain
-        param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
+        param_subdomain = params[:organization_subdomain] || params[:subdomain] || params[:organization_id] || request.subdomains.first
       
         if Rails.env.development? && param_subdomain.blank?
           param_subdomain = 'demo'
@@ -145,9 +145,10 @@ module Api
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
       
         unless @organization
+          Rails.logger.warn "Subdomain '#{param_subdomain}' could not be resolved to any organization"
           render json: { error: "Organization not found for subdomain: #{param_subdomain}" }, status: :not_found
         end
-      end      
+      end
     end
   end
 end
