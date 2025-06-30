@@ -1,10 +1,13 @@
 #!/bin/bash
 set -e
 
+echo "Env variables at container start:"
+env | grep DATABASE_URL
+
 if [ "$1" = "rails" ] && [ "$2" = "server" ]; then
   echo "Running migrations before starting server..."
   bundle exec rails db:migrate
-
+  echo "Migrations complete."
   echo "Starting Rails server..."
 fi
 
