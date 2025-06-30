@@ -214,6 +214,21 @@ module Api
         end
       end
 
+      def tickets_to_csv(tickets)
+        CSV.generate(headers: true) do |csv|
+          csv << ["Ticket Number", "Title", "Status", "Priority", "Created At"]
+          tickets.each do |ticket|
+            csv << [
+              ticket.ticket_number,
+              ticket.title,
+              ticket.status,
+              ticket.priority_before_type_cast,
+              ticket.created_at&.iso8601
+            ]
+          end
+        end
+      end      
+
       private
 
       def create_notifications
@@ -489,25 +504,21 @@ module Api
       end
 
       def export
-        # Apply filters (status, date, etc.)
-        tickets = @organization.tickets.all
-        tickets = tickets.where(status: params[:status]) if params[:status].present?
-        tickets = tickets.where("created_at >= ?", params[:from]) if params[:from].present?
-        tickets = tickets.where("created_at <= ?", params[:to]) if params[:to].present?
-    
+        tickets = apply_filters(@organization.tickets).limit(10_000) # Export up to 10,000
+      
         respond_to do |format|
           format.csv do
-            headers['Content-Disposition'] = "attachment; filename=tickets-#{Time.zone.today}.csv"
-            headers['Content-Type'] ||= 'text/csv'
+            headers["Content-Disposition"] = "attachment; filename=tickets-#{Date.today}.csv"
+            headers["Content-Type"] = "text/csv"
             render plain: tickets_to_csv(tickets)
           end
-    
+      
           format.xlsx do
-            render xlsx: "export", filename: "tickets-#{Time.zone.today}.xlsx", locals: { tickets: tickets }
+            render xlsx: "export", filename: "tickets-#{Date.today}.xlsx", locals: { tickets: tickets }
           end
         end
-      end    
-
+      end
+      
       def process_team_and_assignee(params)
         if params[:team_id].present?
           team = @organization.teams.find_by(id: params[:team_id])

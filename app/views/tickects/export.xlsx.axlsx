@@ -1,0 +1,13 @@
+wb = xlsx_package.workbook
+wb.add_worksheet(name: "Tickets") do |sheet|
+  sheet.add_row ["Ticket Number", "Title", "Status", "Priority", "Created At"]
+  tickets.each do |ticket|
+    sheet.add_row [
+      ticket.ticket_number,
+      ticket.title,
+      ticket.status,
+      ticket.priority_before_type_cast,
+      ticket.created_at&.iso8601
+    ]
+  end
+end

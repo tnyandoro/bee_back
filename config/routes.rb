@@ -44,7 +44,7 @@ Rails.application.routes.draw do
 
         resources :tickets, only: [:index, :show, :create, :update, :destroy] do
           collection do
-            get :export   # 👈 Adds /api/v1/organizations/:subdomain/tickets/export
+            get :export  
           end
         
           post :assign_to_user, on: :member
