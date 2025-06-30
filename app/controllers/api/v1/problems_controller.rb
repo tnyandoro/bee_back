@@ -25,6 +25,10 @@ module Api
 
       def create
         Rails.logger.debug "Problem params: #{params.inspect}"
+        Rails.logger.info "Request params: #{params.to_unsafe_h}"
+        Rails.logger.info "Resolved subdomain: #{params[:subdomain]}"
+        Rails.logger.info "Organization from controller: #{@organization&.id} #{@organization&.subdomain}"
+
       
         @problem = Problem.new(problem_params.merge(
           creator: current_user,
@@ -42,7 +46,7 @@ module Api
         end
       
         if @problem.save
-          render json: @problem, status: :created, location: api_v1_organization_problem_url(@organization.subdomain, @problem)
+          render json: @problem, status: :created, location: api_v1_organization_problem_url(subdomain: @organization.subdomain, id: @problem.id)
         else
           Rails.logger.debug "Problem errors: #{@problem.errors.full_messages}"
           render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
