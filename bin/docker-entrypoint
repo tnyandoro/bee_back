@@ -2,13 +2,47 @@
 set -e
 
 echo "Env variables at container start:"
-env | grep DATABASE_URL
+env | grep DATABASE_URL || echo "DATABASE_URL not found"
 
-if [ "$1" = "rails" ] && [ "$2" = "server" ]; then
-  echo "Running migrations before starting server..."
+# Check if we're starting the Rails server (covers multiple ways to start it)
+if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] || [[ "$*" == *"bundle exec puma"* ]]; then
+  echo "Rails server detected. Running pre-startup tasks..."
+  
+  # Wait for database to be ready
+  echo "Waiting for database to be ready..."
+  until bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')" 2>/dev/null; do
+    echo "Database not ready, waiting 2 seconds..."
+    sleep 2
+  done
+  echo "Database is ready!"
+  
+  # Run migrations
+  echo "Running database migrations..."
   bundle exec rails db:migrate
-  echo "Migrations complete."
-  echo "Starting Rails server..."
+  echo "Migrations completed successfully."
+  
+  # Create missing sequences for all organizations
+  echo "Ensuring problem sequences exist..."
+  bundle exec rails runner "
+    begin
+      Organization.find_each do |org|
+        sequence_name = \"tickets_prb_organization_#{org.id}_seq\"
+        unless ActiveRecord::Base.connection.execute(\"SELECT 1 FROM information_schema.sequences WHERE sequence_name = '#{sequence_name}'\").any?
+          ActiveRecord::Base.connection.execute(\"CREATE SEQUENCE #{sequence_name} START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;\")
+          puts \"Created sequence: #{sequence_name}\"
+        else
+          puts \"Sequence already exists: #{sequence_name}\"
+        end
+      end
+      puts 'All sequences verified/created successfully.'
+    rescue => e
+      puts \"Error creating sequences: #{e.message}\"
+      puts 'Continuing with server startup...'
+    end
+  " 2>/dev/null || echo "Sequence creation failed, but continuing..."
+  
+  echo "Pre-startup tasks completed. Starting Rails server..."
 fi
 
+# Execute the main command
 exec "$@"
