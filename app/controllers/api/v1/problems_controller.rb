@@ -68,8 +68,8 @@ module Api
       end
 
       def problem_params
-        params.require(:problem).permit(:description, :ticket_id, :team_id, :user_id)
-      end
+        params.require(:problem).permit(:title, :description, :ticket_id, :team_id, :user_id, :urgency, :priority, :impact, :category, :status)
+      end      
 
       def set_organization_from_subdomain
         subdomain = request.subdomain.presence || 'default'
