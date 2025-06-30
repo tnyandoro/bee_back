@@ -79,13 +79,19 @@ module Api
       end
 
       def problem_params
-        params.require(:problem).permit(
+        key = params[:problem].present? ? :problem : :ticket
+      
+        unless params[key].present?
+          raise ActionController::ParameterMissing.new("problem or ticket")
+        end
+      
+        params.require(key).permit(
           :title, :description, :ticket_id, :related_incident_id,
           :team_id, :assignee_id, :urgency, :priority, :impact,
           :caller_name, :caller_surname, :caller_email, :caller_phone,
           :customer, :source, :category
         )
-      end          
+      end              
 
       def set_organization_from_subdomain
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
