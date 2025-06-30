@@ -28,35 +28,67 @@ module Api
         Rails.logger.info "Request params: #{params.to_unsafe_h}"
         Rails.logger.info "Resolved subdomain: #{params[:subdomain]}"
         Rails.logger.info "Organization from controller: #{@organization&.id} #{@organization&.subdomain}"
-
       
-        @problem = Problem.new(problem_params.merge(
+        # Build ticket params from problem_params, set ticket_type to 'Problem'
+        ticket_attrs = problem_params.slice(
+          :title, :description, :urgency, :priority, :impact,
+          :team_id, :caller_name, :caller_surname, :caller_email, :caller_phone,
+          :customer, :source, :category, :assignee_id
+        ).merge(
+          ticket_type: 'Problem',
           creator: current_user,
-          organization: @organization
-        ))
+          requester: current_user,
+          reported_at: Time.current,
+          status: 'open'
+        )
       
-        # Optionally associate with an incident and escalate it
-        if params[:problem][:related_incident_id].present?
-          related_ticket = @organization.tickets.find_by(id: params[:problem][:related_incident_id])
+        # Convert urgency and impact enums (you can extract this into a shared method)
+        if ticket_attrs[:urgency].present?
+          urgency_value = ticket_attrs[:urgency].downcase
+          ticket_attrs[:urgency] = Ticket.urgencies[urgency_value]
+        end
+        if ticket_attrs[:impact].present?
+          impact_value = ticket_attrs[:impact].downcase
+          ticket_attrs[:impact] = Ticket.impacts[impact_value]
+        end
       
-          if related_ticket
-            @problem.related_incident_id = related_ticket.id
-            related_ticket.update(status: 'escalated')
+        @ticket = @organization.tickets.new(ticket_attrs)
+      
+        if @ticket.save
+          @problem = Problem.new(
+            ticket: @ticket,
+            creator: current_user,
+            organization: @organization,
+            team: @ticket.team
+          )
+      
+          if params[:problem][:related_incident_id].present?
+            related_ticket = @organization.tickets.find_by(id: params[:problem][:related_incident_id])
+            if related_ticket
+              @problem.related_incident_id = related_ticket.id
+              related_ticket.update(status: 'escalated')
+            end
           end
+      
+          if @problem.save
+            render json: @problem, status: :created, location: api_v1_organization_problem_url(subdomain: @organization.subdomain, id: @problem.id)
+          else
+            Rails.logger.debug "Problem errors: #{@problem.errors.full_messages}"
+            # If problem fails, rollback ticket creation as well
+            @ticket.destroy
+            render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
+          end
+        else
+          Rails.logger.debug "Ticket errors: #{@ticket.errors.full_messages}"
+          render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
         end
       
-        if @problem.save
-          render json: @problem, status: :created, location: api_v1_organization_problem_url(subdomain: @organization.subdomain, id: @problem.id)
-        else
-          Rails.logger.debug "Problem errors: #{@problem.errors.full_messages}"
-          render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
-        end
       rescue => e
         Rails.logger.error "Error creating problem: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
         render json: { error: 'Internal server error', details: e.message }, status: :internal_server_error
-      end      
-
+      end
+      
       def update
         if @problem.update(problem_params)
           render json: @problem
