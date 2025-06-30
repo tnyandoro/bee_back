@@ -21,7 +21,9 @@ gem 'stringio', '~> 3.1.2'
 
 gem 'cloudinary'
 
-gem "axlsx_rails"   # For Excel (XLSX) support
+gem 'caxlsx'
+gem 'caxlsx_rails'
+
 gem "csv"           # Built-in in Ruby for CSV
 gem "roo"           # For reading various spreadsheet formats
 
