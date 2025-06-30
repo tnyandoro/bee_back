@@ -35,7 +35,9 @@ module Api
       end
 
       def set_organization_from_subdomain
-        param_subdomain = params[:organization_id] || params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
+        # param_subdomain = params[:organization_id] || params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
+        param_subdomain = params[:subdomain] || params[:organization_id] || params[:organization_subdomain] || request.subdomains.first
+
         Rails.logger.info "Subdomain sources: params[:organization_id]=#{params[:organization_id]}, params[:subdomain]=#{params[:subdomain]}, params[:organization_subdomain]=#{params[:organization_subdomain]}, request.subdomains=#{request.subdomains}"
 
         if Rails.env.development? && param_subdomain.blank?

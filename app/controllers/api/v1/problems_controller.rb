@@ -24,27 +24,34 @@ module Api
       end
 
       def create
-        Rails.logger.debug "Problem params: #{params.inspect}" # Debug incoming params
-
-        @ticket = @organization.tickets.find_by(id: params[:problem][:ticket_id]) if params[:problem][:ticket_id].present?
-        @problem = Problem.new(problem_params.merge(creator: current_user, organization: @organization))
-
-        if @ticket
-          @problem.ticket = @ticket
-          @ticket.update(status: 'escalated') # Update ticket status if escalated
+        Rails.logger.debug "Problem params: #{params.inspect}"
+      
+        @problem = Problem.new(problem_params.merge(
+          creator: current_user,
+          organization: @organization
+        ))
+      
+        # Optionally associate with an incident and escalate it
+        if params[:problem][:related_incident_id].present?
+          related_ticket = @organization.tickets.find_by(id: params[:problem][:related_incident_id])
+      
+          if related_ticket
+            @problem.related_incident_id = related_ticket.id
+            related_ticket.update(status: 'escalated')
+          end
         end
-
+      
         if @problem.save
           render json: @problem, status: :created, location: api_v1_organization_problem_url(@organization.subdomain, @problem)
         else
-          Rails.logger.debug "Problem errors: #{@problem.errors.full_messages}" # Debug validation errors
+          Rails.logger.debug "Problem errors: #{@problem.errors.full_messages}"
           render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
         end
-      rescue StandardError => e
+      rescue => e
         Rails.logger.error "Error creating problem: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
         render json: { error: 'Internal server error', details: e.message }, status: :internal_server_error
-      end
+      end      
 
       def update
         if @problem.update(problem_params)
