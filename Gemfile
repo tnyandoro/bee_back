@@ -33,6 +33,7 @@ gem "active_model_secure_token"
 
 # Use Redis adapter to run Action Cable in production
 gem "redis", ">= 4.0.1"
+gem 'better_errors', '~> 2.9', '>= 2.9.1'
 
 # SendGrid integration for ActionMailer
 gem 'sendgrid-actionmailer', '~> 3.2'
