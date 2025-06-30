@@ -43,10 +43,14 @@ Rails.application.routes.draw do
         end
 
         resources :tickets, only: [:index, :show, :create, :update, :destroy] do
+          collection do
+            get :export   # 👈 Adds /api/v1/organizations/:subdomain/tickets/export
+          end
+        
           post :assign_to_user, on: :member
           post :escalate_to_problem, on: :member
           post :resolve, on: :member
-        end
+        end        
 
         resources :problems, only: [:index, :show, :create, :update, :destroy]
 
