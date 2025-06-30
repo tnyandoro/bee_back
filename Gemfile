@@ -21,6 +21,13 @@ gem 'stringio', '~> 3.1.2'
 
 gem 'cloudinary'
 
+gem "axlsx_rails"   # For Excel (XLSX) support
+gem "csv"           # Built-in in Ruby for CSV
+gem "roo"           # For reading various spreadsheet formats
+
+# Use ActiveModel has_secure_token for generating unique tokens
+gem "active_model_secure_token"
+
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 

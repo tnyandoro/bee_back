@@ -50,6 +50,8 @@ GEM
       erubi (~> 1.11)
       rails-dom-testing (~> 2.2)
       rails-html-sanitizer (~> 1.6)
+    active_model_secure_token (1.0.0)
+      activemodel
     activejob (7.1.5.1)
       activesupport (= 7.1.5.1)
       globalid (>= 0.3.6)
@@ -80,6 +82,9 @@ GEM
       tzinfo (~> 2.0)
     addressable (2.8.7)
       public_suffix (>= 2.0.2, < 7.0)
+    axlsx_rails (0.6.1)
+      actionpack (>= 3.1)
+      caxlsx (>= 3.0)
     base64 (0.2.0)
     bcrypt (3.1.20)
     benchmark (0.4.0)
@@ -90,6 +95,11 @@ GEM
     business_time (0.13.0)
       activesupport (>= 3.2.0)
       tzinfo
+    caxlsx (4.2.0)
+      htmlentities (~> 4.3, >= 4.3.4)
+      marcel (~> 1.0)
+      nokogiri (~> 1.10, >= 1.10.4)
+      rubyzip (>= 1.3.0, < 3)
     childprocess (5.1.0)
       logger (~> 1.5)
     cloudinary (2.3.0)
@@ -103,6 +113,7 @@ GEM
     cronex (0.15.0)
       tzinfo
       unicode (>= 0.4.4.5)
+    csv (3.3.5)
     daemons (1.4.1)
     date (3.4.1)
     dotenv (3.1.7)
@@ -138,6 +149,7 @@ GEM
       temple (>= 0.8.2)
       thor
       tilt
+    htmlentities (4.3.4)
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
     io-console (0.8.0)
@@ -288,8 +300,12 @@ GEM
       io-console (~> 0.5)
     request_store (1.7.0)
       rack (>= 1.4)
+    roo (2.10.1)
+      nokogiri (~> 1)
+      rubyzip (>= 1.3.0, < 3.0.0)
     ruby2_keywords (0.0.5)
     ruby_http_client (3.5.5)
+    rubyzip (2.4.1)
     securerandom (0.4.1)
     sendgrid-actionmailer (3.2.0)
       mail (~> 2.7)
@@ -362,10 +378,13 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
+  active_model_secure_token
+  axlsx_rails
   bcrypt (~> 3.1.7)
   bootsnap
   business_time
   cloudinary
+  csv
   dotenv-rails
   factory_bot_rails
   jsonapi-serializer (~> 2.2)
@@ -380,6 +399,7 @@ DEPENDENCIES
   rack-cors
   rails (~> 7.1.5, >= 7.1.5.1)
   redis (>= 4.0.1)
+  roo
   sendgrid-actionmailer (~> 3.2)
   sidekiq-cron
   stringio (~> 3.1.2)

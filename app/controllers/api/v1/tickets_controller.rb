@@ -488,6 +488,26 @@ module Api
         permitted_params
       end
 
+      def export
+        # Apply filters (status, date, etc.)
+        tickets = @organization.tickets.all
+        tickets = tickets.where(status: params[:status]) if params[:status].present?
+        tickets = tickets.where("created_at >= ?", params[:from]) if params[:from].present?
+        tickets = tickets.where("created_at <= ?", params[:to]) if params[:to].present?
+    
+        respond_to do |format|
+          format.csv do
+            headers['Content-Disposition'] = "attachment; filename=tickets-#{Time.zone.today}.csv"
+            headers['Content-Type'] ||= 'text/csv'
+            render plain: tickets_to_csv(tickets)
+          end
+    
+          format.xlsx do
+            render xlsx: "export", filename: "tickets-#{Time.zone.today}.xlsx", locals: { tickets: tickets }
+          end
+        end
+      end    
+
       def process_team_and_assignee(params)
         if params[:team_id].present?
           team = @organization.teams.find_by(id: params[:team_id])
