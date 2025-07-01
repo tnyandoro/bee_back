@@ -6,6 +6,7 @@ class Problem < ApplicationRecord
   belongs_to :team, optional: true
   belongs_to :organization 
   belongs_to :related_incident, class_name: "Ticket", optional: true
+  
 
 
   delegate :organization, to: :ticket, allow_nil: true
