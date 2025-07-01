@@ -9,7 +9,8 @@ module Api
             name: @organization.name,
             address: @organization.address,
             email: @organization.email,
-            website: @organization.website,
+            web_address: @organization.web_address,
+
           },
           stats: {
             total_tickets: @organization.tickets.count,
