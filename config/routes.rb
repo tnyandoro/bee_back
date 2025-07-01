@@ -23,6 +23,7 @@ Rails.application.routes.draw do
       resources :organizations, param: :subdomain do
         # Organization-level routes
         member do
+          get 'dashboard', to: 'dashboard#show'
           get 'profile', to: 'profiles#show'
           get 'tickets', to: 'organizations#tickets'
           get 'users', to: 'organizations#users'
