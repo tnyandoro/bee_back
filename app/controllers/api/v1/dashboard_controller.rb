@@ -12,11 +12,11 @@ module Api
             website: @organization.website,
           },
           stats: {
-            total_tickets: @organization.total_tickets,
-            open_tickets: @organization.open_tickets,
-            closed_tickets: @organization.closed_tickets,
-            total_problems: @organization.total_problems,
-            total_members: @organization.total_members,
+            total_tickets: @organization.tickets.count,
+            open_tickets: @organization.tickets.where(status: 'open').count,
+            closed_tickets: @organization.tickets.where(status: 'closed').count,
+            total_problems: @organization.problems.count,
+            total_members: @organization.users.count
           }
         }
       end
@@ -25,6 +25,8 @@ module Api
 
       def set_organization
         @organization = Organization.find_by!(subdomain: params[:subdomain])
+      rescue ActiveRecord::RecordNotFound
+        render json: { error: "Organization not found" }, status: :not_found
       end
     end
   end
