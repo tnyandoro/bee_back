@@ -476,10 +476,12 @@ module Api
       end      
 
       def set_ticket
-        @ticket = @organization.tickets.find_by!(ticket_number: params[:id])
+        @ticket = @organization.tickets.find_by(id: params[:id]) || 
+                  @organization.tickets.find_by(ticket_number: params[:id])
+        raise ActiveRecord::RecordNotFound unless @ticket
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Ticket not found' }, status: :not_found
-      end
+      end          
 
       def ticket_params_with_enums
         permitted_params = ticket_params.dup
