@@ -1,19 +1,23 @@
-# app/controllers/api/v1/application_controller.rb
 module Api
   module V1
     class ApplicationController < ActionController::API
       include Pundit::Authorization
 
-      # Global error handlers
+      # --- Global error handlers ---
       rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
       rescue_from ActionController::RoutingError, with: :render_not_found
       rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
       rescue_from StandardError, with: :render_internal_server_error
 
-      # Filters
+      # --- Filters ---
       before_action :authenticate_user!, except: [:create]
       before_action :set_organization_from_subdomain
       before_action :verify_user_organization, if: -> { @organization.present? }
+
+      # --- Alias for API controller use ---
+      def authenticate_api_user!
+        authenticate_user!
+      end
 
       private
 
@@ -34,9 +38,9 @@ module Api
         current_user&.email
       end
 
+      # --- Subdomain Logic for Multi-Tenancy ---
       def set_organization_from_subdomain
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
-        # param_subdomain = params[:subdomain] || params[:organization_id] || params[:organization_subdomain] || request.subdomains.first
 
         Rails.logger.info "Subdomain sources: params[:organization_id]=#{params[:organization_id]}, params[:subdomain]=#{params[:subdomain]}, params[:organization_subdomain]=#{params[:organization_subdomain]}, request.subdomains=#{request.subdomains}"
 
@@ -64,7 +68,7 @@ module Api
           render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
         end
       end
-      
+
       def verify_user_organization
         if current_user && current_user.organization_id != @organization&.id
           Rails.logger.debug "User #{current_user_email} does not belong to organization #{@organization.subdomain}"
