@@ -1,7 +1,7 @@
 module Api
   module V1
     class SettingsController < ApplicationController
-      before_action :authenticate_api_user!
+      before_action :authenticate_user!
       before_action :set_organization
 
       # GET /api/v1/organizations/:subdomain/settings
