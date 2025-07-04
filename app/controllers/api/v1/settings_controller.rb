@@ -21,7 +21,7 @@ module Api
 
         setting = @organization.settings.find_or_initialize_by(key: key)
 
-        # Merge existing hash if it's nested (e.g., ticket_config), otherwise replace
+        # Merge for nested hashes
         if setting.value.is_a?(Hash) && incoming_value.is_a?(ActionController::Parameters)
           setting.value = setting.value.merge(incoming_value.to_unsafe_h)
         else
