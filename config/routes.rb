@@ -28,6 +28,8 @@ Rails.application.routes.draw do
           get 'tickets', to: 'organizations#tickets'
           get 'users', to: 'organizations#users'
           post 'add_user', to: 'organizations#add_user'
+          get 'settings', to: 'settings#index'
+          put 'settings', to: 'settings#update'
         end
 
         # Registration route for admin

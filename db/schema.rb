@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_07_01_052630) do
+ActiveRecord::Schema[7.1].define(version: 2025_07_04_153515) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -110,6 +110,15 @@ ActiveRecord::Schema[7.1].define(version: 2025_07_01_052630) do
     t.integer "related_incident_id"
     t.index ["ticket_id"], name: "index_problems_on_ticket_id"
     t.index ["user_id"], name: "index_problems_on_user_id"
+  end
+
+  create_table "settings", force: :cascade do |t|
+    t.bigint "organization_id", null: false
+    t.string "key"
+    t.jsonb "value"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["organization_id"], name: "index_settings_on_organization_id"
   end
 
   create_table "sla_policies", force: :cascade do |t|
@@ -231,6 +240,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_07_01_052630) do
   add_foreign_key "notifications", "users"
   add_foreign_key "problems", "tickets"
   add_foreign_key "problems", "users"
+  add_foreign_key "settings", "organizations"
   add_foreign_key "sla_policies", "organizations"
   add_foreign_key "teams", "organizations"
   add_foreign_key "tickets", "departments"
