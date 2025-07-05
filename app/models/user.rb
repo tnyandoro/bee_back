@@ -3,6 +3,7 @@ class User < ApplicationRecord
   has_secure_password
   has_secure_token :auth_token
   has_one_attached :avatar
+  has_one_attached :profile_picture
 
   attr_accessor :skip_auth_token
 
