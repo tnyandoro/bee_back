@@ -23,6 +23,7 @@ Rails.application.routes.draw do
       resources :organizations, param: :subdomain do
         # Organization-level routes
         member do
+          post '/upload_logo', to: 'settings#upload_logo'
           get 'dashboard', to: 'dashboard#show'
           get 'profile', to: 'profiles#show'
           get 'tickets', to: 'organizations#tickets'

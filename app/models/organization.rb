@@ -16,6 +16,7 @@ class Organization < ApplicationRecord
   before_validation :normalize_subdomain
 
   # Associations
+  has_one_attached :logo
   has_many :business_hours, dependent: :destroy
   has_many :sla_policies, dependent: :destroy
   has_many :users, dependent: :destroy
