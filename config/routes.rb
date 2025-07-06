@@ -13,8 +13,8 @@ Rails.application.routes.draw do
       get '/verify', to: 'sessions#verify'
       post '/register', to: 'registrations#create'
       get '/verify_admin', to: 'sessions#verify_admin'
-      post '/password/reset', to: 'passwords#reset'      # New: Request password reset
-      post '/password/update', to: 'passwords#update'    # New: Update password with token
+      post '/password/reset', to: 'passwords#reset'     
+      post '/password/update', to: 'passwords#update'    
 
       # Profile route
       resource :profile, only: [:show]
