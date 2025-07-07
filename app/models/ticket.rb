@@ -16,6 +16,8 @@ class Ticket < ApplicationRecord
   belongs_to :team, optional: true
   belongs_to :sla_policy, optional: true
 
+  has_one_attached :attachment
+
   has_many :problems, dependent: :destroy
   has_many :comments, dependent: :destroy
   has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id", dependent: :nullify

@@ -43,46 +43,51 @@ module Api
         unless current_user.can_create_tickets?(ticket_params[:ticket_type])
           return render_forbidden("Unauthorized to create #{ticket_params[:ticket_type]} ticket")
         end
-
+      
         ticket_params_adjusted = ticket_params_with_enums
-        
+      
         @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = current_user
         @ticket.requester = current_user
         @ticket.reported_at ||= Time.current
         @ticket.status = 'open'
-
+      
         # Handle priority conversion
         if ticket_params_adjusted[:priority].present?
           priority_value = ticket_params_adjusted[:priority].to_i
           @ticket.priority = Ticket.priorities.key([0, [3, priority_value].min].max)
         end
-
+      
         # Process team and assignee
         begin
           process_team_and_assignee(ticket_params_adjusted)
         rescue ActiveRecord::RecordNotFound => e
           return render json: { error: e.message }, status: :not_found
         end
-
+      
         # Validate category
         unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
-          return render json: { 
-            error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" 
+          return render json: {
+            error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}"
           }, status: :unprocessable_entity
         end
-
+      
         if @ticket.save
+          # ✅ Handle Active Storage attachment (optional file upload)
+          if params[:ticket][:attachment].present?
+            @ticket.attachment.attach(params[:ticket][:attachment])
+          end
+      
           create_initial_comment
           create_notifications
           render json: ticket_attributes(@ticket), status: :created
         else
-          render json: { 
+          render json: {
             errors: @ticket.errors.full_messages,
             details: @ticket.errors.details
           }, status: :unprocessable_entity
         end
-      end
+      end      
 
       def update
         unless current_user.can_resolve_tickets?(@ticket.ticket_type) || current_user.can_reassign_tickets? || current_user.can_change_urgency?
