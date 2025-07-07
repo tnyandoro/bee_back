@@ -118,10 +118,9 @@ module Api
       end      
 
       def build_ticket_attributes
-        Rails.logger.debug "[ProblemsController] Incoming ticket attributes: #{raw.inspect}"
-
-        raw = safe_problem_params.to_h.symbolize_keys
-
+        raw = safe_problem_params.to_h.symbolize_keys  # ✅ Define raw first
+        Rails.logger.debug "[ProblemsController] Incoming ticket attributes: #{raw.inspect}"  # ✅ Log after definition
+      
         attrs = raw.slice(
           :title, :description, :urgency, :priority, :impact,
           :team_id, :caller_name, :caller_surname, :caller_email, :caller_phone,
@@ -133,12 +132,12 @@ module Api
           reported_at: Time.current,
           status: 'open'
         )
-
+      
         normalize_enum!(attrs, :urgency, Ticket.urgencies)
         normalize_enum!(attrs, :impact, Ticket.impacts)
-
+      
         attrs
-      end
+      end      
 
       def normalize_enum!(attrs, key, enum_hash)
         value = attrs[key]
