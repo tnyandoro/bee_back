@@ -118,12 +118,12 @@ module Api
 
         # Handle resolution fields if provided (for fallback PUT request)
         if params[:ticket].present?
-          resolution_fields = params[:ticket].slice(
+          resolution_fields = params.require(:ticket).permit(
             :status, :resolved_at, :resolution_note, :reason, :resolution_method,
             :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer
-          )
+          ).to_h.symbolize_keys
           ticket_params_adjusted.merge!(resolution_fields) if resolution_fields.present?
-        end
+        end        
 
         if @ticket.update(ticket_params_adjusted)
           if ticket_params_adjusted[:status] == 'resolved' && !@ticket.resolved_at_was
