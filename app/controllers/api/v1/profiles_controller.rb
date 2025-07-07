@@ -20,20 +20,14 @@ module Api
       private
 
       def user_profile_json(user)
-        {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          username: user.username,
-          position: user.position,
-          role: user.role,
-          is_admin: user.is_admin?,
-          team_id: user.team_id,
-          team_ids: user.team_id ? [user.team_id] : [],
-          department_id: user.department_id,
-          organization_id: user.organization_id
-        }
+        user.as_json(only: [
+          :id, :email, :name, :username, :role, :position, :phone_number,
+          :department, :team_id, :organization_id, :is_admin, :team_ids, :department_id
+        ]).merge({
+          profile_picture_url: user.profile_picture.attached? ? url_for(user.profile_picture) : nil
+        })
       end
+      
 
       def organization_profile_json(org)
         {
