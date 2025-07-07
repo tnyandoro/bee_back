@@ -2,6 +2,7 @@ module Api
   module V1
     class ApplicationController < ActionController::API
       include Pundit::Authorization
+      include Rails.application.routes.url_helpers
 
       # --- Global error handlers ---
       rescue_from ActiveRecord::RecordNotFound, with: :render_not_found

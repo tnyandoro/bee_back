@@ -4,6 +4,9 @@ module Api
       before_action :set_organization_from_subdomain
       before_action :authenticate_user!
 
+      include Rails.application.routes.url_helpers
+      
+
       def show
         user = current_user
 
@@ -21,13 +24,13 @@ module Api
 
       def user_profile_json(user)
         user.as_json(only: [
-          :id, :email, :name, :username, :role, :position, :phone_number,
-          :department, :team_id, :organization_id, :is_admin, :team_ids, :department_id
+          :id, :email, :name, :username, :role, :position,
+          :phone_number, :department_id, :team_id, :organization_id,
+          :is_admin, :team_ids
         ]).merge({
           profile_picture_url: user.profile_picture.attached? ? url_for(user.profile_picture) : nil
         })
-      end
-      
+      end      
 
       def organization_profile_json(org)
         {
