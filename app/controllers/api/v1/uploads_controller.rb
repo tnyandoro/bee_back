@@ -1,15 +1,34 @@
 module Api
     module V1
       class UploadsController < ApplicationController
+
+        require "open-uri"
+
         before_action :authenticate_user!
         before_action :set_organization, only: [:upload_logo]
   
         def upload_profile_picture
-          if current_user.update(profile_picture: params[:file])
-            render json: { url: url_for(current_user.profile_picture) }
-          else
-            render json: { error: "Upload failed" }, status: :unprocessable_entity
+          file_url = params[:file]
+
+          if file_url.blank?
+            render json: { error: "No file URL provided" }, status: :bad_request
+            return
           end
+
+          file = URI.open(file_url)
+
+          current_user.profile_picture.attach(
+            io: file,
+            filename: "profile_picture_#{current_user.id}.jpg",
+            content_type: "image/jpeg"
+          )
+
+          render json: {
+            message: "Profile picture uploaded and saved successfully",
+            url: url_for(current_user.profile_picture)
+          }
+        rescue => e
+          render json: { error: "Upload failed", details: e.message }, status: :unprocessable_entity
         end
         
         def upload_logo
