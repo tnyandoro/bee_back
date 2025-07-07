@@ -21,6 +21,8 @@ gem 'stringio', '~> 3.1.2'
 
 gem 'cloudinary'
 
+gem 'openurl', '~> 1.0'
+
 gem 'caxlsx'
 gem 'caxlsx_rails'
 
