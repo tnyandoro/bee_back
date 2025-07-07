@@ -107,16 +107,19 @@ module Api
         unless params[key].present?
           raise ActionController::ParameterMissing.new("problem or ticket")
         end
-
+      
+        # Use to_h AFTER permitting to avoid losing data
         params.require(key).permit(
           :title, :description, :ticket_id, :related_incident_id,
           :team_id, :assignee_id, :urgency, :priority, :impact,
           :caller_name, :caller_surname, :caller_email, :caller_phone,
           :customer, :source, :category
         )
-      end
+      end      
 
       def build_ticket_attributes
+        Rails.logger.debug "[ProblemsController] Incoming ticket attributes: #{raw.inspect}"
+
         raw = safe_problem_params.to_h.symbolize_keys
 
         attrs = raw.slice(
