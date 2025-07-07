@@ -151,11 +151,12 @@ module Api
         Problem.new(
           ticket_id: ticket.id,
           creator_id: current_user.id,
+          user_id: current_user.id, # ✅ Fix: add this line
           organization_id: ticket.organization_id,
           team_id: ticket.team_id,
-          description: ticket.description # ✅ Add this line
+          description: ticket.description
         )
-      end      
+      end              
 
       def handle_related_incident(problem)
         related_id = params.dig(:problem, :related_incident_id)
