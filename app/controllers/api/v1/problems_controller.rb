@@ -118,7 +118,7 @@ module Api
       end      
 
       def build_ticket_attributes
-        raw = safe_problem_params.to_h.symbolize_keys  # ✅ Define raw first
+        raw = safe_problem_params.to_h.symbolize_keys 
         Rails.logger.debug "[ProblemsController] Incoming ticket attributes: #{raw.inspect}"  # ✅ Log after definition
       
         attrs = raw.slice(
@@ -152,9 +152,10 @@ module Api
           ticket_id: ticket.id,
           creator_id: current_user.id,
           organization_id: ticket.organization_id,
-          team_id: ticket.team_id
+          team_id: ticket.team_id,
+          description: ticket.description # ✅ Add this line
         )
-      end
+      end      
 
       def handle_related_incident(problem)
         related_id = params.dig(:problem, :related_incident_id)
