@@ -10,17 +10,17 @@ module Api
             address: @organization.address,
             email: @organization.email,
             web_address: @organization.web_address,
-
           },
           stats: {
             total_tickets: @organization.tickets.count,
             open_tickets: @organization.tickets.where(status: 'open').count,
             closed_tickets: @organization.tickets.where(status: 'closed').count,
+            resolved_tickets: @organization.tickets.where(status: 'resolved').count, # ✅ Added
             total_problems: @organization.problems.count,
             total_members: @organization.users.count
           }
         }
-      end
+      end      
 
       private
 
