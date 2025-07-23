@@ -15,11 +15,6 @@ services:
       - pg_data:/var/lib/postgresql/data
     networks:
       - itsm_network
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${DB_USERNAME:-tendai}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   app:
     build:
@@ -27,28 +22,19 @@ services:
       dockerfile: Dockerfile
     container_name: itsm_api
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     environment:
       DB_USERNAME: ${DB_USERNAME:-tendai}
       DB_PASSWORD: ${DB_PASSWORD:-Mybreak28#}
       DB_HOST: db
       DB_PORT: 5432
       RAILS_ENV: development
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-your-secret-key}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916}
     ports:
       - "3000:3000"
     volumes:
       - .:/rails
-    command: >
-      bash -c "
-      echo 'Waiting for Postgres...';
-      while ! pg_isready -h db -p 5432 -U ${DB_USERNAME:-tendai}; do
-        sleep 2;
-      done;
-      echo 'Postgres is ready!';
-      /rails/bin/docker-entrypoint
-      "
+    command: bash -c "/rails/bin/docker-entrypoint"
     networks:
       - itsm_network
 

@@ -18,7 +18,9 @@ test:
   database: itsm_api_test
 
 production:
-  <<: *default
-  url: <%= ENV["DATABASE_URL"] %>?sslmode=require
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  url: <%= ENV['DATABASE_URL'] %>
   variables:
     lock_timeout: "5s"
