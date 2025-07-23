@@ -14,7 +14,10 @@ Rails.application.routes.draw do
       post '/register', to: 'registrations#create'
       get '/verify_admin', to: 'sessions#verify_admin'
       post '/password/reset', to: 'passwords#reset'     
-      post '/password/update', to: 'passwords#update'    
+      post '/password/update', to: 'passwords#update'
+
+      # Uploads (Global - for current user's profile picture)
+      post 'uploads/upload_profile_picture', to: 'uploads#upload_profile_picture'
 
       # Profile route
       resource :profile, only: [:show]
@@ -50,7 +53,7 @@ Rails.application.routes.draw do
           collection do
             get :export  
           end
-        
+          
           post :assign_to_user, on: :member
           post :escalate_to_problem, on: :member
           post :resolve, on: :member

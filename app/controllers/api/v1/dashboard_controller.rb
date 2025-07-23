@@ -14,15 +14,17 @@ module Api
           stats: {
             total_tickets: @organization.tickets.count,
             open_tickets: @organization.tickets.where(status: 'open').count,
+            assigned_tickets: @organization.tickets.where(status: 'assigned').count,
+            escalated_tickets: @organization.tickets.where(status: 'escalated').count,
+            resolved_tickets: @organization.tickets.where(status: 'resolved').count,
             closed_tickets: @organization.tickets.where(status: 'closed').count,
-            resolved_tickets: @organization.tickets.where(status: 'resolved').count, # ✅ Added
             total_problems: @organization.problems.count,
             total_members: @organization.users.count
           }
         }
       end      
 
-      private
+      private 
 
       def set_organization
         @organization = Organization.find_by!(subdomain: params[:subdomain])
