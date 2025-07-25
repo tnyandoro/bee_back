@@ -1,26 +1,22 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  username: <%= ENV["DB_USERNAME"] %>
-  password: <%= ENV["DB_PASSWORD"] %>
-  host: <%= ENV["DB_HOST"] %>
-  port: <%= ENV["DB_PORT"] || 5432 %>
-  variables:
-    lock_timeout: "5s"
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 2 } %>
+  timeout: 5000
+  connect_timeout: 10
+  username: <%= ENV['DB_USERNAME'] %>
+  password: <%= ENV['DB_PASSWORD'] %>
+  host: <%= ENV['DB_HOST'] || 'localhost' %>
+  port: <%= ENV['DB_PORT'] || 5432 %>
 
 development:
   <<: *default
-  database: itsm_api_development
+  database: itsm_development
 
 test:
   <<: *default
-  database: itsm_api_test
+  database: itsm_test
 
 production:
-  adapter: postgresql
-  encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  <<: *default
   url: <%= ENV['DATABASE_URL'] %>
-  variables:
-    lock_timeout: "5s"
