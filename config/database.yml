@@ -21,6 +21,6 @@ test:
   database: itsm_api_test
 
 production:
-  <<: *default
   url: <%= ENV['DATABASE_URL'] %>
   sslmode: require
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
