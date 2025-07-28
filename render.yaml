@@ -1,26 +1,13 @@
+# Exported from Render on 2025-07-28T04:52:59Z
 databases:
-  - name: itsm-production-db
-    databaseName: itsm_production_db_plyf
-    user: itsm_production_db_plyf_user
-    plan: starter
-    region: oregon
-
-services:
-  - type: web
-    name: itsm_api
-    runtime: ruby
-    plan: free
-    buildCommand: |
-      bundle install && rails assets:precompile
-    startCommand: |
-      bundle exec rails db:migrate && bundle exec rails server -b 0.0.0.0
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: itsm-production-db
-          property: connectionString
-      - key: RAILS_MASTER_KEY
-        sync: false
-      - key: WEB_CONCURRENCY
-        value: "2"
-    autoDeploy: true
+- name: itsm-production-db
+  databaseName: itsm_production_db_plyf
+  user: itsm_production_db_plyf_user
+  plan: basic-256mb
+  region: oregon
+  ipAllowList:
+  - source: 0.0.0.0/0
+    description: everywhere
+  postgresMajorVersion: "16"
+  diskSizeGB: 1
+version: "1"
