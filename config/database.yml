@@ -2,17 +2,25 @@ default: &default
   adapter: postgresql
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  url: <%= ENV["DATABASE_URL"] %>
+  username: <%= ENV["DB_USERNAME"] %>
+  password: <%= ENV["DB_PASSWORD"] %>
+  host: <%= ENV["DB_HOST"] %>
+  port: <%= ENV["DB_PORT"] || 5432 %>
+  database: <%= ENV["DB_NAME"] %>
+  variables:
+    lock_timeout: 5000
+    idle_in_transaction_session_timeout: 60000
+    statement_timeout: 10000
 
 development:
   <<: *default
-  database: itsm_development
+  database: itsm_api_development
 
 test:
   <<: *default
-  database: itsm_test
+  database: itsm_api_test
 
 production:
   <<: *default
-  database: itsm_production_db_plyf
+  url: <%= ENV['DATABASE_URL'] %>
   sslmode: require
