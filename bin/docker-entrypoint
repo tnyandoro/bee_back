@@ -4,23 +4,43 @@ set -e
 echo "Env variables at container start:"
 env | grep DATABASE_URL || echo "DATABASE_URL not found"
 
-# Check if we're starting the Rails server (covers multiple ways to start it)
-if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] || [[ "$*" == *"bundle exec puma"* ]]; then
-  echo "Rails server detected. Running pre-startup tasks..."
-  
-  # Wait for database to be ready
-  echo "Waiting for database to be ready..."
-  until bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')" 2>/dev/null; do
-    echo "Database not ready, waiting 2 seconds..."
+# Extract PostgreSQL connection info from ENV
+DB_HOST=${DB_HOST:-localhost}
+DB_PORT=${DB_PORT:-5432}
+DB_USER=${DB_USERNAME:-postgres}
+
+# Function: wait for DB at TCP level
+wait_for_postgres() {
+  echo "Waiting for PostgreSQL to be reachable at $DB_HOST:$DB_PORT..."
+  until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" > /dev/null 2>&1; do
+    echo "Database not reachable yet, retrying in 2s..."
     sleep 2
   done
-  echo "Database is ready!"
-  
+  echo "PostgreSQL is reachable."
+}
+
+# Function: wait for Rails to connect to DB
+wait_for_active_record() {
+  echo "Waiting for ActiveRecord to establish DB connection..."
+  until bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')" > /dev/null 2>&1; do
+    echo "ActiveRecord connection failed, waiting 2s..."
+    sleep 2
+  done
+  echo "ActiveRecord connected successfully."
+}
+
+# If we’re starting the Rails server...
+if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] || [[ "$*" == *"bundle exec puma"* ]]; then
+  echo "Rails server detected. Running pre-startup tasks..."
+
+  wait_for_postgres
+  wait_for_active_record
+
   # Run migrations
   echo "Running database migrations..."
   bundle exec rails db:migrate
   echo "Migrations completed successfully."
-  
+
   # Create missing sequences for all organizations
   echo "Ensuring problem sequences exist..."
   bundle exec rails runner "
@@ -40,7 +60,7 @@ if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] 
       puts 'Continuing with server startup...'
     end
   " 2>/dev/null || echo "Sequence creation failed, but continuing..."
-  
+
   echo "Pre-startup tasks completed. Starting Rails server..."
 fi
 
