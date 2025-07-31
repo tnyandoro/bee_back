@@ -48,6 +48,7 @@ class User < ApplicationRecord
   validates :email, presence: true, uniqueness: { scope: :organization_id, case_sensitive: false }
   validates :role, inclusion: { in: roles.keys }, presence: true
   validates :name, presence: true
+  validates :last_name, presence: true, if: -> { name.present? && !name.include?(' ') }
   validates :username, presence: true, uniqueness: { scope: :organization_id }, allow_nil: true
   validates :password, length: { minimum: 8 }, if: -> { password.present? || new_record? }
   validates :password_confirmation, presence: true, if: -> { password.present? }
@@ -153,16 +154,7 @@ class User < ApplicationRecord
     role_domain_admin? || role_sub_domain_admin?
   end
   
-  # User profiles (view only for most)
-  # def can_view_user_profiles?
-  #   role_service_desk_agent? || role_assignee_lvl_1_2? || 
-  #   role_assignee_lvl_3? || role_assignment_group_tl? || 
-  #   role_service_desk_manager? || role_incident_manager? || 
-  #   role_problem_manager? || role_department_manager? || 
-  #   role_general_manager? || role_sub_domain_admin? || 
-  #   role_domain_admin? || role_system_admin?
-  # end
-
+  # User profiles (view only for most)  
   def can_view_user_profiles?
     PROFILE_VIEW_ROLES.include?(role)
   end
@@ -221,18 +213,6 @@ class User < ApplicationRecord
   end
   
   def can_view_reports?(scope)
-    # case scope
-    # when :team
-    #   role_system_admin? || role_service_desk_tl? || role_assignee_lvl_1_2? || 
-    #   role_department_manager? || role_general_manager? || role_domain_admin?
-    # when :department
-    #   role_system_admin? || role_department_manager? || role_general_manager? || 
-    #   role_domain_admin?
-    # when :organization
-    #   role_system_admin? || role_general_manager? || role_domain_admin?
-    # else
-    #   false
-    # end
     return false unless REPORT_PERMISSIONS.key?(scope)
   
     REPORT_PERMISSIONS[scope].include?(role)
@@ -307,13 +287,34 @@ class User < ApplicationRecord
     Rails.logger.info "User #{email} (ID: #{id}) has been activated."
   end
 
+  # Updated to handle both single and separate names
   def full_name
+    if last_name.present?
+      "#{name} #{last_name}".strip
+    else
+      name
+    end
+  end
+
+  # Helper methods for name handling
+  def first_name
     name
+  end
+
+  def first_name=(value)
+    self.name = value
+  end
+
+  def has_separate_names?
+    last_name.present?
+  end
+
+  def display_name
+    full_name
   end
 
   def avatar_url
     return "https://example.com/default-avatar.png" unless avatar.attached?
-    # avatar.service_url rescue "https://example.com/default-avatar.png"
     begin
       avatar.service_url
     rescue StandardError

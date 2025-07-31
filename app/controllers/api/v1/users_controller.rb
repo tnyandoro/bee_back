@@ -105,7 +105,7 @@ module Api
 
       def user_params
         params.require(:user).permit(
-          :name, :email, :username, :phone_number,
+          :name, :last_name, :email, :username, :phone_number,
           :position, :role, :password,
           :password_confirmation, :avatar, :department_id
         )
@@ -138,6 +138,8 @@ module Api
         {
           id: user.id,
           name: user.name,
+          last_name: user.last_name,
+          full_name: user.full_name,
           username: user.username,
           email: user.email,
           role: user.role,
@@ -155,6 +157,8 @@ module Api
           role: user.role,
           is_admin: user.role.in?(['system_admin', 'domain_admin']),
           name: user.name,
+          last_name: user.last_name,
+          full_name: user.full_name,
           username: user.username,
           position: user.position,
           avatar_url: user.avatar.attached? ? url_for(user.avatar) : nil
