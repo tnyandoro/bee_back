@@ -4,7 +4,7 @@ set -euo pipefail
 echo "Env variables at container start:"
 env | grep DATABASE_URL || echo "DATABASE_URL not found"
 
-# Detect if we're starting Rails server
+# Detect Rails server startup
 if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] || [[ "$*" == *"bundle exec puma"* ]]; then
   echo "Rails server detected. Running pre-startup tasks..."
 
@@ -13,25 +13,36 @@ if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] 
     exit 1
   fi
 
-  # Parse DATABASE_URL
-  # Format: postgresql://user:pass@host:port/dbname
-  DB_USER=$(echo "$DATABASE_URL" | sed -E 's|.*://([^:]*):.*@.*|\1|')
-  DB_PASS=$(echo "$DATABASE_URL" | sed -E 's|.*://[^:]*:([^@]*)@.*|\1|')
-  DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
-  DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|' || echo "5432")
-  DB_NAME=$(echo "$DATABASE_URL" | sed -E 's|/([^/?]*).*|\1|')
+  # Use Ruby to safely parse DATABASE_URL
+  eval $(ruby << 'EOF'
+require 'uri'
 
-  export PGPASSWORD="$DB_PASS"  # Used by pg_isready and psql
+uri = URI(ENV['DATABASE_URL'])
 
-  # Wait for PostgreSQL to accept TCP connections
+# Extract components
+host = uri.host
+port = uri.port || 5432
+user = uri.user
+password = uri.password
+dbname = uri.path&.sub('/', '') || ''
+
+puts "DB_HOST=#{host.shellescape}"
+puts "DB_PORT=#{port}"
+puts "DB_USER=#{user.shellescape}"
+puts "export PGPASSWORD=#{password.shellescape.inspect}"
+puts "DB_NAME=#{dbname.shellescape}"
+EOF
+)
+
+  # Now wait for DB
   echo "Waiting for PostgreSQL to be reachable at $DB_HOST:$DB_PORT..."
-  until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --timeout=5 > /dev/null 2>&1; do
+  until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --timeout=10 > /dev/null 2>&1; do
     echo "Database not reachable yet, retrying in 2s..."
     sleep 2
   done
   echo "PostgreSQL is reachable."
 
-  # Wait for ActiveRecord to connect
+  # Wait for ActiveRecord
   echo "Waiting for ActiveRecord to establish DB connection..."
   until bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')" > /dev/null 2>&1; do
     echo "ActiveRecord connection failed, waiting 2s..."
@@ -44,7 +55,7 @@ if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] 
   bundle exec rails db:migrate
   echo "Migrations completed successfully."
 
-  # Create missing sequences for all organizations
+  # Create missing sequences
   echo "Ensuring problem sequences exist..."
   bundle exec rails runner "
     begin
