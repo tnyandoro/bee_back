@@ -2,6 +2,10 @@ default: &default
   adapter: postgresql
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  timeout: 5000
+  sslmode: require # Critical for Render's upgraded DB
+  connect_timeout: 15
+  keepalives_timeout: 10
 
 development:
   <<: *default
@@ -19,7 +23,7 @@ test:
 
 production:
   <<: *default
-  url: <%= ENV["DATABASE_URL"] %>
-  encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
-  sslmode: require
+  url: <%= ENV["DATABASE_URL"] %> # Contains host, user, pass, sslmode
+  # Override any defaults if needed
+  prepared_statements: false # Recommended on Render due to PgBouncer
+  statement_timeout: 30000
