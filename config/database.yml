@@ -3,9 +3,12 @@ default: &default
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
   timeout: 5000
-  sslmode: require # Critical for Render's upgraded DB
+  sslmode: require
   connect_timeout: 15
   keepalives_timeout: 10
+  # Prevent connection leaks and improve behavior in containerized environments
+  reaping_frequency: 10
+  checkout_timeout: 10
 
 development:
   <<: *default
@@ -22,8 +25,15 @@ test:
   host: <%= ENV.fetch("DB_HOST", "localhost") %>
 
 production:
+  # Use DATABASE_URL as the source of truth
+  url: <%= ENV["DATABASE_URL"] %>
+  # Inherit defaults for any non-URL settings
   <<: *default
-  url: <%= ENV["DATABASE_URL"] %> # Contains host, user, pass, sslmode
-  # Override any defaults if needed
-  prepared_statements: false # Recommended on Render due to PgBouncer
+  # Disable prepared statements to avoid issues with Render's PgBouncer
+  prepared_statements: false
+  # Prevent long-running queries
   statement_timeout: 30000
+  # Increase pool size if needed (adjust based on RAILS_MAX_THREADS)
+  # pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
+  # Optional: Set application name for easier debugging in PostgreSQL logs
+  # application_name: itsm-production
