@@ -25,15 +25,13 @@ test:
   host: <%= ENV.fetch("DB_HOST", "localhost") %>
 
 production:
-  # Use DATABASE_URL as the source of truth
   url: <%= ENV["DATABASE_URL"] %>
-  # Inherit defaults for any non-URL settings
   <<: *default
-  # Disable prepared statements to avoid issues with Render's PgBouncer
   prepared_statements: false
-  # Prevent long-running queries
   statement_timeout: 30000
-  # Increase pool size if needed (adjust based on RAILS_MAX_THREADS)
-  # pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
-  # Optional: Set application name for easier debugging in PostgreSQL logs
-  # application_name: itsm-production
+  # Connection pool and timeouts
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  timeout: 10000
+  connect_timeout: 30
+  checkout_timeout: 30
+  reaping_frequency: 10
