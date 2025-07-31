@@ -14,25 +14,31 @@ if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] 
   fi
 
   # Use Ruby to safely parse DATABASE_URL
-  eval $(ruby << 'EOF'
+  eval "$(ruby << 'EOF'
 require 'uri'
+require 'shellwords'
 
-uri = URI(ENV['DATABASE_URL'])
+begin
+  uri = URI(ENV['DATABASE_URL'])
 
-# Extract components
-host = uri.host
-port = uri.port || 5432
-user = uri.user
-password = uri.password
-dbname = uri.path&.sub('/', '') || ''
+  host = uri.host
+  port = uri.port || 5432
+  user = uri.user
+  password = uri.password
+  dbname = uri.path&.sub(/^\//, '') || 'postgres'
 
-puts "DB_HOST=#{host.shellescape}"
-puts "DB_PORT=#{port}"
-puts "DB_USER=#{user.shellescape}"
-puts "export PGPASSWORD=#{password.shellescape.inspect}"
-puts "DB_NAME=#{dbname.shellescape}"
+  # Shell-escape each value to prevent injection
+  puts "DB_HOST=#{Shellwords.escape(host)}"
+  puts "DB_PORT=#{Shellwords.escape(port.to_s)}"
+  puts "DB_USER=#{Shellwords.escape(user)}"
+  puts "export PGPASSWORD=#{Shellwords.escape(password).inspect}"
+  puts "DB_NAME=#{Shellwords.escape(dbname)}"
+rescue => e
+  $stderr.puts "Failed to parse DATABASE_URL: #{e.message}"
+  exit 1
+end
 EOF
-)
+)"
 
   # Now wait for DB
   echo "Waiting for PostgreSQL to be reachable at $DB_HOST:$DB_PORT..."
@@ -55,7 +61,7 @@ EOF
   bundle exec rails db:migrate
   echo "Migrations completed successfully."
 
-  # Create missing sequences
+  # Create missing sequences for all organizations
   echo "Ensuring problem sequences exist..."
   bundle exec rails runner "
     begin
