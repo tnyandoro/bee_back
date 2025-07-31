@@ -6,18 +6,20 @@ default: &default
 development:
   <<: *default
   database: itsm_development
-  username: <%= ENV.fetch("DB_USERNAME", "your_local_username") %>
-  password: <%= ENV.fetch("DB_PASSWORD", "your_local_password") %>
+  username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
   host: <%= ENV.fetch("DB_HOST", "localhost") %>
 
 test:
   <<: *default
   database: itsm_test
-  username: <%= ENV.fetch("DB_USERNAME", "your_local_username") %>
-  password: <%= ENV.fetch("DB_PASSWORD", "your_local_password") %>
+  username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
   host: <%= ENV.fetch("DB_HOST", "localhost") %>
 
 production:
   <<: *default
   url: <%= ENV["DATABASE_URL"] %>
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
   sslmode: require
