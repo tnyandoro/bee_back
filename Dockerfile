@@ -17,7 +17,7 @@ ENV RUBYGEMS_VERSION="" \
     NODE_ENV="production" \
     RAILS_LOG_TO_STDOUT="true" \
     RAILS_SERVE_STATIC_FILES="true" \
-    PORT="10000"  # Default port; will be overridden by Render if needed
+    PORT="10000" 
 
 # Install production dependencies
 # libvips: image processing (fast alternative to ImageMagick)
