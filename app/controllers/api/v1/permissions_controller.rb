@@ -1,5 +1,5 @@
 # permissions_controller.rb
-class Api::V1::PermissionsController < Api::V1::BaseController
+class Api::V1::PermissionsController < ApplicationController
   before_action :authenticate_user!
 
   def show
