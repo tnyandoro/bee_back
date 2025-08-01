@@ -54,6 +54,10 @@ class Ticket < ApplicationRecord
   before_save :set_calculated_priority
   after_commit :update_sla_dates, on: [:create, :update]
 
+  def create?
+    user.can_create_ticket?
+  end
+
   def resolve(resolved_by:)
     raise ArgumentError, "resolved_by must be a User" unless resolved_by.is_a?(User)
     update!(status: :resolved, assignee: resolved_by)
