@@ -105,9 +105,17 @@ module Api
 
       def user_params
         params.require(:user).permit(
-          :name, :email, :username, :phone_number,
-          :position, :role, :password,
-          :password_confirmation, :avatar, :department_id
+          :name,
+          :last_name,
+          :email,
+          :username,
+          :phone_number,
+          :position,
+          :role,
+          :password,
+          :password_confirmation,
+          :avatar,
+          :department_id
         )
       end
 
