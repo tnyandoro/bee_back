@@ -1,83 +1,129 @@
 module Api
   module V1
-    class DashboardController < ApplicationController
-      before_action :set_organization
+    class DashboardController < Api::V1::ApplicationController
+      # All authentication and organization scoping
+      # is already handled by Api::V1::ApplicationController
+      # via:
+      #   - before_action :authenticate_user!
+      #   - before_action :set_organization_from_subdomain
+      #   - before_action :verify_user_organization
 
       def show
-        tickets = @organization.tickets
-        problems = @organization.problems
-        users = @organization.users
-
-        # Efficient status and priority counts
-        ticket_status_counts = tickets.group(:status).count.transform_keys(&:to_s)
-        ticket_priority_counts = tickets.group(:priority).count.transform_keys(&:to_s)
-        sla_breached_count = tickets.where(sla_breached: true).count
-        breaching_soon_count = tickets.where(breaching_sla: true, status: ['open', 'assigned']).count
-
-        # Ensure all statuses
-        statuses = %w[open assigned escalated resolved closed]
-        status_counts = statuses.each_with_object({}) { |s, h| h[s] = ticket_status_counts[s].to_i }
-
-        # Priority labels
-        priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
-        priority_data = {}
-        priority_labels.each do |key, label|
-          priority_data[label] = ticket_priority_counts[key].to_i
+        # Use organization-scoped data with caching
+        cache_key = "dashboard:v5:org_#{@organization.id}"
+        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
+          build_dashboard_data
         end
 
-        # Top assignees (limit to top 5)
+        render_success(data, "Dashboard loaded successfully", :ok)
+      end
+
+      private
+
+      def build_dashboard_data
+        org_id = @organization.id
+
+        # Tenant-scoped base queries
+        tickets = Ticket.where(organization_id: org_id)
+        users = User.where(organization_id: org_id)
+        problems = Problem.where(organization_id: org_id)
+
+        # === Status Mapping: Integer Enum → String ===
+        # From your schema: status defaults to 6 (resolved), and is an integer
+        status_labels = {
+          0 => "open",
+          1 => "assigned",
+          2 => "escalated",
+          3 => "on_hold",
+          4 => "in_progress",
+          5 => "waiting_for_customer",
+          6 => "resolved",
+          7 => "closed"
+        }
+
+        status_counts_raw = tickets.group(:status).count
+        status_counts = status_labels.values.each_with_object({}) { |s, h| h[s] = 0 }
+        status_counts_raw.each do |status_int, count|
+          key = status_labels[status_int]
+          status_counts[key] = count if key
+        end
+
+        total_tickets = status_counts.values.sum
+        resolved_closed = status_counts["resolved"] + status_counts["closed"]
+
+        # === Priority Mapping ===
+        priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
+        priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
+        priority_data = priority_labels.transform_values { |label| priority_counts_raw[label == "Critical" ? "0" : label == "High" ? "1" : label == "Medium" ? "2" : "3"].to_i }
+
+        # === SLA Metrics ===
+        breached_count = tickets.where(sla_breached: true).count
+        breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count # open, assigned, escalated
+
+        # === Top Assignees (safe, efficient query) ===
         top_assignees = tickets
                           .where.not(assignee_id: nil)
-                          .group(:assignee_id, 'users.name')
                           .joins(:assignee)
-                          .order('count_all DESC')
+                          .group("users.id", "users.name")
                           .limit(5)
-                          .count
-                          .map { |(id_name, count)| { name: id_name.second, count: count } }
+                          .order(Arel.sql("COUNT(*) DESC"))
+                          .pluck("users.name", "COUNT(*)")
+                          .map { |name, count| { name: name, count: count } }
 
-        # SLA Metrics
-        resolved_tickets = tickets.where.not(resolved_at: nil)
-        avg_resolution_hours = resolved_tickets.average(:resolution_time_hours)&.round(1) || 0
+        # === Average Resolution Time (in hours) ===
+        avg_resolution_sql = tickets
+                               .where.not(resolved_at: nil)
+                               .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
+                               .first&.avg
 
-        # Recent tickets (last 10 created)
+        avg_resolution_hours = avg_resolution_sql&.round(2) || 0.0
+
+        # === Recent Tickets (last 10) ===
         recent_tickets = tickets
                            .includes(:assignee, :user)
                            .order(created_at: :desc)
                            .limit(10)
+                           .select(
+                             :id, :title, :status, :priority, :created_at,
+                             :assignee_id, :user_id, :sla_breached, :breaching_sla
+                           )
                            .map do |t|
           {
             id: t.id,
             title: t.title,
-            status: t.status,
+            status: status_labels[t.status] || "Unknown",
             priority: priority_labels[t.priority.to_s] || "Unknown",
             created_at: t.created_at.iso8601,
-            assignee: t.assignee&.name,
-            reporter: t.user&.name,
+            assignee: t.assignee&.name || "Unassigned",
+            reporter: t.user&.name || "Unknown",
             sla_breached: t.sla_breached,
             breaching_sla: t.breaching_sla
           }
         end
 
-        render json: {
+        # === Final JSON Response ===
+        {
           organization: {
             name: @organization.name,
             address: @organization.address,
             email: @organization.email,
             web_address: @organization.web_address,
-            subdomain: @organization.subdomain
+            subdomain: @organization.subdomain,
+            logo_url: @organization.logo_url,
+            phone_number: @organization.phone_number
           },
           stats: {
-            total_tickets: tickets.count,
-            open_tickets: status_counts['open'],
-            assigned_tickets: status_counts['assigned'],
-            escalated_tickets: status_counts['escalated'],
-            resolved_tickets: status_counts['resolved'],
-            closed_tickets: status_counts['closed'],
+            total_tickets: total_tickets,
+            open_tickets: status_counts["open"],
+            assigned_tickets: status_counts["assigned"],
+            escalated_tickets: status_counts["escalated"],
+            resolved_tickets: status_counts["resolved"],
+            closed_tickets: status_counts["closed"],
             total_problems: problems.count,
             total_members: users.count,
-            high_priority_tickets: (ticket_priority_counts['0'].to_i + ticket_priority_counts['1'].to_i),
-            unresolved_tickets: tickets.where(status: ['open', 'assigned', 'escalated']).count,
-            resolution_rate_percent: tickets.count > 0 ? ((status_counts['resolved'] + status_counts['closed']) / tickets.count.to_f * 100).round(1) : 0
+            high_priority_tickets: priority_data["Critical"] + priority_data["High"],
+            unresolved_tickets: total_tickets - resolved_closed,
+            resolution_rate_percent: total_tickets > 0 ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
           },
           charts: {
             tickets_by_status: status_counts,
@@ -85,38 +131,18 @@ module Api
             top_assignees: top_assignees
           },
           sla: {
-            breached: sla_breached_count,
+            breached: breached_count,
             breaching_soon: breaching_soon_count,
             avg_resolution_hours: avg_resolution_hours,
-            on_time_rate_percent: tickets.count > 0 ? (((tickets.count - sla_breached_count).to_f / tickets.count) * 100).round(1) : 100
+            on_time_rate_percent: total_tickets > 0 ? (((total_tickets - breached_count).to_f / total_tickets) * 100).round(1) : 100
           },
           recent_tickets: recent_tickets,
           meta: {
             fetched_at: Time.current.iso8601,
-            timezone: Time.current.zone.name
+            timezone: Time.current.zone.name,
+            tenant: @organization.subdomain
           }
-        }, status: :ok
-      end
-
-      private
-
-      def set_organization
-        subdomain = params[:subdomain].to_s.strip
-        if subdomain.blank?
-          render json: { error: "Subdomain is required" }, status: :bad_request
-          return
-        end
-
-        @organization = Organization.find_by(subdomain: subdomain)
-
-        unless @organization
-          render json: { error: "Organization not found" }, status: :not_found
-          return
-        end
-
-      rescue => e
-        Rails.logger.error "DashboardController#set_organization failed for subdomain=#{subdomain}: #{e.class}"
-        render json: { error: "Internal server error" }, status: :internal_server_error
+        }
       end
     end
   end
