@@ -1,145 +1,89 @@
-# app/controllers/api/v1/dashboard_controller.rb
+# app/controllers/api/v1/api_application_controller.rb
 
 module Api
   module V1
-    class DashboardController < Api::V1::ApplicationController
-      # No need to call set_organization_from_subdomain again — already in ApplicationController
-      # No need to call authenticate_user! — already in ApplicationController
+    class ApiApplicationController < ActionController::API
+      include Pundit::Authorization
+      include Rails.application.routes.url_helpers
 
-      def show
-        # Use cached dashboard data (per-tenant, expires every 5 minutes)
-        cache_key = "dashboard:v4:org_#{@organization.id}"
-        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
-          build_dashboard_data
-        end
+      # --- Global error handlers ---
+      rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
+      rescue_from ActionController::RoutingError, with: :render_not_found
+      rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
+      rescue_from StandardError, with: :render_internal_server_error
 
-        render_success(data, "Dashboard loaded successfully", :ok)
+      # --- Filters ---
+      before_action :authenticate_user!, except: [:create]
+      before_action :set_organization_from_subdomain
+      before_action :verify_user_organization, if: -> { @organization.present? }
+
+      # --- Authentication ---
+      def authenticate_user!
+        render json: { error: "Unauthorized" }, status: :unauthorized unless current_user
       end
 
-      private
+      def current_user
+        @current_user ||= begin
+          token = request.headers['Authorization']&.split(' ')&.last
+          User.find_by(auth_token: token)
+        end
+      end
 
-      def build_dashboard_data
-        org_id = @organization.id
+      # --- Organization & Tenant Scoping ---
+      def set_organization_from_subdomain
+        param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
 
-        # Base scopes (always tenant-scoped)
-        tickets = Ticket.where(organization_id: org_id)
-        users = User.where(organization_id: org_id)
-        problems = Problem.where(organization_id: org_id)
+        Rails.logger.info "Subdomain sources: params[:organization_id]=#{params[:organization_id]}, params[:subdomain]=#{params[:subdomain]}, request.subdomains=#{request.subdomains}"
 
-        # === Status Mapping (integer → string) ===
-        status_labels = {
-          0 => "open",
-          1 => "assigned",
-          2 => "escalated",
-          3 => "on_hold",
-          4 => "in_progress",
-          5 => "waiting_for_customer",
-          6 => "resolved",
-          7 => "closed"
-        }
-
-        status_counts_raw = tickets.group(:status).count
-        status_counts = status_labels.values.each_with_object({}) { |s, h| h[s] = 0 }
-        status_counts_raw.each do |status_int, count|
-          key = status_labels[status_int]
-          status_counts[key] = count if key
+        if Rails.env.development? && param_subdomain.blank?
+          param_subdomain = 'demo'
         end
 
-        total_tickets = status_counts.values.sum
-        resolved_closed = status_counts["resolved"] + status_counts["closed"]
-
-        # === Priority Mapping ===
-        priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
-        priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_data = {}
-        priority_labels.each do |key, label|
-          priority_data[label] = priority_counts_raw[key].to_i
+        if param_subdomain.blank? && Organization.count == 1
+          @organization = Organization.first
+          Rails.logger.info "Single-tenant fallback: Organization ID #{@organization.id}"
+          return
         end
 
-        # === SLA Metrics ===
-        breached_count = tickets.where(sla_breached: true).count
-        breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count # open, assigned, escalated
-
-        # === Top Assignees (safe join) ===
-        top_assignees = tickets
-                          .where.not(assignee_id: nil)
-                          .joins(:assignee)
-                          .group("users.id", "users.name")
-                          .limit(5)
-                          .order(Arel.sql("COUNT(*) DESC"))
-                          .pluck("users.name", "COUNT(*)")
-                          .map { |name, count| { name: name, count: count } }
-
-        # === Average Resolution Time (in hours) ===
-        avg_resolution_hours = tickets
-                                 .where.not(resolved_at: nil)
-                                 .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
-                                 .first&.avg&.round(2) || 0.0
-
-        # === Recent Tickets (last 10) ===
-        recent_tickets = tickets
-                           .includes(:assignee, :user)
-                           .order(created_at: :desc)
-                           .limit(10)
-                           .select(
-                             :id, :title, :status, :priority, :created_at,
-                             :assignee_id, :user_id, :sla_breached, :breaching_sla
-                           )
-                           .map do |t|
-          {
-            id: t.id,
-            title: t.title,
-            status: status_labels[t.status] || "Unknown",
-            priority: priority_labels[t.priority.to_s] || "Unknown",
-            created_at: t.created_at.iso8601,
-            assignee: t.assignee&.name || "Unassigned",
-            reporter: t.user&.name || "Unknown",
-            sla_breached: t.sla_breached,
-            breaching_sla: t.breaching_sla
-          }
+        unless param_subdomain.present?
+          return render_error("Subdomain is missing in the request", status: :bad_request)
         end
 
-        # === Final Response ===
-        {
-          organization: {
-            name: @organization.name,
-            address: @organization.address,
-            email: @organization.email,
-            web_address: @organization.web_address,
-            subdomain: @organization.subdomain,
-            logo_url: @organization.logo_url
-          },
-          stats: {
-            total_tickets: total_tickets,
-            open_tickets: status_counts["open"],
-            assigned_tickets: status_counts["assigned"],
-            escalated_tickets: status_counts["escalated"],
-            resolved_tickets: status_counts["resolved"],
-            closed_tickets: status_counts["closed"],
-            total_problems: problems.count,
-            total_members: users.count,
-            high_priority_tickets: priority_data["Critical"] + priority_data["High"],
-            unresolved_tickets: total_tickets - resolved_closed,
-            resolution_rate_percent: total_tickets > 0 ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
-          },
-          charts: {
-            tickets_by_status: status_counts,
-            tickets_by_priority: priority_data,
-            top_assignees: top_assignees
-          },
-          sla: {
-            breached: breached_count,
-            breaching_soon: breaching_soon_count,
-            avg_resolution_hours: avg_resolution_hours,
-            on_time_rate_percent: total_tickets > 0 ? (((total_tickets - breached_count).to_f / total_tickets) * 100).round(1) : 100
-          },
-          recent_tickets: recent_tickets,
-          meta: {
-            fetched_at: Time.current.iso8601,
-            timezone: Time.current.zone.name,
-            tenant: @organization.subdomain
-          }
-        }
+        @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
+
+        unless @organization
+          Rails.logger.error "Organization not found for subdomain: #{param_subdomain}"
+          return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
+        end
+      end
+
+      def verify_user_organization
+        if current_user && current_user.organization_id != @organization&.id
+          Rails.logger.debug "User #{current_user&.email} does not belong to organization #{@organization.subdomain}"
+          render_error("User does not belong to this organization", status: :forbidden)
+        end
+      end
+
+      # --- Response Helpers ---
+      def render_success(data, message = "Success", status = :ok)
+        render json: { message: message, data: data }, status: status
+      end
+
+      def render_error(errors, message: "An error occurred", details: nil, status: :unprocessable_entity)
+        render json: { error: message, details: details || errors }, status: status
+      end
+
+      def render_not_found(exception = nil)
+        render_error("Resource not found", details: exception&.message, status: :not_found)
+      end
+
+      def render_forbidden(exception = nil)
+        render_error("You are not authorized to perform this action", details: exception&.message, status: :forbidden)
+      end
+
+      def render_internal_server_error(exception = nil)
+        Rails.logger.error "Internal Server Error: #{exception&.message}"
+        render_error("Internal server error", details: exception&.message, status: :internal_server_error)
       end
     end
   end
