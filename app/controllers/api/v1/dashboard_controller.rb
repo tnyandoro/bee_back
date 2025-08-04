@@ -71,14 +71,13 @@ module Api
 
         # === Top Assignees ===
         top_assignees = tickets
-                          .where.not(assignee_id: nil)
                           .joins(:assignee)
+                          .where.not(assignee_id: nil)
                           .group("users.id", "users.name")
+                          .select("users.name, COUNT(tickets.id) as ticket_count")
+                          .order(Arel.sql("COUNT(tickets.id) DESC"))
                           .limit(5)
-                          .order(Arel.sql("COUNT(*) DESC"))
-                          .pluck("users.name", "COUNT(*)")
-                          .map { |name, count| { name: name, count: count } }
-
+                          .map { |record| { name: record.name, count: record.ticket_count } }
         # === Average Resolution Time ===
         avg_resolution_sql = tickets
                                .where.not(resolved_at: nil)
