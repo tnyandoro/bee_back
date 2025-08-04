@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_07_31_175927) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_04_050339) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -181,7 +181,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_07_31_175927) do
     t.string "support_center"
     t.string "total_kilometer"
     t.bigint "department_id"
+    t.boolean "breaching_sla", default: false
     t.index ["assignee_id"], name: "index_tickets_on_assignee_id"
+    t.index ["breaching_sla"], name: "index_tickets_on_breaching_sla"
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
     t.index ["department_id"], name: "index_tickets_on_department_id"
     t.index ["impact"], name: "index_tickets_on_impact"
