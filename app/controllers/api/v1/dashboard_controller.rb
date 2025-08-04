@@ -1,12 +1,20 @@
+# app/controllers/api/v1/dashboard_controller.rb
+
 module Api
   module V1
     class DashboardController < Api::V1::ApiController
       def show
         return render_error("Organization not found", status: :not_found) unless @organization
 
-        cache_key = "dashboard:v11:org_#{@organization.id}"
+        Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
+
+        cache_key = "dashboard:v14:org_#{@organization.id}"
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
+        rescue => e
+            Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
+            Rails.logger.error e.backtrace.take(20).join("\n  ")
+            raise
         end
 
         render_success(data, "Dashboard loaded successfully", :ok)
@@ -16,6 +24,8 @@ module Api
 
       def build_dashboard_data
         org_id = @organization.id
+        Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
+
         tickets = Ticket.where(organization_id: org_id)
         users = User.where(organization_id: org_id)
         problems = Problem.where(organization_id: org_id)
@@ -60,17 +70,16 @@ module Api
         end
 
         # === Top Assignees ===
-        count_star = Arel.star.count
         top_assignees = tickets
                           .where.not(assignee_id: nil)
                           .joins(:assignee)
                           .group("users.id", "users.name")
                           .limit(5)
-                          .order(count_star.desc)
-                          .pluck("users.name", count_star)
+                          .order(Arel.sql("COUNT(*) DESC"))
+                          .pluck("users.name", "COUNT(*)")
                           .map { |name, count| { name: name, count: count } }
 
-        # === Avg Resolution Time ===
+        # === Average Resolution Time ===
         avg_resolution_sql = tickets
                                .where.not(resolved_at: nil)
                                .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
@@ -105,7 +114,7 @@ module Api
         end
 
         # === Final Response ===
-        {
+        result = {
           organization: {
             name: @organization.name,
             address: @organization.address,
@@ -146,6 +155,13 @@ module Api
             tenant: @organization.subdomain
           }
         }
+
+        Rails.logger.info "✅ Dashboard data built successfully"
+        result
+      rescue => e
+        Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
+        Rails.logger.error e.backtrace.take(20).join("\n  ")
+        raise
       end
     end
   end
