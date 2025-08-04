@@ -3,8 +3,6 @@ module Api
   module V1
     class UploadsController < Api::V1::ApiController
       require "open-uri"
-
-      before_action :authenticate_user!
       before_action :set_organization, only: [:upload_logo]
 
       # POST /api/v1/uploads/upload_profile_picture

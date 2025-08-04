@@ -1,8 +1,6 @@
 module Api
   module V1
     class SettingsController < Api::V1::ApiController
-      before_action :authenticate_user!
-      before_action :set_organization
 
       # GET /api/v1/organizations/:subdomain/settings
       def index

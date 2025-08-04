@@ -2,9 +2,6 @@ module Api
   module V1
     class UsersController < Api::V1::ApiController
       include Pundit::Authorization
-
-      before_action :set_organization_from_subdomain
-      before_action :authenticate_user!
       before_action :set_user, only: [:show, :update, :destroy, :profile]
       after_action :verify_authorized
 

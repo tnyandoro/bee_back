@@ -1,9 +1,6 @@
 module Api
   module V1
     class PasswordsController < Api::V1::ApiController
-      skip_before_action :authenticate_user!
-      skip_before_action :verify_user_organization
-      skip_before_action :set_organization_from_subdomain
 
       def reset
         subdomain = params[:subdomain]&.downcase

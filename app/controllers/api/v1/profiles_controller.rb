@@ -1,8 +1,6 @@
 module Api
   module V1
     class ProfilesController < Api::V1::ApiController
-      before_action :set_organization_from_subdomain
-      before_action :authenticate_user!
 
       include Rails.application.routes.url_helpers
       

@@ -2,9 +2,6 @@
 module Api
     module V1
       class SlaConfigurationsController < Api::V1::ApiController
-        before_action :authenticate_user!
-        before_action :set_organization_from_subdomain
-        before_action :verify_admin
   
         # GET /api/v1/organizations/:subdomain/sla_configuration
         def show

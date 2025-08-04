@@ -11,7 +11,9 @@ module Api
       rescue_from StandardError, with: :render_internal_server_error
 
       # --- Filters: Use `except:` to avoid `skip_before_action` errors ---
+      before_action :verify_admin
       before_action :set_organization_from_subdomain
+      before_action :set_problem, only: %i[show update destroy]
       before_action :authenticate_user!, except: [:create]  # e.g., login/register
       before_action :verify_user_organization, if: -> { @organization.present? }, except: [:create, :validate_subdomain]
 
