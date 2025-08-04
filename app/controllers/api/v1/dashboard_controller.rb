@@ -1,10 +1,15 @@
-# app/controllers/api/v1/dashboard_controller.rb
-
 module Api
   module V1
-    class DashboardController < Api::V1::ApiApplicationController
+    class DashboardController < Api::V1::ApplicationController
+      # All authentication and organization scoping
+      # is already handled by Api::V1::ApplicationController
+      # via:
+      #   - before_action :authenticate_user!
+      #   - before_action :set_organization_from_subdomain
+      #   - before_action :verify_user_organization
+
       def show
-        # Use cached dashboard data (per-tenant, expires every 5 minutes)
+        # Use organization-scoped data with caching
         cache_key = "dashboard:v5:org_#{@organization.id}"
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
@@ -18,11 +23,13 @@ module Api
       def build_dashboard_data
         org_id = @organization.id
 
+        # Tenant-scoped base queries
         tickets = Ticket.where(organization_id: org_id)
         users = User.where(organization_id: org_id)
         problems = Problem.where(organization_id: org_id)
 
-        # === Status Mapping ===
+        # === Status Mapping: Integer Enum → String ===
+        # From your schema: status defaults to 6 (resolved), and is an integer
         status_labels = {
           0 => "open",
           1 => "assigned",
@@ -47,16 +54,13 @@ module Api
         # === Priority Mapping ===
         priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
         priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_data = {}
-        priority_labels.each do |key, label|
-          priority_data[label] = priority_counts_raw[key].to_i
-        end
+        priority_data = priority_labels.transform_values { |label| priority_counts_raw[label == "Critical" ? "0" : label == "High" ? "1" : label == "Medium" ? "2" : "3"].to_i }
 
         # === SLA Metrics ===
         breached_count = tickets.where(sla_breached: true).count
-        breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count
+        breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count # open, assigned, escalated
 
-        # === Top Assignees ===
+        # === Top Assignees (safe, efficient query) ===
         top_assignees = tickets
                           .where.not(assignee_id: nil)
                           .joins(:assignee)
@@ -66,7 +70,7 @@ module Api
                           .pluck("users.name", "COUNT(*)")
                           .map { |name, count| { name: name, count: count } }
 
-        # === Average Resolution Time ===
+        # === Average Resolution Time (in hours) ===
         avg_resolution_sql = tickets
                                .where.not(resolved_at: nil)
                                .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
@@ -74,7 +78,7 @@ module Api
 
         avg_resolution_hours = avg_resolution_sql&.round(2) || 0.0
 
-        # === Recent Tickets ===
+        # === Recent Tickets (last 10) ===
         recent_tickets = tickets
                            .includes(:assignee, :user)
                            .order(created_at: :desc)
@@ -97,7 +101,7 @@ module Api
           }
         end
 
-        # === Final Response ===
+        # === Final JSON Response ===
         {
           organization: {
             name: @organization.name,
@@ -105,7 +109,8 @@ module Api
             email: @organization.email,
             web_address: @organization.web_address,
             subdomain: @organization.subdomain,
-            logo_url: @organization.logo_url
+            logo_url: @organization.logo_url,
+            phone_number: @organization.phone_number
           },
           stats: {
             total_tickets: total_tickets,
