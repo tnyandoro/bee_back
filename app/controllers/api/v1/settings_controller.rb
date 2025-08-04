@@ -1,6 +1,6 @@
 module Api
   module V1
-    class SettingsController < ApplicationController
+    class SettingsController < ApiController
       before_action :authenticate_user!
       before_action :set_organization
 

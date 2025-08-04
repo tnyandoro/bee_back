@@ -2,7 +2,7 @@
 
 module Api
   module V1
-    class TeamsController < ApplicationController
+    class TeamsController < ApiController
       before_action :authenticate_user!
       before_action :set_organization_from_subdomain
       before_action :authorize_admin_or_super_user, except: [:index, :show, :users]

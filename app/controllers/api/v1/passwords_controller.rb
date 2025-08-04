@@ -1,6 +1,6 @@
 module Api
   module V1
-    class PasswordsController < ApplicationController
+    class PasswordsController < ApiController
       skip_before_action :authenticate_user!
       skip_before_action :verify_user_organization
       skip_before_action :set_organization_from_subdomain

@@ -1,6 +1,6 @@
 module Api
   module V1
-    class UsersController < ApplicationController
+    class UsersController < ApiController
       include Pundit::Authorization
 
       before_action :set_organization_from_subdomain

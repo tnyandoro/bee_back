@@ -1,8 +1,8 @@
-# app/controllers/api/v1/api_application_controller.rb
+# app/controllers/api/v1/api_controller.rb
 
 module Api
   module V1
-    class ApiApplicationController < ActionController::API
+    class ApiController < ActionController::API
       include Pundit::Authorization
       include Rails.application.routes.url_helpers
 
@@ -17,7 +17,14 @@ module Api
       before_action :set_organization_from_subdomain
       before_action :verify_user_organization, if: -> { @organization.present? }
 
-      # --- Authentication ---
+      # --- Alias for API controller use ---
+      def authenticate_api_user!
+        authenticate_user!
+      end
+
+      private
+
+      # --- Centralized Authentication Logic ---
       def authenticate_user!
         render json: { error: "Unauthorized" }, status: :unauthorized unless current_user
       end
@@ -25,15 +32,20 @@ module Api
       def current_user
         @current_user ||= begin
           token = request.headers['Authorization']&.split(' ')&.last
+          Rails.logger.debug "Authenticating with token: #{token}"
           User.find_by(auth_token: token)
         end
       end
 
-      # --- Organization & Tenant Scoping ---
+      def current_user_email
+        current_user&.email
+      end
+
+      # --- Subdomain Logic for Multi-Tenancy ---
       def set_organization_from_subdomain
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
 
-        Rails.logger.info "Subdomain sources: params[:organization_id]=#{params[:organization_id]}, params[:subdomain]=#{params[:subdomain]}, request.subdomains=#{request.subdomains}"
+        Rails.logger.info "Subdomain sources: params[:organization_id]=#{params[:organization_id]}, params[:subdomain]=#{params[:subdomain]}, params[:organization_subdomain]=#{params[:organization_subdomain]}, request.subdomains=#{request.subdomains}"
 
         if Rails.env.development? && param_subdomain.blank?
           param_subdomain = 'demo'
@@ -46,20 +58,23 @@ module Api
         end
 
         unless param_subdomain.present?
-          return render_error("Subdomain is missing in the request", status: :bad_request)
+          render_error("Subdomain is missing in the request", status: :bad_request)
+          return
         end
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
 
-        unless @organization
+        if @organization
+          Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
+        else
           Rails.logger.error "Organization not found for subdomain: #{param_subdomain}"
-          return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
+          render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
         end
       end
 
       def verify_user_organization
         if current_user && current_user.organization_id != @organization&.id
-          Rails.logger.debug "User #{current_user&.email} does not belong to organization #{@organization.subdomain}"
+          Rails.logger.debug "User #{current_user_email} does not belong to organization #{@organization.subdomain}"
           render_error("User does not belong to this organization", status: :forbidden)
         end
       end

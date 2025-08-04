@@ -1,6 +1,6 @@
 module Api
   module V1
-    class SessionsController < ApplicationController
+    class SessionsController < ApiController
       before_action :set_organization_from_subdomain, only: [:create]
       before_action :authenticate_user!, only: [:destroy]
 

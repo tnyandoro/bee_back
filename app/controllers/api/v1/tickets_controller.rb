@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 module Api
   module V1
-    class TicketsController < ApplicationController
+    class TicketsController < ApiController
       before_action :authenticate_user!
       before_action :set_organization_from_subdomain
       before_action :set_ticket, only: %i[show update destroy assign_to_user escalate_to_problem resolve]
