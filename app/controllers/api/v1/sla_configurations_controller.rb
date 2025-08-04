@@ -1,7 +1,7 @@
 # app/controllers/api/v1/sla_configurations_controller.rb
 module Api
     module V1
-      class SlaConfigurationsController < ApplicationController
+      class SlaConfigurationsController < Api::V1::ApiController
         before_action :authenticate_user!
         before_action :set_organization_from_subdomain
         before_action :verify_admin

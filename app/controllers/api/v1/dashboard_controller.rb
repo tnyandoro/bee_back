@@ -1,5 +1,3 @@
-# app/controllers/api/v1/dashboard_controller.rb
-
 module Api
   module V1
     class DashboardController < Api::V1::ApiController

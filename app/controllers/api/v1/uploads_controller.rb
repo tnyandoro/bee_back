@@ -1,7 +1,7 @@
 # frzen_string_literal: true
 module Api
   module V1
-    class UploadsController < ApplicationController
+    class UploadsController < Api::V1::ApiController
       require "open-uri"
 
       before_action :authenticate_user!
