@@ -1,8 +1,6 @@
-# app/controllers/api/v1/api_controller.rb
-
 module Api
   module V1
-    class ApiController < ActionController::API
+    class ApplicationController < ActionController::API
       include Pundit::Authorization
       include Rails.application.routes.url_helpers
 

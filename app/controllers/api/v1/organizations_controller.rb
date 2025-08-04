@@ -1,7 +1,7 @@
-# app/controllers/api/v1/organizations_controller.rb
+
 module Api
   module V1
-    class OrganizationsController < ApiController
+    class OrganizationsController < ApplicationController
       before_action :set_organization, only: %i[show update destroy users add_user tickets]
       skip_before_action :authenticate_user!, only: [:validate_subdomain]
       skip_before_action :verify_user_organization, only: [:validate_subdomain]

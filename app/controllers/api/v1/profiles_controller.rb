@@ -1,6 +1,6 @@
 module Api
   module V1
-    class ProfilesController < ApiController
+    class ProfilesController < ApplicationController
       before_action :set_organization_from_subdomain
       before_action :authenticate_user!
 

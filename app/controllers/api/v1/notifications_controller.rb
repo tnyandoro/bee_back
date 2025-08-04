@@ -1,7 +1,7 @@
 # app/controllers/api/v1/notifications_controller.rb
 module Api
   module V1
-    class NotificationsController < ApiController
+    class NotificationsController < ApplicationController
       before_action :authenticate_user!
       before_action :set_organization
 

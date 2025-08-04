@@ -2,7 +2,7 @@
 
 module Api
   module V1
-    class DashboardController < Api::V1::ApiController
+    class DashboardController < Api::V1::ApiApplicationController
       def show
         # Use cached dashboard data (per-tenant, expires every 5 minutes)
         cache_key = "dashboard:v5:org_#{@organization.id}"
