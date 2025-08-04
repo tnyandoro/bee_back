@@ -1,16 +1,12 @@
+# app/controllers/api/v1/dashboard_controller.rb
+
 module Api
   module V1
-    class DashboardController < ApplicationController
-      # All authentication and organization scoping
-      # is already handled by Api::V1::ApplicationController
-      # via:
-      #   - before_action :authenticate_user!
-      #   - before_action :set_organization_from_subdomain
-      #   - before_action :verify_user_organization
-
+    class DashboardController < Api::V1::ApiController
       def show
-        # Use organization-scoped data with caching
-        cache_key = "dashboard:v5:org_#{@organization.id}"
+        return render_error("Organization not found", status: :not_found) unless @organization
+
+        cache_key = "dashboard:v8:org_#{@organization.id}"
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -22,14 +18,11 @@ module Api
 
       def build_dashboard_data
         org_id = @organization.id
-
-        # Tenant-scoped base queries
         tickets = Ticket.where(organization_id: org_id)
         users = User.where(organization_id: org_id)
         problems = Problem.where(organization_id: org_id)
 
-        # === Status Mapping: Integer Enum → String ===
-        # From your schema: status defaults to 6 (resolved), and is an integer
+        # === Status Mapping (int → string) ===
         status_labels = {
           0 => "open",
           1 => "assigned",
@@ -54,23 +47,32 @@ module Api
         # === Priority Mapping ===
         priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
         priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_data = priority_labels.transform_values { |label| priority_counts_raw[label == "Critical" ? "0" : label == "High" ? "1" : label == "Medium" ? "2" : "3"].to_i }
+        priority_data = {}
+        priority_labels.each do |key, label|
+          priority_data[label] = priority_counts_raw[key].to_i
+        end
 
         # === SLA Metrics ===
         breached_count = tickets.where(sla_breached: true).count
-        breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count # open, assigned, escalated
 
-        # === Top Assignees (safe, efficient query) ===
+        # Only use `breaching_sla` if column exists
+        if Ticket.column_names.include?("breaching_sla")
+          breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count
+        else
+          breaching_soon_count = 0
+        end
+
+        # === Top Assignees (safe order) ===
         top_assignees = tickets
                           .where.not(assignee_id: nil)
                           .joins(:assignee)
                           .group("users.id", "users.name")
                           .limit(5)
-                          .order(Arel.sql("COUNT(*) DESC"))
+                          .order("COUNT(*) DESC")
                           .pluck("users.name", "COUNT(*)")
                           .map { |name, count| { name: name, count: count } }
 
-        # === Average Resolution Time (in hours) ===
+        # === Average Resolution Time (hours) ===
         avg_resolution_sql = tickets
                                .where.not(resolved_at: nil)
                                .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
@@ -79,14 +81,17 @@ module Api
         avg_resolution_hours = avg_resolution_sql&.round(2) || 0.0
 
         # === Recent Tickets (last 10) ===
+        recent_columns = [
+          :id, :title, :status, :priority, :created_at,
+          :assignee_id, :user_id, :sla_breached
+        ]
+        recent_columns << :breaching_sla if Ticket.column_names.include?("breaching_sla")
+
         recent_tickets = tickets
                            .includes(:assignee, :user)
                            .order(created_at: :desc)
                            .limit(10)
-                           .select(
-                             :id, :title, :status, :priority, :created_at,
-                             :assignee_id, :user_id, :sla_breached, :breaching_sla
-                           )
+                           .select(recent_columns)
                            .map do |t|
           {
             id: t.id,
@@ -97,11 +102,11 @@ module Api
             assignee: t.assignee&.name || "Unassigned",
             reporter: t.user&.name || "Unknown",
             sla_breached: t.sla_breached,
-            breaching_sla: t.breaching_sla
+            breaching_sla: t.breaching_sla || false
           }
         end
 
-        # === Final JSON Response ===
+        # === Final Response ===
         {
           organization: {
             name: @organization.name,

@@ -1,6 +1,8 @@
+# app/controllers/api/v1/api_controller.rb
+
 module Api
   module V1
-    class ApplicationController < ActionController::API
+    class ApiController < ActionController::API
       include Pundit::Authorization
       include Rails.application.routes.url_helpers
 
@@ -15,14 +17,14 @@ module Api
       before_action :set_organization_from_subdomain
       before_action :verify_user_organization, if: -> { @organization.present? }
 
-      # --- Alias for API controller use ---
+      # --- Alias for API use ---
       def authenticate_api_user!
         authenticate_user!
       end
 
       private
 
-      # --- Centralized Authentication Logic ---
+      # --- Authentication ---
       def authenticate_user!
         render json: { error: "Unauthorized" }, status: :unauthorized unless current_user
       end
@@ -30,25 +32,27 @@ module Api
       def current_user
         @current_user ||= begin
           token = request.headers['Authorization']&.split(' ')&.last
-          Rails.logger.debug "Authenticating with token: #{token}"
+          Rails.logger.debug "Authenticating with token: #{token&.first(8)}..." if token
           User.find_by(auth_token: token)
         end
       end
 
-      def current_user_email
-        current_user&.email
-      end
-
-      # --- Subdomain Logic for Multi-Tenancy ---
+      # --- Multi-Tenancy: Subdomain → Organization ---
       def set_organization_from_subdomain
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
 
-        Rails.logger.info "Subdomain sources: params[:organization_id]=#{params[:organization_id]}, params[:subdomain]=#{params[:subdomain]}, params[:organization_subdomain]=#{params[:organization_subdomain]}, request.subdomains=#{request.subdomains}"
+        Rails.logger.info "Subdomain sources: " \
+          "params[:organization_id]=#{params[:organization_id]}, " \
+          "params[:subdomain]=#{params[:subdomain]}, " \
+          "params[:organization_subdomain]=#{params[:organization_subdomain]}, " \
+          "request.subdomains=#{request.subdomains}"
 
+        # Dev fallback
         if Rails.env.development? && param_subdomain.blank?
           param_subdomain = 'demo'
         end
 
+        # Single-tenant mode fallback
         if param_subdomain.blank? && Organization.count == 1
           @organization = Organization.first
           Rails.logger.info "Single-tenant fallback: Organization ID #{@organization.id}"
@@ -56,23 +60,25 @@ module Api
         end
 
         unless param_subdomain.present?
-          render_error("Subdomain is missing in the request", status: :bad_request)
-          return
+          return render_error("Subdomain is missing in the request", status: :bad_request)
         end
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
 
-        if @organization
-          Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
-        else
+        unless @organization
           Rails.logger.error "Organization not found for subdomain: #{param_subdomain}"
-          render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
+          return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
         end
+
+        Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
       end
 
+      # --- Tenant Access Control ---
       def verify_user_organization
-        if current_user && current_user.organization_id != @organization&.id
-          Rails.logger.debug "User #{current_user_email} does not belong to organization #{@organization.subdomain}"
+        return unless current_user && @organization
+
+        if current_user.organization_id != @organization.id
+          Rails.logger.warn "User #{current_user.email} (org=#{current_user.organization_id}) tried to access org=#{@organization.id}"
           render_error("User does not belong to this organization", status: :forbidden)
         end
       end
