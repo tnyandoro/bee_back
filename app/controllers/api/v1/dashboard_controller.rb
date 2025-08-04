@@ -60,13 +60,14 @@ module Api
         end
 
         # === Top Assignees ===
+        count_star = Arel.star.count
         top_assignees = tickets
                           .where.not(assignee_id: nil)
                           .joins(:assignee)
                           .group("users.id", "users.name")
                           .limit(5)
-                          .order("COUNT(*) DESC")
-                          .pluck("users.name", "COUNT(*)")
+                          .order(count_star.desc)
+                          .pluck("users.name", count_star)
                           .map { |name, count| { name: name, count: count } }
 
         # === Avg Resolution Time ===

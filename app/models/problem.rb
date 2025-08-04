@@ -9,7 +9,7 @@ class Problem < ApplicationRecord
   
 
 
-  delegate :organization, to: :ticket, allow_nil: true
+  # delegate :organization, to: :ticket, allow_nil: true
 
   validates :description, presence: true
   validates :creator, presence: true
