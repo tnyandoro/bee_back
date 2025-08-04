@@ -10,11 +10,11 @@ module Api
       rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
       rescue_from StandardError, with: :render_internal_server_error
 
-      # --- Filters: Use `except:` to avoid `skip_before_action` errors ---
-      before_action :verify_admin
+      # --- Filters ---
+      before_action :verify_admin, only: %i[update destroy]  # if you have admin-only actions
       before_action :set_organization_from_subdomain
       before_action :set_problem, only: %i[show update destroy]
-      before_action :authenticate_user!, except: [:create]  # e.g., login/register
+      before_action :authenticate_user!, except: [:create]
       before_action :verify_user_organization, if: -> { @organization.present? }, except: [:create, :validate_subdomain]
 
       private
@@ -74,7 +74,7 @@ module Api
       end
 
       def render_success(data, message = "Success", status = :ok)
-        render json: { message: message,  data }, status: status
+        render json: { message: message, data: data }, status: status
       end
 
       def render_error(errors, message: "An error occurred", details: nil, status: :unprocessable_entity)
