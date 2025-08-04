@@ -2,7 +2,7 @@ module Api
   module V1
     class SessionsController < ApplicationController
       before_action :set_organization_from_subdomain, only: [:create]
-      before_action :authenticate_user!, only: [:destroy]
+      # before_action :authenticate_user!, only: [:destroy]
 
       def create
         unless @organization

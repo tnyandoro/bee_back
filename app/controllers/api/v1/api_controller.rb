@@ -1,5 +1,3 @@
-# app/controllers/api/v1/api_controller.rb
-
 module Api
   module V1
     class ApiController < ActionController::API
@@ -13,18 +11,14 @@ module Api
       rescue_from StandardError, with: :render_internal_server_error
 
       # --- Filters ---
-      before_action :authenticate_user!, except: [:create]
       before_action :set_organization_from_subdomain
       before_action :verify_user_organization, if: -> { @organization.present? }
 
-      # --- Alias for API use ---
-      def authenticate_api_user!
-        authenticate_user!
-      end
+      # --- Authentication: skip only for :create ---
+      before_action :authenticate_user!, except: [:create]
 
       private
 
-      # --- Authentication ---
       def authenticate_user!
         render json: { error: "Unauthorized" }, status: :unauthorized unless current_user
       end
@@ -37,7 +31,6 @@ module Api
         end
       end
 
-      # --- Multi-Tenancy: Subdomain → Organization ---
       def set_organization_from_subdomain
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
 
@@ -47,12 +40,10 @@ module Api
           "params[:organization_subdomain]=#{params[:organization_subdomain]}, " \
           "request.subdomains=#{request.subdomains}"
 
-        # Dev fallback
         if Rails.env.development? && param_subdomain.blank?
           param_subdomain = 'demo'
         end
 
-        # Single-tenant mode fallback
         if param_subdomain.blank? && Organization.count == 1
           @organization = Organization.first
           Rails.logger.info "Single-tenant fallback: Organization ID #{@organization.id}"
@@ -73,7 +64,6 @@ module Api
         Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
       end
 
-      # --- Tenant Access Control ---
       def verify_user_organization
         return unless current_user && @organization
 
@@ -83,7 +73,6 @@ module Api
         end
       end
 
-      # --- Response Helpers ---
       def render_success(data, message = "Success", status = :ok)
         render json: { message: message, data: data }, status: status
       end

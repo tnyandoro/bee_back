@@ -6,7 +6,7 @@ module Api
       def show
         return render_error("Organization not found", status: :not_found) unless @organization
 
-        cache_key = "dashboard:v8:org_#{@organization.id}"
+        cache_key = "dashboard:v9:org_#{@organization.id}"
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -22,7 +22,6 @@ module Api
         users = User.where(organization_id: org_id)
         problems = Problem.where(organization_id: org_id)
 
-        # === Status Mapping (int → string) ===
         status_labels = {
           0 => "open",
           1 => "assigned",
@@ -44,7 +43,6 @@ module Api
         total_tickets = status_counts.values.sum
         resolved_closed = status_counts["resolved"] + status_counts["closed"]
 
-        # === Priority Mapping ===
         priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
         priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
         priority_data = {}
@@ -52,17 +50,14 @@ module Api
           priority_data[label] = priority_counts_raw[key].to_i
         end
 
-        # === SLA Metrics ===
         breached_count = tickets.where(sla_breached: true).count
 
-        # Only use `breaching_sla` if column exists
         if Ticket.column_names.include?("breaching_sla")
           breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count
         else
           breaching_soon_count = 0
         end
 
-        # === Top Assignees (safe order) ===
         top_assignees = tickets
                           .where.not(assignee_id: nil)
                           .joins(:assignee)
@@ -72,7 +67,6 @@ module Api
                           .pluck("users.name", "COUNT(*)")
                           .map { |name, count| { name: name, count: count } }
 
-        # === Average Resolution Time (hours) ===
         avg_resolution_sql = tickets
                                .where.not(resolved_at: nil)
                                .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
@@ -80,11 +74,7 @@ module Api
 
         avg_resolution_hours = avg_resolution_sql&.round(2) || 0.0
 
-        # === Recent Tickets (last 10) ===
-        recent_columns = [
-          :id, :title, :status, :priority, :created_at,
-          :assignee_id, :user_id, :sla_breached
-        ]
+        recent_columns = [:id, :title, :status, :priority, :created_at, :assignee_id, :user_id, :sla_breached]
         recent_columns << :breaching_sla if Ticket.column_names.include?("breaching_sla")
 
         recent_tickets = tickets
@@ -106,7 +96,6 @@ module Api
           }
         end
 
-        # === Final Response ===
         {
           organization: {
             name: @organization.name,
