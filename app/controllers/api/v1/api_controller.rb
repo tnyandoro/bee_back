@@ -13,7 +13,7 @@ module Api
       # --- Filters ---
       before_action :verify_admin, only: %i[update destroy]  # if you have admin-only actions
       before_action :set_organization_from_subdomain
-      before_action :set_problem, only: %i[show update destroy]
+      
       before_action :authenticate_user!, except: [:create]
       before_action :verify_user_organization, if: -> { @organization.present? }, except: [:create, :validate_subdomain]
 
