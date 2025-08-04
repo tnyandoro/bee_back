@@ -1,6 +1,6 @@
 module Api
   module V1
-    class DashboardController < Api::V1::ApplicationController
+    class DashboardController < ApplicationController
       # All authentication and organization scoping
       # is already handled by Api::V1::ApplicationController
       # via:
