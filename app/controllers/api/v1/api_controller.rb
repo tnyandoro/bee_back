@@ -1,3 +1,5 @@
+# app/controllers/api/v1/api_controller.rb
+
 module Api
   module V1
     class ApiController < ActionController::API
@@ -10,12 +12,10 @@ module Api
       rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
       rescue_from StandardError, with: :render_internal_server_error
 
-      # --- Filters ---
+      # --- Filters: Define ALL in parent, use `except:` ---
       before_action :set_organization_from_subdomain
-      before_action :verify_user_organization, if: -> { @organization.present? }
-
-      # --- Authentication: skip only for :create ---
-      before_action :authenticate_user!, except: [:create]
+      before_action :authenticate_user!, except: [:create]  # e.g., login
+      before_action :verify_user_organization, if: -> { @organization.present? }, except: [:create, :validate_subdomain]
 
       private
 
