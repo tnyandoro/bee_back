@@ -1,5 +1,3 @@
-# app/controllers/api/v1/dashboard_controller.rb
-
 module Api
   module V1
     class DashboardController < Api::V1::ApiController
@@ -69,22 +67,24 @@ module Api
           breaching_soon_count = 0
         end
 
-        # === Top Assignees ===
+        # === Average Resolution Time ===
+        avg_seconds = tickets
+                        .where.not(resolved_at: nil)
+                        .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
+        avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
+
+        # === Fixed Top Assignees Query ===
         top_assignees = tickets
                           .joins(:assignee)
                           .where.not(assignee_id: nil)
-                          .group("users.id", "users.name")
-                          .select("users.name, COUNT(tickets.id) as ticket_count")
-                          .order(Arel.sql("COUNT(tickets.id) DESC"))
+                          .group("users.id")
+                          .order("count_tickets_id DESC")
                           .limit(5)
-                          .map { |record| { name: record.name, count: record.ticket_count } }
-        # === Average Resolution Time ===
-        avg_resolution_sql = tickets
-                               .where.not(resolved_at: nil)
-                               .select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600)")
-                               .first&.avg
-
-        avg_resolution_hours = avg_resolution_sql&.round(2) || 0.0
+                          .count("tickets.id")
+                          .map { |user_id, count| 
+                            user = User.find_by(id: user_id)
+                            { name: user&.name || "Unknown", count: count } 
+                          }
 
         # === Recent Tickets ===
         recent_columns = [
@@ -94,11 +94,11 @@ module Api
         recent_columns << :breaching_sla if Ticket.column_names.include?("breaching_sla")
 
         recent_tickets = tickets
-                           .includes(:assignee, :user)
-                           .order(created_at: :desc)
-                           .limit(10)
-                           .select(recent_columns)
-                           .map do |t|
+                          .includes(:assignee, :user)
+                          .order(created_at: :desc)
+                          .limit(10)
+                          .select(recent_columns)
+                          .map do |t|
           {
             id: t.id,
             title: t.title,
