@@ -89,16 +89,22 @@ module Api
         # === Recent Tickets ===
         recent_columns = [
           :id, :title, :status, :priority, :created_at,
-          :assignee_id, :user_id, :sla_breached
+          :assignee_id, :creator_id, :requester_id, :sla_breached
         ]
         recent_columns << :breaching_sla if Ticket.column_names.include?("breaching_sla")
 
-        recent_tickets = tickets
-                          .includes(:assignee, :user)
+        # Fetch tickets with assignee and creator preloaded
+        recent_tickets_scope = tickets
+                          .includes(:assignee, :creator)
                           .order(created_at: :desc)
                           .limit(10)
                           .select(recent_columns)
-                          .map do |t|
+
+        # Preload requesters in a single query
+        requester_ids = recent_tickets_scope.map(&:requester_id).compact.uniq
+        requesters = User.where(id: requester_ids).select(:id, :name).index_by(&:id)
+
+        recent_tickets = recent_tickets_scope.map do |t|
           {
             id: t.id,
             title: t.title,
@@ -106,7 +112,8 @@ module Api
             priority: priority_labels[t.priority.to_s] || "Unknown",
             created_at: t.created_at.iso8601,
             assignee: t.assignee&.name || "Unassigned",
-            reporter: t.user&.name || "Unknown",
+            creator: t.creator&.name || "Unknown",
+            requester: requesters[t.requester_id]&.name || "Unknown",
             sla_breached: t.sla_breached,
             breaching_sla: t.breaching_sla || false
           }
