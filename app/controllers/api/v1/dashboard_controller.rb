@@ -86,24 +86,35 @@ module Api
                             { name: user&.name || "Unknown", count: count } 
                           }
 
-        # === Recent Tickets - Fixed ===
+        # === Recent Tickets with Robust Error Handling ===
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
                           .limit(10)
                           .map do |t|
-          {
-            id: t.id,
-            title: t.title,
-            status: status_labels[t.status] || "Unknown",
-            priority: priority_labels[t.priority.to_s] || "Unknown",
-            created_at: t.created_at.iso8601,
-            assignee: t.assignee.is_a?(User) ? t.assignee&.name : "Unassigned",
-            reporter: t.user.is_a?(User) ? t.user&.name : "Unknown",
-            sla_breached: t.sla_breached,
-            breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
-          }
-        end
+          begin
+            # Add detailed logging for each association
+            Rails.logger.debug "Processing Ticket #{t.id}:"
+            Rails.logger.debug "Assignee: #{t.assignee.inspect}, Class: #{t.assignee.class}"
+            Rails.logger.debug "User: #{t.user.inspect}, Class: #{t.user.class}"
+
+            {
+              id: t.id,
+              title: t.title,
+              status: status_labels[t.status] || "Unknown",
+              priority: priority_labels[t.priority.to_s] || "Unknown",
+              created_at: t.created_at.iso8601,
+              assignee: extract_name(t.assignee, "Unassigned"),
+              reporter: extract_name(t.user, "Unknown"),
+              sla_breached: t.sla_breached,
+              breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
+            }
+          rescue => e
+            Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
+            Rails.logger.error e.backtrace.take(5).join("\n")
+            nil
+          end
+        end.compact
 
         # === Final Response ===
         result = {
@@ -154,6 +165,22 @@ module Api
         Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
         Rails.logger.error e.backtrace.take(20).join("\n  ")
         raise
+      end
+
+      # Helper method to safely extract names with multiple fallbacks
+      def extract_name(object, default)
+        return default if object.nil?
+        
+        if object.is_a?(User)
+          object.name
+        elsif object.respond_to?(:name)
+          object.name
+        else
+          default
+        end
+      rescue => e
+        Rails.logger.error "Error extracting name from #{object.inspect}: #{e.message}"
+        default
       end
     end
   end
