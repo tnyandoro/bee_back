@@ -86,25 +86,22 @@ module Api
                             { name: user&.name || "Unknown", count: count } 
                           }
 
-        # === Recent Tickets ===
-        # Get ticket IDs first
-        recent_ticket_ids = tickets.order(created_at: :desc).limit(10).pluck(:id)
-
-        # Fetch tickets with associations preloaded
-        recent_tickets = Ticket.where(id: recent_ticket_ids)
-                               .includes(:assignee, :user)
-                               .order(created_at: :desc)
-                               .map do |t|
+        # === Recent Tickets - Fixed ===
+        recent_tickets = tickets
+                          .includes(:assignee, :user)
+                          .order(created_at: :desc)
+                          .limit(10)
+                          .map do |t|
           {
             id: t.id,
             title: t.title,
             status: status_labels[t.status] || "Unknown",
             priority: priority_labels[t.priority.to_s] || "Unknown",
             created_at: t.created_at.iso8601,
-            assignee: t.assignee&.name || "Unassigned",
-            reporter: t.user&.name || "Unknown",
+            assignee: t.assignee.is_a?(User) ? t.assignee&.name : "Unassigned",
+            reporter: t.user.is_a?(User) ? t.user&.name : "Unknown",
             sla_breached: t.sla_breached,
-            breaching_sla: t.breaching_sla || false
+            breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
           }
         end
 
