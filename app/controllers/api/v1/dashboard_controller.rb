@@ -87,12 +87,6 @@ module Api
                           }
 
         # === Recent Tickets ===
-        recent_columns = [
-          :id, :title, :status, :priority, :created_at,
-          :assignee_id, :user_id, :sla_breached
-        ]
-        recent_columns << :breaching_sla if Ticket.column_names.include?("breaching_sla")
-
         # Get ticket IDs first
         recent_ticket_ids = tickets.order(created_at: :desc).limit(10).pluck(:id)
 
