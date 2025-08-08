@@ -85,23 +85,19 @@ module Api
                         .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
         avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
 
-        # === Top Assignees ===
+        # === FIXED: Top Assignees Query ===
         top_assignees = tickets
-                          .joins(:assignee)
+                          .joins('INNER JOIN users ON tickets.assignee_id = users.id')
                           .where.not(assignee_id: nil)
-                          .group("users.id")
-                          .order("count_tickets_id DESC")
+                          .group('users.id, users.name')
+                          .order('count_all DESC')
                           .limit(5)
-                          .count("tickets.id")
-                          .map { |user_id, count| 
-                            user = User.find_by(id: user_id.to_i)
-                            { 
-                              name: user ? safe_user_name(user, "Unknown") : "Unknown", 
-                              count: count 
-                            } 
+                          .count
+                          .map { |(user_id, user_name), count| 
+                            { name: user_name || "Unknown", count: count } 
                           }
 
-        # === FIXED: Recent Tickets with string handling ===
+        # === Recent Tickets ===
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
@@ -113,7 +109,6 @@ module Api
             status: status_labels[t.status] || "Unknown",
             priority: priority_labels[t.priority.to_s] || "Unknown",
             created_at: t.created_at.iso8601,
-            # Handle both string and object types
             assignee: t.assignee.is_a?(String) ? t.assignee : safe_user_name(t.assignee, "Unassigned"),
             reporter: t.user.is_a?(String) ? t.user : safe_user_name(t.user, "Unknown"),
             sla_breached: t.sla_breached,
