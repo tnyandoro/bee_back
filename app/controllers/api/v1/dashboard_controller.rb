@@ -85,7 +85,7 @@ module Api
                         .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
         avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
 
-        # === Fixed Top Assignees Query ===
+        # === FIXED: Top Assignees Query with proper type handling ===
         top_assignees = tickets
                           .joins(:assignee)
                           .where.not(assignee_id: nil)
@@ -94,8 +94,12 @@ module Api
                           .limit(5)
                           .count("tickets.id")
                           .map { |user_id, count| 
-                            user = User.find_by(id: user_id)
-                            { name: user&.name || "Unknown", count: count } 
+                            # Convert to integer to handle string IDs from database
+                            user = User.find_by(id: user_id.to_i)
+                            { 
+                              name: user ? safe_user_name(user, "Unknown") : "Unknown", 
+                              count: count 
+                            } 
                           }
 
         # === Recent Tickets with Robust Error Handling ===
