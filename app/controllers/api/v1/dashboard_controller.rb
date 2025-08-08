@@ -24,7 +24,7 @@ module Api
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
-        # Store organization attributes in local variables to prevent accidental override
+        # Store organization attributes
         org_attrs = {
           id: @organization.id,
           name: @organization.name,
@@ -85,7 +85,7 @@ module Api
                         .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
         avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
 
-        # === FIXED: Top Assignees Query with proper type handling ===
+        # === Top Assignees ===
         top_assignees = tickets
                           .joins(:assignee)
                           .where.not(assignee_id: nil)
@@ -94,7 +94,6 @@ module Api
                           .limit(5)
                           .count("tickets.id")
                           .map { |user_id, count| 
-                            # Convert to integer to handle string IDs from database
                             user = User.find_by(id: user_id.to_i)
                             { 
                               name: user ? safe_user_name(user, "Unknown") : "Unknown", 
@@ -102,7 +101,7 @@ module Api
                             } 
                           }
 
-        # === Recent Tickets with Robust Error Handling ===
+        # === FIXED: Recent Tickets with string handling ===
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
@@ -114,8 +113,9 @@ module Api
             status: status_labels[t.status] || "Unknown",
             priority: priority_labels[t.priority.to_s] || "Unknown",
             created_at: t.created_at.iso8601,
-            assignee: safe_user_name(t.assignee, "Unassigned"),
-            reporter: safe_user_name(t.user, "Unknown"),
+            # Handle both string and object types
+            assignee: t.assignee.is_a?(String) ? t.assignee : safe_user_name(t.assignee, "Unassigned"),
+            reporter: t.user.is_a?(String) ? t.user : safe_user_name(t.user, "Unknown"),
             sla_breached: t.sla_breached,
             breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
           }
@@ -168,18 +168,10 @@ module Api
         raise
       end
 
-      # Safer method to extract user names with additional type checking
       def safe_user_name(object, default)
-        # If it's already a string, return it directly
         return object if object.is_a?(String)
-        
-        # If it's nil, return the default
         return default if object.nil?
-        
-        # If it's a User object or responds to name, return the name
         return object.name if object.respond_to?(:name)
-        
-        # If it's something else, try to convert to string
         object.to_s
       rescue => e
         Rails.logger.error "Error extracting name from #{object.inspect}: #{e.message}"
