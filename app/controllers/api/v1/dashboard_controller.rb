@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v19:org_#{@organization.id}" # Updated cache key
+        cache_key = "dashboard:v20:org_#{@organization.id}" # Updated cache key
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -21,7 +21,7 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v19 with String handling"
+        Rails.logger.info "Using DashboardController version v20 with enhanced String handling"
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
@@ -98,23 +98,24 @@ module Api
                           }
 
         # === Recent Tickets with robust data handling ===
+        Rails.logger.info "Processing recent tickets for org_id=#{org_id}"
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
                           .limit(10)
                           .map do |t|
           begin
-            # Log ticket details for debugging
-            Rails.logger.debug "Processing ticket #{t.id}: assignee_id=#{t.assignee_id}, requester_id=#{t.requester_id}, assignee=#{t.assignee.inspect}, user=#{t.user.inspect}"
+            Rails.logger.debug "Starting processing for ticket #{t.id}"
+            Rails.logger.debug "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}, assignee=#{t.assignee.inspect}, user=#{t.user.inspect}"
 
             # Get assignee name safely
-            assignee_name = case
-                            when t.assignee.nil?
+            Rails.logger.debug "Processing assignee for ticket #{t.id}"
+            assignee_name = if t.assignee.nil?
                               "Unassigned"
-                            when t.assignee.is_a?(String)
+                            elsif t.assignee.is_a?(String)
                               Rails.logger.warn "Unexpected string assignee for ticket #{t.id}: #{t.assignee.inspect}"
                               t.assignee
-                            when t.assignee.respond_to?(:name)
+                            elsif t.assignee.respond_to?(:name)
                               t.assignee.name.to_s
                             else
                               Rails.logger.warn "Unexpected assignee type for ticket #{t.id}: #{t.assignee.class}"
@@ -122,36 +123,39 @@ module Api
                             end
 
             # Get reporter name safely
-            reporter_name = case
-                            when t.user.nil?
+            Rails.logger.debug "Processing user for ticket #{t.id}"
+            reporter_name = if t.user.nil?
                               "Unknown"
-                            when t.user.is_a?(String)
+                            elsif t.user.is_a?(String)
                               Rails.logger.warn "Unexpected string user for ticket #{t.id}: #{t.user.inspect}"
                               t.user
-                            when t.user.respond_to?(:name)
+                            elsif t.user.respond_to?(:name)
                               t.user.name.to_s
                             else
                               Rails.logger.warn "Unexpected user type for ticket #{t.id}: #{t.user.class}"
                               t.user.to_s
                             end
 
+            Rails.logger.debug "Building ticket data for ticket #{t.id}"
             {
               id: t.id,
-              title: t.title,
+              title: t.title || "Untitled",
               status: status_labels[t.status] || "Unknown",
               priority: priority_labels[t.priority.to_s] || "Unknown",
-              created_at: t.created_at.iso8601,
+              created_at: t.created_at&.iso8601 || Time.current.iso8601,
               assignee: assignee_name,
               reporter: reporter_name,
-              sla_breached: t.sla_breached,
+              sla_breached: t.sla_breached || false,
               breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
             }
           rescue => e
-            Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
+            Rails.logger.error "Error processing ticket #{t.id}: #{e.class}: #{e.message}"
             Rails.logger.error e.backtrace.take(5).join("\n")
             nil
           end
         end.compact
+
+        Rails.logger.info "Finished processing recent tickets: #{recent_tickets.count} tickets processed"
 
         # === Final Response ===
         result = {
