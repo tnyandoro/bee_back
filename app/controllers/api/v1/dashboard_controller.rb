@@ -45,11 +45,10 @@ module Api
           0 => "open",
           1 => "assigned",
           2 => "escalated",
-          3 => "on_hold",
-          4 => "in_progress",
-          5 => "waiting_for_customer",
-          6 => "resolved",
-          7 => "closed"
+          3 => "closed",
+          4 => "suspended",
+          5 => "resolved",
+          6 => "pending"
         }
 
         status_counts_raw = tickets.group(:status).count
@@ -63,7 +62,7 @@ module Api
         resolved_closed = status_counts["resolved"] + status_counts["closed"]
 
         # === Priority Mapping ===
-        priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
+        priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
         priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
         priority_data = {}
         priority_labels.each do |key, label|
@@ -97,28 +96,41 @@ module Api
                             { name: user_name || "Unknown", count: count } 
                           }
 
-        # === Recent Tickets with safer data access ===
+        # === Recent Tickets with robust data handling ===
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
                           .limit(10)
                           .map do |t|
           begin
+            # Log ticket details for debugging
+            Rails.logger.debug "Processing ticket #{t.id}: assignee_id=#{t.assignee_id}, requester_id=#{t.requester_id}, assignee=#{t.assignee.inspect}, user=#{t.user.inspect}"
+
             # Get assignee name safely
-            assignee_name = if t.assignee.nil?
+            assignee_name = case
+                            when t.assignee.nil?
                               "Unassigned"
-                            elsif t.assignee.respond_to?(:name)
+                            when t.assignee.is_a?(String)
+                              Rails.logger.warn "Unexpected string assignee for ticket #{t.id}: #{t.assignee.inspect}"
+                              t.assignee
+                            when t.assignee.respond_to?(:name)
                               t.assignee.name.to_s
                             else
+                              Rails.logger.warn "Unexpected assignee type for ticket #{t.id}: #{t.assignee.class}"
                               t.assignee.to_s
                             end
 
             # Get reporter name safely
-            reporter_name = if t.user.nil?
+            reporter_name = case
+                            when t.user.nil?
                               "Unknown"
-                            elsif t.user.respond_to?(:name)
+                            when t.user.is_a?(String)
+                              Rails.logger.warn "Unexpected string user for ticket #{t.id}: #{t.user.inspect}"
+                              t.user
+                            when t.user.respond_to?(:name)
                               t.user.name.to_s
                             else
+                              Rails.logger.warn "Unexpected user type for ticket #{t.id}: #{t.user.class}"
                               t.user.to_s
                             end
 
@@ -152,7 +164,7 @@ module Api
             closed_tickets: status_counts["closed"],
             total_problems: problems.count,
             total_members: users.count,
-            high_priority_tickets: priority_data["Critical"] + priority_data["High"],
+            high_priority_tickets: priority_data["p1"] + priority_data["p2"],
             unresolved_tickets: total_tickets - resolved_closed,
             resolution_rate_percent: total_tickets > 0 ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
           },
