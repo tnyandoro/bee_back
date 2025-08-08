@@ -1,196 +1,77 @@
-module Api
-  module V1
-    class DashboardController < Api::V1::ApiController
-      def show
-        return render_error("Organization not found", status: :not_found) unless @organization
+Rails.application.routes.draw do
+  get "up" => "rails/health#show", as: :rails_health_check
 
-        Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
+  # Mount ActionCable for WebSocket support
+  mount ActionCable.server => '/cable'
 
-        cache_key = "dashboard:v16:org_#{@organization.id}"
-        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
-          build_dashboard_data
-        rescue => e
-          Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
-          Rails.logger.error e.backtrace.take(20).join("\n  ")
-          raise
+  namespace :api do
+    namespace :v1 do
+      # Global routes (no organization needed)
+      post 'validate_subdomain', to: 'organizations#validate_subdomain'
+      post '/login', to: 'sessions#create'
+      delete '/logout', to: 'sessions#destroy'
+      get '/verify', to: 'sessions#verify'
+      post '/register', to: 'registrations#create'
+      get '/verify_admin', to: 'sessions#verify_admin'
+      post '/password/reset', to: 'passwords#reset'     
+      post '/password/update', to: 'passwords#update'    
+
+      # Profile route
+      resource :profile, only: [:show]
+
+      # Organization resources
+      resources :organizations, param: :subdomain do
+        # Organization-level routes
+        member do
+          post '/upload_logo', to: 'settings#upload_logo'
+          get 'dashboard', to: 'dashboard#show'
+          get 'profile', to: 'profiles#show'
+          get 'tickets', to: 'organizations#tickets'
+          get 'users', to: 'organizations#users'
+          post 'add_user', to: 'organizations#add_user'
+          get 'settings', to: 'settings#index'
+          put 'settings', to: 'settings#update'
         end
 
-        render_success(data, "Dashboard loaded successfully", :ok)
-      end
+        # Registration route for admin
+        post 'register_admin', to: 'registrations#register_admin'
 
-      private
-
-      def build_dashboard_data
-        org_id = @organization.id
-        Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
-
-        # Store organization attributes
-        org_attrs = {
-          id: @organization.id,
-          name: @organization.name,
-          address: @organization.address,
-          email: @organization.email,
-          web_address: @organization.web_address,
-          subdomain: @organization.subdomain,
-          logo_url: @organization.logo_url,
-          phone_number: @organization.phone_number
-        }
-
-        tickets = Ticket.where(organization_id: org_id)
-        users = User.where(organization_id: org_id)
-        problems = Problem.where(organization_id: org_id)
-
-        # === Status Mapping ===
-        status_labels = {
-          0 => "open",
-          1 => "assigned",
-          2 => "escalated",
-          3 => "on_hold",
-          4 => "in_progress",
-          5 => "waiting_for_customer",
-          6 => "resolved",
-          7 => "closed"
-        }
-
-        status_counts_raw = tickets.group(:status).count
-        status_counts = status_labels.values.each_with_object({}) { |s, h| h[s] = 0 }
-        status_counts_raw.each do |status_int, count|
-          key = status_labels[status_int]
-          status_counts[key] = count if key
+        # Nested resources
+        resources :users, only: [:index, :show, :create, :update, :destroy] do
+          resources :tickets, only: [:index]
+          resources :problems, only: [:index]
         end
 
-        total_tickets = status_counts.values.sum
-        resolved_closed = status_counts["resolved"] + status_counts["closed"]
-
-        # === Priority Mapping ===
-        priority_labels = { "0" => "Critical", "1" => "High", "2" => "Medium", "3" => "Low" }
-        priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_data = {}
-        priority_labels.each do |key, label|
-          priority_data[label] = priority_counts_raw[key].to_i
+        resources :teams, only: [:index, :show, :create, :update, :destroy] do
+          get 'users', on: :member
         end
 
-        # === SLA Metrics ===
-        breached_count = tickets.where(sla_breached: true).count
-
-        if Ticket.column_names.include?("breaching_sla")
-          breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count
-        else
-          breaching_soon_count = 0
-        end
-
-        # === Average Resolution Time ===
-        avg_seconds = tickets
-                        .where.not(resolved_at: nil)
-                        .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
-        avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
-
-        # === Top Assignees ===
-        top_assignees = tickets
-                          .joins('INNER JOIN users ON tickets.assignee_id = users.id')
-                          .where.not(assignee_id: nil)
-                          .group('users.id, users.name')
-                          .order('count_all DESC')
-                          .limit(5)
-                          .count
-                          .map { |(user_id, user_name), count| 
-                            { name: user_name || "Unknown", count: count } 
-                          }
-
-        # === Recent Tickets with enhanced logging ===
-        recent_tickets = tickets
-                          .includes(:assignee, :user)
-                          .order(created_at: :desc)
-                          .limit(10)
-                          .map do |t|
-          begin
-            # Log critical information for debugging
-            Rails.logger.debug "Processing ticket #{t.id}:"
-            Rails.logger.debug "  Assignee type: #{t.assignee.class.name}, value: #{t.assignee.inspect}"
-            Rails.logger.debug "  User type: #{t.user.class.name}, value: #{t.user.inspect}"
-
-            {
-              id: t.id,
-              title: t.title,
-              status: status_labels[t.status] || "Unknown",
-              priority: priority_labels[t.priority.to_s] || "Unknown",
-              created_at: t.created_at.iso8601,
-              assignee: safe_user_name(t.assignee, "Unassigned"),
-              reporter: safe_user_name(t.user, "Unknown"),
-              sla_breached: t.sla_breached,
-              breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
-            }
-          rescue => e
-            Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
-            Rails.logger.error e.backtrace.take(5).join("\n")
-            nil
+        resources :tickets, only: [:index, :show, :create, :update, :destroy] do
+          collection do
+            get :export  
           end
-        end.compact
-
-        # === Final Response ===
-        result = {
-          organization: org_attrs,
-          stats: {
-            total_tickets: total_tickets,
-            open_tickets: status_counts["open"],
-            assigned_tickets: status_counts["assigned"],
-            escalated_tickets: status_counts["escalated"],
-            resolved_tickets: status_counts["resolved"],
-            closed_tickets: status_counts["closed"],
-            total_problems: problems.count,
-            total_members: users.count,
-            high_priority_tickets: priority_data["Critical"] + priority_data["High"],
-            unresolved_tickets: total_tickets - resolved_closed,
-            resolution_rate_percent: total_tickets > 0 ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
-          },
-          charts: {
-            tickets_by_status: status_counts,
-            tickets_by_priority: priority_data,
-            top_assignees: top_assignees
-          },
-          sla: {
-            breached: breached_count,
-            breaching_soon: breaching_soon_count,
-            avg_resolution_hours: avg_resolution_hours,
-            on_time_rate_percent: total_tickets > 0 ? (((total_tickets - breached_count).to_f / total_tickets) * 100).round(1) : 100
-          },
-          recent_tickets: recent_tickets,
-          meta: {
-            fetched_at: Time.current.iso8601,
-            timezone: Time.current.zone.name,
-            tenant: org_attrs[:subdomain]
-          }
-        }
-
-        Rails.logger.info "✅ Dashboard data built successfully"
-        result
-      rescue => e
-        Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
-        Rails.logger.error e.backtrace.take(20).join("\n  ")
-        raise
-      end
-
-      def safe_user_name(object, default)
-        Rails.logger.debug "safe_user_name called with: #{object.inspect} (#{object.class})"
         
-        return default if object.nil?
-        return object if object.is_a?(String)
-        
-        if object.respond_to?(:name)
-          name = object.name
-          if name.is_a?(String)
-            return name
-          else
-            Rails.logger.warn "Object has name method but returns #{name.class}: #{object.inspect}"
-            return name.to_s
-          end
+          post :assign_to_user, on: :member
+          post :escalate_to_problem, on: :member
+          post :resolve, on: :member
+        end        
+
+        resources :problems, only: [:index, :show, :create, :update, :destroy]
+
+        resources :notifications, only: [:index, :show, :create, :update, :destroy] do
+          patch :mark_as_read, on: :member
         end
-        
-        object.to_s
-      rescue => e
-        Rails.logger.error "Error extracting name from #{object.inspect}: #{e.message}"
-        default
       end
     end
   end
+
+  # ✅ Root route returns simple confirmation for base GET /
+  root to: proc {
+    [200, { 'Content-Type' => 'application/json' }, [{ message: 'API is live' }.to_json]]
+  }
+
+  # ✅ Catch-all fallback route for frontend
+  get '*path', to: proc {
+    [404, { 'Content-Type' => 'application/json' }, [{ error: 'Not found' }.to_json]]
+  }, constraints: ->(req) { !req.path.start_with?('/api', '/cable', '/rails') }
 end
