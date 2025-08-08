@@ -191,7 +191,7 @@ module Api
         Rails.logger.info "✅ Dashboard data built successfully"
         result
       rescue => e
-        Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
+        Rails.logger.error "❌ Error in build_dashboard data: #{e.class}: #{e.message}"
         Rails.logger.error e.backtrace.take(20).join("\n  ")
         raise
       end
