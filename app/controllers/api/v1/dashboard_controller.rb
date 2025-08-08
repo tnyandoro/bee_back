@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v15:org_#{@organization.id}"
+        cache_key = "dashboard:v17:org_#{@organization.id}"
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -85,7 +85,7 @@ module Api
                         .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
         avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
 
-        # === FIXED: Top Assignees Query ===
+        # === Top Assignees ===
         top_assignees = tickets
                           .joins('INNER JOIN users ON tickets.assignee_id = users.id')
                           .where.not(assignee_id: nil)
@@ -97,27 +97,47 @@ module Api
                             { name: user_name || "Unknown", count: count } 
                           }
 
-        # === Recent Tickets ===
+        # === Recent Tickets with safer data access ===
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
                           .limit(10)
                           .map do |t|
-          {
-            id: t.id,
-            title: t.title,
-            status: status_labels[t.status] || "Unknown",
-            priority: priority_labels[t.priority.to_s] || "Unknown",
-            created_at: t.created_at.iso8601,
-            assignee: t.assignee.is_a?(String) ? t.assignee : safe_user_name(t.assignee, "Unassigned"),
-            reporter: t.user.is_a?(String) ? t.user : safe_user_name(t.user, "Unknown"),
-            sla_breached: t.sla_breached,
-            breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
-          }
-        rescue => e
-          Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
-          Rails.logger.error e.backtrace.take(5).join("\n")
-          nil
+          begin
+            # Get assignee name safely
+            assignee_name = if t.assignee.nil?
+                              "Unassigned"
+                            elsif t.assignee.respond_to?(:name)
+                              t.assignee.name.to_s
+                            else
+                              t.assignee.to_s
+                            end
+
+            # Get reporter name safely
+            reporter_name = if t.user.nil?
+                              "Unknown"
+                            elsif t.user.respond_to?(:name)
+                              t.user.name.to_s
+                            else
+                              t.user.to_s
+                            end
+
+            {
+              id: t.id,
+              title: t.title,
+              status: status_labels[t.status] || "Unknown",
+              priority: priority_labels[t.priority.to_s] || "Unknown",
+              created_at: t.created_at.iso8601,
+              assignee: assignee_name,
+              reporter: reporter_name,
+              sla_breached: t.sla_breached,
+              breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
+            }
+          rescue => e
+            Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
+            Rails.logger.error e.backtrace.take(5).join("\n")
+            nil
+          end
         end.compact
 
         # === Final Response ===
@@ -161,16 +181,6 @@ module Api
         Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
         Rails.logger.error e.backtrace.take(20).join("\n  ")
         raise
-      end
-
-      def safe_user_name(object, default)
-        return object if object.is_a?(String)
-        return default if object.nil?
-        return object.name if object.respond_to?(:name)
-        object.to_s
-      rescue => e
-        Rails.logger.error "Error extracting name from #{object.inspect}: #{e.message}"
-        default
       end
     end
   end

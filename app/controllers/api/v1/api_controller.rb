@@ -26,8 +26,15 @@ module Api
       def current_user
         @current_user ||= begin
           token = request.headers['Authorization']&.split(' ')&.last
-          Rails.logger.debug "Authenticating with token: #{token&.first(8)}..." if token
-          User.find_by(auth_token: token)
+          return nil unless token
+          
+          Rails.logger.debug "Authenticating with token: #{token.first(8)}..."
+          
+          # Find user by token AND organization
+          User.find_by(
+            auth_token: token,
+            organization_id: @organization&.id
+          )
         end
       end
 
