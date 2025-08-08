@@ -30,8 +30,7 @@ module Api
           name: @organization.name,
           address: @organization.address,
           email: @organization.email,
- 
-         web_address: @organization.web_address,
+          web_address: @organization.web_address,
           subdomain: @organization.subdomain,
           logo_url: @organization.logo_url,
           phone_number: @organization.phone_number
@@ -191,7 +190,7 @@ module Api
         Rails.logger.info "✅ Dashboard data built successfully"
         result
       rescue => e
-        Rails.logger.error "❌ Error in build_dashboard data: #{e.class}: #{e.message}"
+        Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
         Rails.logger.error e.backtrace.take(20).join("\n  ")
         raise
       end
