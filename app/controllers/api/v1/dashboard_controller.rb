@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v14:org_#{@organization.id}"
+        cache_key = "dashboard:v15:org_#{@organization.id}"
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -23,6 +23,18 @@ module Api
       def build_dashboard_data
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
+
+        # Store organization attributes in local variables to prevent accidental override
+        org_attrs = {
+          id: @organization.id,
+          name: @organization.name,
+          address: @organization.address,
+          email: @organization.email,
+          web_address: @organization.web_address,
+          subdomain: @organization.subdomain,
+          logo_url: @organization.logo_url,
+          phone_number: @organization.phone_number
+        }
 
         tickets = Ticket.where(organization_id: org_id)
         users = User.where(organization_id: org_id)
@@ -92,37 +104,26 @@ module Api
                           .order(created_at: :desc)
                           .limit(10)
                           .map do |t|
-          begin
-            {
-              id: t.id,
-              title: t.title,
-              status: status_labels[t.status] || "Unknown",
-              priority: priority_labels[t.priority.to_s] || "Unknown",
-              created_at: t.created_at.iso8601,
-              assignee: safe_user_name(t.assignee, "Unassigned"),
-              reporter: safe_user_name(t.user, "Unknown"),
-              sla_breached: t.sla_breached,
-              breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
-            }
-          rescue => e
-            Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
-            Rails.logger.error e.backtrace.take(5).join("\n")
-            nil
-          end
+          {
+            id: t.id,
+            title: t.title,
+            status: status_labels[t.status] || "Unknown",
+            priority: priority_labels[t.priority.to_s] || "Unknown",
+            created_at: t.created_at.iso8601,
+            assignee: safe_user_name(t.assignee, "Unassigned"),
+            reporter: safe_user_name(t.user, "Unknown"),
+            sla_breached: t.sla_breached,
+            breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
+          }
+        rescue => e
+          Rails.logger.error "Error processing ticket #{t.id}: #{e.message}"
+          Rails.logger.error e.backtrace.take(5).join("\n")
+          nil
         end.compact
 
         # === Final Response ===
         result = {
-          organization: {
-            id: @organization.id,
-            name: @organization.name,
-            address: @organization.address,
-            email: @organization.email,
-            web_address: @organization.web_address,
-            subdomain: @organization.subdomain,
-            logo_url: @organization.logo_url,
-            phone_number: @organization.phone_number
-          },
+          organization: org_attrs,
           stats: {
             total_tickets: total_tickets,
             open_tickets: status_counts["open"],
@@ -151,7 +152,7 @@ module Api
           meta: {
             fetched_at: Time.current.iso8601,
             timezone: Time.current.zone.name,
-            tenant: @organization.subdomain
+            tenant: org_attrs[:subdomain]
           }
         }
 
@@ -164,20 +165,20 @@ module Api
       end
 
       # Safer method to extract user names with additional type checking
-      def safe_user_name(user, default)
-        return default if user.nil?
+      def safe_user_name(object, default)
+        # If it's already a string, return it directly
+        return object if object.is_a?(String)
         
-        if user.is_a?(User)
-          user.name
-        elsif user.respond_to?(:name)
-          user.name
-        elsif user.respond_to?(:to_s)
-          user.to_s
-        else
-          default
-        end
+        # If it's nil, return the default
+        return default if object.nil?
+        
+        # If it's a User object or responds to name, return the name
+        return object.name if object.respond_to?(:name)
+        
+        # If it's something else, try to convert to string
+        object.to_s
       rescue => e
-        Rails.logger.error "Error extracting name from #{user.inspect}: #{e.message}"
+        Rails.logger.error "Error extracting name from #{object.inspect}: #{e.message}"
         default
       end
     end
