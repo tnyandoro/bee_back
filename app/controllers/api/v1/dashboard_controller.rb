@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v18:org_#{@organization.id}" # Updated cache key to force refresh
+        cache_key = "dashboard:v19:org_#{@organization.id}" # Updated cache key
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -21,6 +21,7 @@ module Api
       private
 
       def build_dashboard_data
+        Rails.logger.info "Using DashboardController version v19 with String handling"
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
