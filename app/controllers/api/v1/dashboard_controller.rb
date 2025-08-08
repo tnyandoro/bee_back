@@ -30,7 +30,8 @@ module Api
           name: @organization.name,
           address: @organization.address,
           email: @organization.email,
-          web_address: @organization.web_address,
+ 
+         web_address: @organization.web_address,
           subdomain: @organization.subdomain,
           logo_url: @organization.logo_url,
           phone_number: @organization.phone_number
