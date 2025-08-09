@@ -15,7 +15,6 @@ class Ticket < ApplicationRecord
   belongs_to :assignee, class_name: "User", optional: true
   belongs_to :team, optional: true
   belongs_to :sla_policy, optional: true
-  belongs_to :user, class_name: "User", foreign_key: "requester_id", optional: true
 
   has_one_attached :attachment
 
@@ -56,7 +55,7 @@ class Ticket < ApplicationRecord
   after_commit :update_sla_dates, on: [:create, :update]
 
   def create?
-    user.can_create_ticket?
+    requester.can_create_ticket?
   end
 
   def resolve(resolved_by:)

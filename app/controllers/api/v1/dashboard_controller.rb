@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v21:org_#{@organization.id}" # Updated cache key
+        cache_key = "dashboard:v22:org_#{@organization.id}" # Updated cache key
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -21,7 +21,7 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v21 with enhanced error handling"
+        Rails.logger.info "Using DashboardController version v22 with requester instead of user"
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
@@ -99,9 +99,9 @@ module Api
 
         # === Recent Tickets with robust data handling ===
         Rails.logger.info "Processing recent tickets for org_id=#{org_id}"
-        Rails.logger.debug "Fetching tickets with includes(:assignee, :user)"
+        Rails.logger.debug "Fetching tickets with includes(:assignee, :requester)"
         recent_tickets = tickets
-                          .includes(:assignee, :user)
+                          .includes(:assignee, :requester)
                           .order(created_at: :desc)
                           .limit(10)
                           .map do |t|
@@ -109,7 +109,7 @@ module Api
             Rails.logger.debug "Starting processing for ticket #{t.id}"
             Rails.logger.debug "Ticket #{t.id} raw attributes: #{t.attributes.inspect}"
             Rails.logger.debug "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}"
-            Rails.logger.debug "Ticket #{t.id}: assignee=#{t.assignee.inspect}, user=#{t.user.inspect}"
+            Rails.logger.debug "Ticket #{t.id}: assignee=#{t.assignee.inspect}, requester=#{t.requester.inspect}"
 
             # Get assignee name safely
             Rails.logger.debug "Processing assignee for ticket #{t.id}"
@@ -127,19 +127,19 @@ module Api
                               "Unknown"
                             end
 
-            # Get reporter name safely
-            Rails.logger.debug "Processing user for ticket #{t.id}"
-            reporter_name = if t.requester_id && !t.user
-                              Rails.logger.warn "Requester_id #{t.requester_id} present but user is nil for ticket #{t.id}"
+            # Get requester name safely
+            Rails.logger.debug "Processing requester for ticket #{t.id}"
+            requester_name = if t.requester_id && !t.requester
+                              Rails.logger.warn "Requester_id #{t.requester_id} present but requester is nil for ticket #{t.id}"
                               "Unknown"
-                            elsif t.user.is_a?(String)
-                              Rails.logger.warn "Unexpected string user for ticket #{t.id}: #{t.user.inspect}"
-                              t.user
-                            elsif t.user.respond_to?(:name)
-                              Rails.logger.debug "User is User object for ticket #{t.id}: #{t.user.name}"
-                              t.user.name.to_s
+                            elsif t.requester.is_a?(String)
+                              Rails.logger.warn "Unexpected string requester for ticket #{t.id}: #{t.requester.inspect}"
+                              t.requester
+                            elsif t.requester.respond_to?(:name)
+                              Rails.logger.debug "Requester is User object for ticket #{t.id}: #{t.requester.name}"
+                              t.requester.name.to_s
                             else
-                              Rails.logger.warn "Unexpected user type for ticket #{t.id}: #{t.user&.class || 'nil'}"
+                              Rails.logger.warn "Unexpected requester type for ticket #{t.id}: #{t.requester&.class || 'nil'}"
                               "Unknown"
                             end
 
@@ -151,7 +151,7 @@ module Api
               priority: priority_labels[t.priority.to_s] || "Unknown",
               created_at: t.created_at&.iso8601 || Time.current.iso8601,
               assignee: assignee_name,
-              reporter: reporter_name,
+              reporter: requester_name,
               sla_breached: t.sla_breached || false,
               breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
             }
