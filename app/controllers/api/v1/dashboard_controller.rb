@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v22:org_#{@organization.id}" # Updated cache key
+        cache_key = "dashboard:v25:org_#{@organization.id}" # Updated cache key
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -21,7 +21,7 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v22 with requester instead of user"
+        Rails.logger.info "Using DashboardController version v25 with enhanced type safety"
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
@@ -97,7 +97,7 @@ module Api
                             { name: user_name || "Unknown", count: count } 
                           }
 
-        # === Recent Tickets with robust data handling ===
+        # === Recent Tickets with robust type safety ===
         Rails.logger.info "Processing recent tickets for org_id=#{org_id}"
         Rails.logger.debug "Fetching tickets with includes(:assignee, :requester)"
         recent_tickets = tickets
@@ -106,42 +106,44 @@ module Api
                           .limit(10)
                           .map do |t|
           begin
-            Rails.logger.debug "Starting processing for ticket #{t.id}"
-            Rails.logger.debug "Ticket #{t.id} raw attributes: #{t.attributes.inspect}"
-            Rails.logger.debug "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}"
-            Rails.logger.debug "Ticket #{t.id}: assignee=#{t.assignee.inspect}, requester=#{t.requester.inspect}"
+            Rails.logger.info "Processing ticket #{t.id}: assignee_type=#{t.assignee&.class || 'nil'}, requester_type=#{t.requester&.class || 'nil'}"
+            Rails.logger.info "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}"
+            Rails.logger.info "Ticket #{t.id}: assignee_value=#{t.assignee.inspect}, requester_value=#{t.requester.inspect}"
+            Rails.logger.info "Ticket #{t.id}: caller_name=#{t.caller_name.inspect}, caller_email=#{t.caller_email.inspect}"
 
             # Get assignee name safely
             Rails.logger.debug "Processing assignee for ticket #{t.id}"
-            assignee_name = if t.assignee_id && !t.assignee
+            assignee_name = case
+                            when t.assignee_id && !t.assignee
                               Rails.logger.warn "Assignee_id #{t.assignee_id} present but assignee is nil for ticket #{t.id}"
                               "Unassigned"
-                            elsif t.assignee.is_a?(String)
+                            when t.assignee.is_a?(String)
                               Rails.logger.warn "Unexpected string assignee for ticket #{t.id}: #{t.assignee.inspect}"
                               t.assignee
-                            elsif t.assignee.respond_to?(:name)
-                              Rails.logger.debug "Assignee is User object for ticket #{t.id}: #{t.assignee.name}"
+                            when t.assignee.is_a?(User) && t.assignee.respond_to?(:name)
+                              Rails.logger.debug "Assignee is User object for ticket #{t.id}"
                               t.assignee.name.to_s
                             else
                               Rails.logger.warn "Unexpected assignee type for ticket #{t.id}: #{t.assignee&.class || 'nil'}"
-                              "Unknown"
+                              t.caller_name || t.caller_email || "Unknown"
                             end
 
             # Get requester name safely
             Rails.logger.debug "Processing requester for ticket #{t.id}"
-            requester_name = if t.requester_id && !t.requester
-                              Rails.logger.warn "Requester_id #{t.requester_id} present but requester is nil for ticket #{t.id}"
-                              "Unknown"
-                            elsif t.requester.is_a?(String)
-                              Rails.logger.warn "Unexpected string requester for ticket #{t.id}: #{t.requester.inspect}"
-                              t.requester
-                            elsif t.requester.respond_to?(:name)
-                              Rails.logger.debug "Requester is User object for ticket #{t.id}: #{t.requester.name}"
-                              t.requester.name.to_s
-                            else
-                              Rails.logger.warn "Unexpected requester type for ticket #{t.id}: #{t.requester&.class || 'nil'}"
-                              "Unknown"
-                            end
+            requester_name = case
+                             when t.requester_id && !t.requester
+                               Rails.logger.warn "Requester_id #{t.requester_id} present but requester is nil for ticket #{t.id}"
+                               "Unknown"
+                             when t.requester.is_a?(String)
+                               Rails.logger.warn "Unexpected string requester for ticket #{t.id}: #{t.requester.inspect}"
+                               t.requester
+                             when t.requester.is_a?(User) && t.requester.respond_to?(:name)
+                               Rails.logger.debug "Requester is User object for ticket #{t.id}"
+                               t.requester.name.to_s
+                             else
+                               Rails.logger.warn "Unexpected requester type for ticket #{t.id}: #{t.requester&.class || 'nil'}"
+                               t.caller_name || t.caller_email || "Unknown"
+                             end
 
             Rails.logger.debug "Building ticket data for ticket #{t.id}"
             {
