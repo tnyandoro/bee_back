@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v20:org_#{@organization.id}" # Updated cache key
+        cache_key = "dashboard:v21:org_#{@organization.id}" # Updated cache key
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         rescue => e
@@ -21,7 +21,7 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v20 with enhanced String handling"
+        Rails.logger.info "Using DashboardController version v21 with enhanced error handling"
         org_id = @organization.id
         Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
@@ -99,6 +99,7 @@ module Api
 
         # === Recent Tickets with robust data handling ===
         Rails.logger.info "Processing recent tickets for org_id=#{org_id}"
+        Rails.logger.debug "Fetching tickets with includes(:assignee, :user)"
         recent_tickets = tickets
                           .includes(:assignee, :user)
                           .order(created_at: :desc)
@@ -106,34 +107,40 @@ module Api
                           .map do |t|
           begin
             Rails.logger.debug "Starting processing for ticket #{t.id}"
-            Rails.logger.debug "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}, assignee=#{t.assignee.inspect}, user=#{t.user.inspect}"
+            Rails.logger.debug "Ticket #{t.id} raw attributes: #{t.attributes.inspect}"
+            Rails.logger.debug "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}"
+            Rails.logger.debug "Ticket #{t.id}: assignee=#{t.assignee.inspect}, user=#{t.user.inspect}"
 
             # Get assignee name safely
             Rails.logger.debug "Processing assignee for ticket #{t.id}"
-            assignee_name = if t.assignee.nil?
+            assignee_name = if t.assignee_id && !t.assignee
+                              Rails.logger.warn "Assignee_id #{t.assignee_id} present but assignee is nil for ticket #{t.id}"
                               "Unassigned"
                             elsif t.assignee.is_a?(String)
                               Rails.logger.warn "Unexpected string assignee for ticket #{t.id}: #{t.assignee.inspect}"
                               t.assignee
                             elsif t.assignee.respond_to?(:name)
+                              Rails.logger.debug "Assignee is User object for ticket #{t.id}: #{t.assignee.name}"
                               t.assignee.name.to_s
                             else
-                              Rails.logger.warn "Unexpected assignee type for ticket #{t.id}: #{t.assignee.class}"
-                              t.assignee.to_s
+                              Rails.logger.warn "Unexpected assignee type for ticket #{t.id}: #{t.assignee&.class || 'nil'}"
+                              "Unknown"
                             end
 
             # Get reporter name safely
             Rails.logger.debug "Processing user for ticket #{t.id}"
-            reporter_name = if t.user.nil?
+            reporter_name = if t.requester_id && !t.user
+                              Rails.logger.warn "Requester_id #{t.requester_id} present but user is nil for ticket #{t.id}"
                               "Unknown"
                             elsif t.user.is_a?(String)
                               Rails.logger.warn "Unexpected string user for ticket #{t.id}: #{t.user.inspect}"
                               t.user
                             elsif t.user.respond_to?(:name)
+                              Rails.logger.debug "User is User object for ticket #{t.id}: #{t.user.name}"
                               t.user.name.to_s
                             else
-                              Rails.logger.warn "Unexpected user type for ticket #{t.id}: #{t.user.class}"
-                              t.user.to_s
+                              Rails.logger.warn "Unexpected user type for ticket #{t.id}: #{t.user&.class || 'nil'}"
+                              "Unknown"
                             end
 
             Rails.logger.debug "Building ticket data for ticket #{t.id}"
