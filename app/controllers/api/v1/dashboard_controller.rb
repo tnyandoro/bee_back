@@ -40,7 +40,7 @@ module Api
         recent_tickets = fetch_recent_tickets(tickets)
 
         total_tickets = status_counts.values.sum
-        resolved_closed = status_counts["resolved"] + status_counts["closed"]
+        resolved_closed = status_counts["resolved"].to_i + status_counts["closed"].to_i
 
         {
           organization: org_attrs,
@@ -53,7 +53,7 @@ module Api
             closed_tickets: status_counts["closed"],
             total_problems: problems_count,
             total_members: users_count,
-            high_priority_tickets: (priority_data["p1"] || 0) + (priority_data["p2"] || 0),
+            high_priority_tickets: priority_data["p1"].to_i + priority_data["p2"].to_i,
             unresolved_tickets: total_tickets - resolved_closed,
             resolution_rate_percent: total_tickets.positive? ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
           },
@@ -112,9 +112,7 @@ module Api
       def compute_priority_counts(tickets)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
         raw_counts = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_labels.each_with_object({}) do |(num_key, label), counts|
-          counts[label] = raw_counts[num_key].to_i
-        end
+        priority_labels.transform_values { |label| raw_counts[label].to_i rescue 0 }
       end
 
       def compute_sla_metrics(tickets)
@@ -129,7 +127,7 @@ module Api
 
       def compute_avg_resolution_hours(tickets)
         avg_seconds = tickets.where.not(resolved_at: nil)
-                             .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
+                             .average("EXTRACT(EPOCH FROM (resolved_at - tickets.created_at))")
         avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
       end
 
@@ -140,11 +138,11 @@ module Api
                .order("count_all DESC")
                .limit(5)
                .count
-               .map { |(_id, name), count| { name: name || "Unknown", count: count } }
+               .map { |(id, name), count| { name: name || "Unknown", count: count } }
       end
 
       def fetch_recent_tickets(tickets)
-        tickets.order(created_at: :desc)
+        tickets.order("created_at DESC")
                .limit(10)
                .map do |t|
           {
