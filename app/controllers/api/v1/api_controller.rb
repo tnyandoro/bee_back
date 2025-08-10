@@ -11,7 +11,8 @@ module Api
       rescue_from StandardError, with: :render_internal_server_error
 
       # --- Filters ---
-      before_action :verify_admin, only: %i[update destroy]  # if you have admin-only actions
+      # before_action :verify_admin, only: %i[update destroy]  # if you have admin-only actions
+      before_action :verify_admin, only: %i[update destroy], if: -> { self.respond_to?(:update) && self.respond_to?(:destroy) }
       before_action :set_organization_from_subdomain
       
       before_action :authenticate_user!, except: [:create]
