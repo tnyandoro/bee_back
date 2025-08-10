@@ -1,3 +1,4 @@
+# app/controllers/api/v1/dashboard_controller.rb
 module Api
   module V1
     class DashboardController < Api::V1::ApiController
@@ -6,42 +7,92 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v25:org_#{@organization.id}" # Updated cache key
+        cache_key = "dashboard:v26:org_#{@organization.id}" # bump version when structure changes
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
-        rescue => e
-          Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
-          Rails.logger.error e.backtrace.take(20).join("\n  ")
-          raise
         end
 
         render_success(data, "Dashboard loaded successfully", :ok)
+      rescue => e
+        Rails.logger.error "❌ Dashboard error: #{e.class} - #{e.message}"
+        Rails.logger.error e.backtrace.take(10).join("\n  ")
+        render_error("An unexpected error occurred", status: :internal_server_error)
       end
 
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v25 with enhanced type safety"
+        Rails.logger.info "Using DashboardController version v26 (optimized queries & caching)"
         org_id = @organization.id
-        Rails.logger.info "📊 Building dashboard data for org_id=#{org_id}"
 
-        # Store organization attributes
-        org_attrs = {
-          id: @organization.id,
-          name: @organization.name,
-          address: @organization.address,
-          email: @organization.email,
-          web_address: @organization.web_address,
-          subdomain: @organization.subdomain,
-          logo_url: @organization.logo_url,
-          phone_number: @organization.phone_number
+        org_attrs = extract_org_attributes(@organization)
+
+        # === Bulk preload queries to reduce N+1 ===
+        tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
+        users_count = User.where(organization_id: org_id).count
+        problems_count = Problem.where(organization_id: org_id).count
+
+        status_counts = compute_status_counts(tickets)
+        priority_data = compute_priority_counts(tickets)
+        sla_data = compute_sla_metrics(tickets)
+        avg_resolution_hours = compute_avg_resolution_hours(tickets)
+        top_assignees = compute_top_assignees(tickets)
+        recent_tickets = fetch_recent_tickets(tickets)
+
+        total_tickets = status_counts.values.sum
+        resolved_closed = status_counts["resolved"] + status_counts["closed"]
+
+        {
+          organization: org_attrs,
+          stats: {
+            total_tickets: total_tickets,
+            open_tickets: status_counts["open"],
+            assigned_tickets: status_counts["assigned"],
+            escalated_tickets: status_counts["escalated"],
+            resolved_tickets: status_counts["resolved"],
+            closed_tickets: status_counts["closed"],
+            total_problems: problems_count,
+            total_members: users_count,
+            high_priority_tickets: priority_data["p1"] + priority_data["p2"],
+            unresolved_tickets: total_tickets - resolved_closed,
+            resolution_rate_percent: total_tickets.positive? ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
+          },
+          charts: {
+            tickets_by_status: status_counts,
+            tickets_by_priority: priority_data,
+            top_assignees: top_assignees
+          },
+          sla: sla_data.merge(
+            avg_resolution_hours: avg_resolution_hours,
+            on_time_rate_percent: total_tickets.positive? ? (((total_tickets - sla_data[:breached]).to_f / total_tickets) * 100).round(1) : 100
+          ),
+          recent_tickets: recent_tickets,
+          meta: {
+            fetched_at: Time.current.iso8601,
+            timezone: Time.zone.name,
+            tenant: org_attrs[:subdomain]
+          }
         }
+      end
 
-        tickets = Ticket.where(organization_id: org_id)
-        users = User.where(organization_id: org_id)
-        problems = Problem.where(organization_id: org_id)
+      # ======================
+      # Extracted helper methods
+      # ======================
 
-        # === Status Mapping ===
+      def extract_org_attributes(org)
+        {
+          id: org.id,
+          name: org.name,
+          address: org.address,
+          email: org.email,
+          web_address: org.web_address,
+          subdomain: org.subdomain,
+          logo_url: org.logo_url,
+          phone_number: org.phone_number
+        }
+      end
+
+      def compute_status_counts(tickets)
         status_labels = {
           0 => "open",
           1 => "assigned",
@@ -51,162 +102,85 @@ module Api
           5 => "resolved",
           6 => "pending"
         }
-
-        status_counts_raw = tickets.group(:status).count
-        status_counts = status_labels.values.each_with_object({}) { |s, h| h[s] = 0 }
-        status_counts_raw.each do |status_int, count|
-          key = status_labels[status_int]
-          status_counts[key] = count if key
+        counts = status_labels.values.index_with { 0 }
+        tickets.group(:status).count.each do |status, count|
+          counts[status_labels[status]] = count if status_labels.key?(status)
         end
+        counts
+      end
 
-        total_tickets = status_counts.values.sum
-        resolved_closed = status_counts["resolved"] + status_counts["closed"]
-
-        # === Priority Mapping ===
+      def compute_priority_counts(tickets)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
-        priority_counts_raw = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_data = {}
-        priority_labels.each do |key, label|
-          priority_data[label] = priority_counts_raw[key].to_i
-        end
+        raw_counts = tickets.group(:priority).count.transform_keys(&:to_s)
+        priority_labels.transform_values { |label| raw_counts.key(label) ? raw_counts[label].to_i : raw_counts[label].to_i rescue 0 }
+      end
 
-        # === SLA Metrics ===
+      def compute_sla_metrics(tickets)
         breached_count = tickets.where(sla_breached: true).count
+        breaching_soon_count = if Ticket.column_names.include?("breaching_sla")
+                                 tickets.where(breaching_sla: true, status: [0, 1, 2]).count
+                               else
+                                 0
+                               end
+        { breached: breached_count, breaching_soon: breaching_soon_count }
+      end
 
-        if Ticket.column_names.include?("breaching_sla")
-          breaching_soon_count = tickets.where(breaching_sla: true).where(status: [0, 1, 2]).count
-        else
-          breaching_soon_count = 0
-        end
+      def compute_avg_resolution_hours(tickets)
+        avg_seconds = tickets.where.not(resolved_at: nil)
+                             .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
+        avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
+      end
 
-        # === Average Resolution Time ===
-        avg_seconds = tickets
-                        .where.not(resolved_at: nil)
-                        .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
-        avg_resolution_hours = avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
+      def compute_top_assignees(tickets)
+        tickets.joins("INNER JOIN users ON tickets.assignee_id = users.id")
+               .where.not(assignee_id: nil)
+               .group("users.id, users.name")
+               .order("count_all DESC")
+               .limit(5)
+               .count
+               .map { |(id, name), count| { name: name || "Unknown", count: count } }
+      end
 
-        # === Top Assignees ===
-        top_assignees = tickets
-                          .joins('INNER JOIN users ON tickets.assignee_id = users.id')
-                          .where.not(assignee_id: nil)
-                          .group('users.id, users.name')
-                          .order('count_all DESC')
-                          .limit(5)
-                          .count
-                          .map { |(user_id, user_name), count| 
-                            { name: user_name || "Unknown", count: count } 
-                          }
-
-        # === Recent Tickets with robust type safety ===
-        Rails.logger.info "Processing recent tickets for org_id=#{org_id}"
-        Rails.logger.debug "Fetching tickets with includes(:assignee, :requester)"
-        recent_tickets = tickets
-                          .includes(:assignee, :requester)
-                          .order(created_at: :desc)
-                          .limit(10)
-                          .map do |t|
-          begin
-            Rails.logger.info "Processing ticket #{t.id}: assignee_type=#{t.assignee&.class || 'nil'}, requester_type=#{t.requester&.class || 'nil'}"
-            Rails.logger.info "Ticket #{t.id}: assignee_id=#{t.assignee_id.inspect}, requester_id=#{t.requester_id.inspect}"
-            Rails.logger.info "Ticket #{t.id}: assignee_value=#{t.assignee.inspect}, requester_value=#{t.requester.inspect}"
-            Rails.logger.info "Ticket #{t.id}: caller_name=#{t.caller_name.inspect}, caller_email=#{t.caller_email.inspect}"
-
-            # Get assignee name safely
-            Rails.logger.debug "Processing assignee for ticket #{t.id}"
-            assignee_name = case
-                            when t.assignee_id && !t.assignee
-                              Rails.logger.warn "Assignee_id #{t.assignee_id} present but assignee is nil for ticket #{t.id}"
-                              "Unassigned"
-                            when t.assignee.is_a?(String)
-                              Rails.logger.warn "Unexpected string assignee for ticket #{t.id}: #{t.assignee.inspect}"
-                              t.assignee
-                            when t.assignee.is_a?(User) && t.assignee.respond_to?(:name)
-                              Rails.logger.debug "Assignee is User object for ticket #{t.id}"
-                              t.assignee.name.to_s
-                            else
-                              Rails.logger.warn "Unexpected assignee type for ticket #{t.id}: #{t.assignee&.class || 'nil'}"
-                              t.caller_name || t.caller_email || "Unknown"
-                            end
-
-            # Get requester name safely
-            Rails.logger.debug "Processing requester for ticket #{t.id}"
-            requester_name = case
-                             when t.requester_id && !t.requester
-                               Rails.logger.warn "Requester_id #{t.requester_id} present but requester is nil for ticket #{t.id}"
-                               "Unknown"
-                             when t.requester.is_a?(String)
-                               Rails.logger.warn "Unexpected string requester for ticket #{t.id}: #{t.requester.inspect}"
-                               t.requester
-                             when t.requester.is_a?(User) && t.requester.respond_to?(:name)
-                               Rails.logger.debug "Requester is User object for ticket #{t.id}"
-                               t.requester.name.to_s
-                             else
-                               Rails.logger.warn "Unexpected requester type for ticket #{t.id}: #{t.requester&.class || 'nil'}"
-                               t.caller_name || t.caller_email || "Unknown"
-                             end
-
-            Rails.logger.debug "Building ticket data for ticket #{t.id}"
-            {
-              id: t.id,
-              title: t.title || "Untitled",
-              status: status_labels[t.status] || "Unknown",
-              priority: priority_labels[t.priority.to_s] || "Unknown",
-              created_at: t.created_at&.iso8601 || Time.current.iso8601,
-              assignee: assignee_name,
-              reporter: requester_name,
-              sla_breached: t.sla_breached || false,
-              breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
-            }
-          rescue => e
-            Rails.logger.error "Error processing ticket #{t.id}: #{e.class}: #{e.message}"
-            Rails.logger.error e.backtrace.take(5).join("\n")
-            nil
-          end
-        end.compact
-
-        Rails.logger.info "Finished processing recent tickets: #{recent_tickets.count} tickets processed"
-
-        # === Final Response ===
-        result = {
-          organization: org_attrs,
-          stats: {
-            total_tickets: total_tickets,
-            open_tickets: status_counts["open"],
-            assigned_tickets: status_counts["assigned"],
-            escalated_tickets: status_counts["escalated"],
-            resolved_tickets: status_counts["resolved"],
-            closed_tickets: status_counts["closed"],
-            total_problems: problems.count,
-            total_members: users.count,
-            high_priority_tickets: priority_data["p1"] + priority_data["p2"],
-            unresolved_tickets: total_tickets - resolved_closed,
-            resolution_rate_percent: total_tickets > 0 ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
-          },
-          charts: {
-            tickets_by_status: status_counts,
-            tickets_by_priority: priority_data,
-            top_assignees: top_assignees
-          },
-          sla: {
-            breached: breached_count,
-            breaching_soon: breaching_soon_count,
-            avg_resolution_hours: avg_resolution_hours,
-            on_time_rate_percent: total_tickets > 0 ? (((total_tickets - breached_count).to_f / total_tickets) * 100).round(1) : 100
-          },
-          recent_tickets: recent_tickets,
-          meta: {
-            fetched_at: Time.current.iso8601,
-            timezone: Time.current.zone.name,
-            tenant: org_attrs[:subdomain]
+      def fetch_recent_tickets(tickets)
+        tickets.order(created_at: :desc)
+               .limit(10)
+               .map do |t|
+          {
+            id: t.id,
+            title: t.title || "Untitled",
+            status: compute_status_label(t.status),
+            priority: compute_priority_label(t.priority),
+            created_at: t.created_at&.iso8601 || Time.current.iso8601,
+            assignee: safe_user_name(t.assignee, t.caller_name, t.caller_email) || "Unassigned",
+            reporter: safe_user_name(t.requester, t.caller_name, t.caller_email) || "Unknown",
+            sla_breached: t.sla_breached || false,
+            breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
           }
-        }
+        end
+      end
 
-        Rails.logger.info "✅ Dashboard data built successfully"
-        result
-      rescue => e
-        Rails.logger.error "❌ Error in build_dashboard_data: #{e.class}: #{e.message}"
-        Rails.logger.error e.backtrace.take(20).join("\n  ")
-        raise
+      def compute_status_label(status_int)
+        {
+          0 => "open",
+          1 => "assigned",
+          2 => "escalated",
+          3 => "closed",
+          4 => "suspended",
+          5 => "resolved",
+          6 => "pending"
+        }[status_int] || "Unknown"
+      end
+
+      def compute_priority_label(priority_int)
+        { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }[priority_int.to_s] || "Unknown"
+      end
+
+      def safe_user_name(user, fallback_name, fallback_email)
+        case user
+        when User then user.name.to_s
+        when String then user
+        else fallback_name || fallback_email
+        end
       end
     end
   end
