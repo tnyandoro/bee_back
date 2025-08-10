@@ -139,9 +139,9 @@ module Api
       end
 
       def fetch_recent_tickets(tickets)
-        tickets.order(tickets: { created_at: :desc }) # aliasing table
-               .limit(10)
-               .map do |t|
+        tickets.order("tickets.created_at DESC")
+              .limit(10)
+              .map do |t|
           {
             id: t.id,
             title: t.title || "Untitled",
