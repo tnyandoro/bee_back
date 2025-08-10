@@ -7,10 +7,8 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v26:org_#{@organization.id}" # bump version when structure changes
-        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
-          build_dashboard_data
-        end
+        cache_key = "dashboard:v27:org_#{@organization.id}" # bumped to v27
+        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) { build_dashboard_data }
 
         render_success(data, "Dashboard loaded successfully", :ok)
       rescue => e
@@ -22,24 +20,23 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v26 (optimized queries & caching)"
+        Rails.logger.info "Using DashboardController version v27 (alias fix + optimized)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
 
-        # === Bulk preload queries to reduce N+1 ===
         tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
         users_count = User.where(organization_id: org_id).count
         problems_count = Problem.where(organization_id: org_id).count
 
-        status_counts = compute_status_counts(tickets)
-        priority_data = compute_priority_counts(tickets)
-        sla_data = compute_sla_metrics(tickets)
+        status_counts       = compute_status_counts(tickets)
+        priority_data       = compute_priority_counts(tickets)
+        sla_data            = compute_sla_metrics(tickets)
         avg_resolution_hours = compute_avg_resolution_hours(tickets)
-        top_assignees = compute_top_assignees(tickets)
-        recent_tickets = fetch_recent_tickets(tickets)
+        top_assignees       = compute_top_assignees(tickets)
+        recent_tickets      = fetch_recent_tickets(tickets)
 
-        total_tickets = status_counts.values.sum
+        total_tickets  = status_counts.values.sum
         resolved_closed = status_counts["resolved"] + status_counts["closed"]
 
         {
@@ -76,7 +73,7 @@ module Api
       end
 
       # ======================
-      # Extracted helper methods
+      # Helper methods
       # ======================
 
       def extract_org_attributes(org)
@@ -112,7 +109,7 @@ module Api
       def compute_priority_counts(tickets)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
         raw_counts = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_labels.transform_values { |label| raw_counts.key(label) ? raw_counts[label].to_i : raw_counts[label].to_i rescue 0 }
+        priority_labels.transform_values { |label| raw_counts.fetch(priority_labels.key(label), 0) }
       end
 
       def compute_sla_metrics(tickets)
@@ -127,7 +124,7 @@ module Api
 
       def compute_avg_resolution_hours(tickets)
         avg_seconds = tickets.where.not(resolved_at: nil)
-                             .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
+                             .average("EXTRACT(EPOCH FROM (tickets.resolved_at - tickets.created_at))") # table alias fix
         avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
       end
 
@@ -135,14 +132,14 @@ module Api
         tickets.joins("INNER JOIN users ON tickets.assignee_id = users.id")
                .where.not(assignee_id: nil)
                .group("users.id, users.name")
-               .order("count_all DESC")
+               .order(Arel.sql("COUNT(*) DESC"))
                .limit(5)
                .count
                .map { |(id, name), count| { name: name || "Unknown", count: count } }
       end
 
       def fetch_recent_tickets(tickets)
-        tickets.order(created_at: :desc)
+        tickets.order(tickets: { created_at: :desc }) # aliasing table
                .limit(10)
                .map do |t|
           {
