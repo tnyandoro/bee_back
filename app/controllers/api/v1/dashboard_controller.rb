@@ -7,8 +7,10 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v27:org_#{@organization.id}" # bumped to v27
-        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) { build_dashboard_data }
+        cache_key = "dashboard:v27:org_#{@organization.id}" # bump version when structure changes
+        data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
+          build_dashboard_data
+        end
 
         render_success(data, "Dashboard loaded successfully", :ok)
       rescue => e
@@ -25,18 +27,19 @@ module Api
 
         org_attrs = extract_org_attributes(@organization)
 
+        # === Bulk preload queries to reduce N+1 ===
         tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
         users_count = User.where(organization_id: org_id).count
         problems_count = Problem.where(organization_id: org_id).count
 
-        status_counts       = compute_status_counts(tickets)
-        priority_data       = compute_priority_counts(tickets)
-        sla_data            = compute_sla_metrics(tickets)
+        status_counts = compute_status_counts(tickets)
+        priority_data = compute_priority_counts(tickets)
+        sla_data = compute_sla_metrics(tickets)
         avg_resolution_hours = compute_avg_resolution_hours(tickets)
-        top_assignees       = compute_top_assignees(tickets)
-        recent_tickets      = fetch_recent_tickets(tickets)
+        top_assignees = compute_top_assignees(tickets)
+        recent_tickets = fetch_recent_tickets(tickets)
 
-        total_tickets  = status_counts.values.sum
+        total_tickets = status_counts.values.sum
         resolved_closed = status_counts["resolved"] + status_counts["closed"]
 
         {
@@ -50,7 +53,7 @@ module Api
             closed_tickets: status_counts["closed"],
             total_problems: problems_count,
             total_members: users_count,
-            high_priority_tickets: priority_data["p1"] + priority_data["p2"],
+            high_priority_tickets: (priority_data["p1"] || 0) + (priority_data["p2"] || 0),
             unresolved_tickets: total_tickets - resolved_closed,
             resolution_rate_percent: total_tickets.positive? ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
           },
@@ -73,7 +76,7 @@ module Api
       end
 
       # ======================
-      # Helper methods
+      # Extracted helper methods
       # ======================
 
       def extract_org_attributes(org)
@@ -109,7 +112,9 @@ module Api
       def compute_priority_counts(tickets)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
         raw_counts = tickets.group(:priority).count.transform_keys(&:to_s)
-        priority_labels.transform_values { |label| raw_counts.fetch(priority_labels.key(label), 0) }
+        priority_labels.each_with_object({}) do |(num_key, label), counts|
+          counts[label] = raw_counts[num_key].to_i
+        end
       end
 
       def compute_sla_metrics(tickets)
@@ -124,7 +129,7 @@ module Api
 
       def compute_avg_resolution_hours(tickets)
         avg_seconds = tickets.where.not(resolved_at: nil)
-                             .average("EXTRACT(EPOCH FROM (tickets.resolved_at - tickets.created_at))") # table alias fix
+                             .average("EXTRACT(EPOCH FROM (resolved_at - created_at))")
         avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
       end
 
@@ -132,16 +137,16 @@ module Api
         tickets.joins("INNER JOIN users ON tickets.assignee_id = users.id")
                .where.not(assignee_id: nil)
                .group("users.id, users.name")
-               .order(Arel.sql("COUNT(*) DESC"))
+               .order("count_all DESC")
                .limit(5)
                .count
-               .map { |(id, name), count| { name: name || "Unknown", count: count } }
+               .map { |(_id, name), count| { name: name || "Unknown", count: count } }
       end
 
       def fetch_recent_tickets(tickets)
-        tickets.order("tickets.created_at DESC")
-              .limit(10)
-              .map do |t|
+        tickets.order(created_at: :desc)
+               .limit(10)
+               .map do |t|
           {
             id: t.id,
             title: t.title || "Untitled",
