@@ -11,47 +11,61 @@ module Api
       rescue_from StandardError, with: :render_internal_server_error
 
       # --- Filters ---
-      # before_action :verify_admin, only: %i[update destroy]  # if you have admin-only actions
-      before_action :verify_admin, only: %i[update destroy], if: -> { self.respond_to?(:update) && self.respond_to?(:destroy) }
+      before_action :verify_admin, only: %i[update destroy], if: -> { respond_to?(:update) && respond_to?(:destroy) }
       before_action :set_organization_from_subdomain
-      
       before_action :authenticate_user!, except: [:create]
-      before_action :verify_user_organization, if: -> { @organization.present? }, except: [:create, :validate_subdomain]
+      before_action :verify_user_organization, if: -> { current_user.present? && @organization.present? }, except: [:create, :validate_subdomain]
 
       private
 
+      # ---------------------------
+      # Authentication
+      # ---------------------------
       def authenticate_user!
-        render json: { error: "Unauthorized" }, status: :unauthorized unless current_user
-      end
-
-      def current_user
-        @current_user ||= begin
-          token = request.headers['Authorization']&.split(' ')&.last
-          return nil unless token
-          
-          Rails.logger.debug "Authenticating with token: #{token.first(8)}..."
-          
-          # Find user by token AND organization
-          User.find_by(
-            auth_token: token,
-            organization_id: @organization&.id
-          )
+        unless current_user
+          render_error("Unauthorized", status: :unauthorized)
         end
       end
 
+      def current_user
+        return @current_user if defined?(@current_user)
+
+        token = request.headers['Authorization']&.split(' ')&.last
+        return @current_user = nil if token.blank?
+
+        Rails.logger.debug { "Authenticating with token: #{token[0..7]}..." }
+
+        user = User.find_by(auth_token: token)
+
+        # Only enforce org match if @organization has been resolved
+        if @organization && user && user.organization_id != @organization.id
+          Rails.logger.warn "Token valid but user #{user.email} does not belong to org #{@organization.id}"
+          return @current_user = nil
+        end
+
+        @current_user = user
+      end
+
+      # ---------------------------
+      # Organization resolution
+      # ---------------------------
       def set_organization_from_subdomain
-        param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id] || request.subdomains.first
+        # Prefer explicit params for API calls (React frontend likely sends it in the URL)
+        param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id]
+        param_subdomain ||= request.subdomains.first
 
         Rails.logger.info "Subdomain sources: " \
-          "params[:organization_id]=#{params[:organization_id]}, " \
           "params[:subdomain]=#{params[:subdomain]}, " \
           "params[:organization_subdomain]=#{params[:organization_subdomain]}, " \
-          "request.subdomains=#{request.subdomains}"
+          "params[:organization_id]=#{params[:organization_id]}, " \
+          "request.subdomains=#{request.subdomains.inspect}"
 
+        # Development fallback: default to demo org
         if Rails.env.development? && param_subdomain.blank?
           param_subdomain = 'demo'
         end
 
+        # Single-tenant shortcut
         if param_subdomain.blank? && Organization.count == 1
           @organization = Organization.first
           Rails.logger.info "Single-tenant fallback: Organization ID #{@organization.id}"
@@ -72,8 +86,11 @@ module Api
         Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
       end
 
+      # ---------------------------
+      # Authorization checks
+      # ---------------------------
       def verify_user_organization
-        return unless current_user && @organization
+        return if current_user.nil? || @organization.nil?
 
         if current_user.organization_id != @organization.id
           Rails.logger.warn "User #{current_user.email} (org=#{current_user.organization_id}) tried to access org=#{@organization.id}"
@@ -81,12 +98,18 @@ module Api
         end
       end
 
+      # ---------------------------
+      # Rendering helpers
+      # ---------------------------
       def render_success(data, message = "Success", status = :ok)
         render json: { message: message, data: data }, status: status
       end
 
-      def render_error(errors, message: "An error occurred", details: nil, status: :unprocessable_entity)
-        render json: { error: message, details: details || errors }, status: status
+      def render_error(errors, message: nil, details: nil, status: :unprocessable_entity)
+        render json: {
+          error: message || "An error occurred",
+          details: details || errors
+        }, status: status
       end
 
       def render_not_found(exception = nil)
