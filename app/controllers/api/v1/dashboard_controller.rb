@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v28:org_#{@organization.id}" # Updated version
+        cache_key = "dashboard:v29:org_#{@organization.id}" # Updated version
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -21,7 +21,7 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v28 (status/priority fix)"
+        Rails.logger.info "Using DashboardController version v29 (problems/status fix)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
@@ -29,7 +29,9 @@ module Api
         # Bulk preload queries
         tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
         users_count = User.where(organization_id: org_id).count
-        problems_count = Problem.where(organization_id: org_id).count
+        problems = Problem.where(organization_id: org_id)
+        problems_count = problems.count
+        Rails.logger.info "Problems count for org_id=#{org_id}: #{problems_count}, problem IDs: #{problems.pluck(:id).join(', ')}"
 
         status_counts = compute_status_counts(tickets)
         priority_data = compute_priority_counts(tickets)
@@ -101,8 +103,9 @@ module Api
         invalid_statuses = []
 
         tickets.group(:status).count.each do |status, count|
-          if status_labels.key?(status)
-            counts[status_labels[status]] = count
+          status_key = status.is_a?(String) ? status.to_i : status
+          if status_labels.key?(status_key)
+            counts[status_labels[status_key]] = count
           else
             invalid_statuses << [status, count]
           end
@@ -171,7 +174,7 @@ module Api
         end
       end
 
-      def compute_status_label(status_int)
+      def compute_status_label(status)
         status_labels = {
           0 => "open",
           1 => "assigned",
@@ -181,12 +184,13 @@ module Api
           5 => "resolved",
           6 => "pending"
         }
-        status_labels[status_int] || "Unknown (#{status_int})"
+        status_key = status.is_a?(String) ? status.to_i : status
+        status_labels[status_key] || "Unknown (#{status})"
       end
 
-      def compute_priority_label(priority_int)
+      def compute_priority_label(priority)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
-        priority_labels[priority_int.to_s] || "Unknown (#{priority_int})"
+        priority_labels[priority.to_s] || "Unknown (#{priority})"
       end
 
       def safe_user_name(user, fallback_name, fallback_email)
