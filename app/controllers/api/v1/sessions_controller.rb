@@ -1,9 +1,13 @@
 module Api
   module V1
     class SessionsController < Api::V1::ApiController
-      skip_before_action :authenticate_user!, only: [:create]
-
+      skip_before_action :authenticate_user!, only: [:create, :options]
       before_action :set_cors_headers
+
+      def options
+        Rails.logger.info "Handling OPTIONS request for /api/v1/login, origin=#{request.headers['Origin']}"
+        head :ok
+      end
 
       def create
         Rails.logger.info "Login attempt: email=#{params[:email]}, subdomain=#{params[:subdomain]}, origin=#{request.headers['Origin']}"
@@ -68,7 +72,6 @@ module Api
       end
 
       def destroy
-        set_cors_headers
         token = request.headers['Authorization']&.split(' ')&.last
         user = User.find_by(auth_token: token)
 
@@ -83,7 +86,6 @@ module Api
       end
 
       def verify
-        set_cors_headers
         if current_user
           Rails.logger.info "Token verified for user #{current_user.id}"
           render json: { message: "Token valid", role: current_user.role }, status: :ok
@@ -94,7 +96,6 @@ module Api
       end
 
       def verify_admin
-        set_cors_headers
         if current_user&.is_admin?
           Rails.logger.info "Admin token verified for user #{current_user.id}"
           head :ok
@@ -107,8 +108,11 @@ module Api
       private
 
       def set_cors_headers
+        Rails.logger.info "Setting CORS headers for origin=#{request.headers['Origin']}"
         response.headers['Access-Control-Allow-Origin'] = 'https://itsm-gss.netlify.app'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD'
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,X-Organization-Subdomain'
       end
 
       def current_user
