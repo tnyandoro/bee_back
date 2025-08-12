@@ -1,7 +1,6 @@
 module Api
   module V1
     class SessionsController < Api::V1::ApiController
-
       def create
         unless @organization
           Rails.logger.info "Organization not found for subdomain=#{params[:subdomain]}"
@@ -105,6 +104,16 @@ module Api
 
         @current_user ||= User.find_by(auth_token: token).tap do |user|
           Rails.logger.warn "No user found for token" unless user
+        end
+      end
+
+      def set_organization_from_subdomain
+        subdomain = request.headers['X-Organization-Subdomain'] || params[:subdomain] || request.subdomains.first
+        Rails.logger.info "Looking up organization with subdomain: #{subdomain}"
+        @organization = Organization.find_by(subdomain: subdomain)
+        unless @organization
+          Rails.logger.error "Organization not found for subdomain: #{subdomain}"
+          render json: { error: "Organization not found for subdomain: #{subdomain}" }, status: :not_found
         end
       end
     end

@@ -5,6 +5,7 @@ module Api
       include Rails.application.routes.url_helpers
 
       # --- Global error handlers ---
+      # This will catch exceptions raised in any controller action
       rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
       rescue_from ActionController::RoutingError, with: :render_not_found
       rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
