@@ -1,12 +1,14 @@
 module Api
   module V1
     class DashboardController < Api::V1::ApiController
+      before_action :require_admin
+
       def show
         return render_error("Organization not found", status: :not_found) unless @organization
 
-        Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
+        Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id}), user=#{current_user&.email || 'unknown'}"
 
-        cache_key = "dashboard:v29:org_#{@organization.id}" # Updated version
+        cache_key = "dashboard:v30:org_#{@organization.id}:user_#{current_user&.id}" # Updated version with user-specific cache
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -20,8 +22,15 @@ module Api
 
       private
 
+      def require_admin
+        unless current_user&.role&.in?(["system_admin", "domain_admin"])
+          Rails.logger.warn "Unauthorized access attempt by user: #{current_user&.email || 'unknown'} (role: #{current_user&.role})"
+          render_error("Unauthorized access", status: :unauthorized)
+        end
+      end
+
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v29 (problems/status fix)"
+        Rails.logger.info "Using DashboardController version v30 (RBAC, data minimization)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
@@ -80,12 +89,8 @@ module Api
         {
           id: org.id,
           name: org.name,
-          address: org.address,
-          email: org.email,
-          web_address: org.web_address,
           subdomain: org.subdomain,
-          logo_url: org.logo_url,
-          phone_number: org.phone_number
+          logo_url: org.logo_url
         }
       end
 
@@ -153,7 +158,7 @@ module Api
                .order("count_all DESC")
                .limit(5)
                .count
-               .map { |(id, name), count| { name: name || "Unknown", count: count } }
+               .map { |(id, name), count| { name: ActionView::Base.full_sanitizer.sanitize(name || "Unknown"), count: count } }
       end
 
       def fetch_recent_tickets(tickets)
@@ -162,12 +167,12 @@ module Api
                .map do |t|
           {
             id: t.id,
-            title: t.title || "Untitled",
+            title: ActionView::Base.full_sanitizer.sanitize(t.title || "Untitled"),
             status: compute_status_label(t.status),
             priority: compute_priority_label(t.priority),
             created_at: t.created_at&.iso8601 || Time.current.iso8601,
-            assignee: safe_user_name(t.assignee, t.caller_name, t.caller_email) || "Unassigned",
-            reporter: safe_user_name(t.requester, t.caller_name, t.caller_email) || "Unknown",
+            assignee: ActionView::Base.full_sanitizer.sanitize(safe_user_name(t.assignee, t.caller_name, t.caller_email) || "Unassigned"),
+            reporter: ActionView::Base.full_sanitizer.sanitize(safe_user_name(t.requester, t.caller_name, t.caller_email) || "Unknown"),
             sla_breached: t.sla_breached || false,
             breaching_sla: t.respond_to?(:breaching_sla) ? t.breaching_sla : false
           }
@@ -185,19 +190,19 @@ module Api
           6 => "pending"
         }
         status_key = status.is_a?(String) ? status.to_i : status
-        status_labels[status_key] || "Unknown (#{status})"
+        status_labels[status_key] || "Unknown (#{ActionView::Base.full_sanitizer.sanitize(status.to_s)})"
       end
 
       def compute_priority_label(priority)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
-        priority_labels[priority.to_s] || "Unknown (#{priority})"
+        priority_labels[priority.to_s] || "Unknown (#{ActionView::Base.full_sanitizer.sanitize(priority.to_s)})"
       end
 
       def safe_user_name(user, fallback_name, fallback_email)
         case user
-        when User then user.name.to_s
-        when String then user
-        else fallback_name || fallback_email
+        when User then ActionView::Base.full_sanitizer.sanitize(user.name.to_s)
+        when String then ActionView::Base.full_sanitizer.sanitize(user)
+        else ActionView::Base.full_sanitizer.sanitize(fallback_name || fallback_email || "")
         end
       end
     end
