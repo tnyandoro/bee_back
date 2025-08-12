@@ -1,5 +1,3 @@
-# config/initializers/cors.rb
-
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
   # Development environment settings
   if Rails.env.development?
@@ -25,13 +23,9 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
   # Production environment settings
   if Rails.env.production?
     allow do
-      # This regex allows all subdomains of itsm-gss.netlify.app
-      origins do |origin, _env|
-        Rails.logger.info "🔵 Incoming CORS origin: #{origin}"
-        origin.present? && origin.match?(/^https:\/\/([a-z0-9-]+\.)?itsm-gss\.netlify\.app$/)
-      end
+      origins 'https://itsm-gss.netlify.app'
 
-      resource '*',
+      resource '/api/v1/*',
         headers: :any,
         methods: [:get, :post, :put, :patch, :delete, :options, :head],
         credentials: true,
