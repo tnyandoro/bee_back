@@ -1,4 +1,3 @@
-# app/controllers/api/v1/dashboard_controller.rb
 module Api
   module V1
     class DashboardController < Api::V1::ApiController
@@ -7,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v27:org_#{@organization.id}" # bump version when structure changes
+        cache_key = "dashboard:v28:org_#{@organization.id}" # Updated version
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -22,12 +21,12 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v27 (alias fix + optimized)"
+        Rails.logger.info "Using DashboardController version v28 (status/priority fix)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
 
-        # === Bulk preload queries to reduce N+1 ===
+        # Bulk preload queries
         tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
         users_count = User.where(organization_id: org_id).count
         problems_count = Problem.where(organization_id: org_id).count
@@ -75,10 +74,6 @@ module Api
         }
       end
 
-      # ======================
-      # Extracted helper methods
-      # ======================
-
       def extract_org_attributes(org)
         {
           id: org.id,
@@ -103,15 +98,32 @@ module Api
           6 => "pending"
         }
         counts = status_labels.values.index_with { 0 }
+        invalid_statuses = []
+
         tickets.group(:status).count.each do |status, count|
-          counts[status_labels[status]] = count if status_labels.key?(status)
+          if status_labels.key?(status)
+            counts[status_labels[status]] = count
+          else
+            invalid_statuses << [status, count]
+          end
         end
+
+        if invalid_statuses.any?
+          Rails.logger.warn "Invalid ticket statuses found: #{invalid_statuses.map { |s, c| "#{s}: #{c}" }.join(', ')}"
+        end
+
         counts
       end
 
       def compute_priority_counts(tickets)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
         raw_counts = tickets.group(:priority).count.transform_keys(&:to_s)
+        invalid_priorities = raw_counts.keys - priority_labels.keys
+
+        if invalid_priorities.any?
+          Rails.logger.warn "Invalid ticket priorities found: #{invalid_priorities.map { |p| "#{p}: #{raw_counts[p]}" }.join(', ')}"
+        end
+
         priority_labels.transform_values { |label| raw_counts[label].to_i rescue 0 }
       end
 
@@ -127,7 +139,7 @@ module Api
 
       def compute_avg_resolution_hours(tickets)
         avg_seconds = tickets.where.not(resolved_at: nil)
-                             .average("EXTRACT(EPOCH FROM (resolved_at - tickets.created_at))")
+                            .average("EXTRACT(EPOCH FROM (resolved_at - tickets.created_at))")
         avg_seconds ? (avg_seconds / 3600.0).round(2) : 0.0
       end
 
@@ -160,7 +172,7 @@ module Api
       end
 
       def compute_status_label(status_int)
-        {
+        status_labels = {
           0 => "open",
           1 => "assigned",
           2 => "escalated",
@@ -168,11 +180,13 @@ module Api
           4 => "suspended",
           5 => "resolved",
           6 => "pending"
-        }[status_int] || "Unknown"
+        }
+        status_labels[status_int] || "Unknown (#{status_int})"
       end
 
       def compute_priority_label(priority_int)
-        { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }[priority_int.to_s] || "Unknown"
+        priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
+        priority_labels[priority_int.to_s] || "Unknown (#{priority_int})"
       end
 
       def safe_user_name(user, fallback_name, fallback_email)
