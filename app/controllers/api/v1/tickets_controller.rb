@@ -325,10 +325,13 @@ module Api
       end
 
       def set_organization_from_subdomain
-        subdomain = params[:organization_subdomain].presence || request.subdomain.presence || 'default'
-        @organization = Organization.find_by!(subdomain: subdomain)
-      rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Organization not found for this subdomain' }, status: :not_found
+        subdomain = request.headers['X-Organization-Subdomain'] || params[:organization_subdomain] || request.subdomains.first
+        Rails.logger.info "Looking up organization with subdomain: #{subdomain}"
+        @organization = Organization.find_by(subdomain: subdomain)
+        unless @organization
+          Rails.logger.error "Organization not found for subdomain: #{subdomain}"
+          render json: { error: "Organization not found for subdomain: #{subdomain}" }, status: :not_found
+        end
       end
 
       def validate_params
@@ -351,7 +354,7 @@ module Api
       end
 
       def apply_filters(scope)
-        Rails.logger.info "Fetching tickets for organization: #{params[:organization_subdomain] || params[:subdomain]}"
+        Rails.logger.info "Fetching tickets for organization: #{params[:organization_subdomain] || request.headers['X-Organization-Subdomain'] || request.subdomains.first}"
         Rails.logger.info "Current user: #{current_user&.id} - #{current_user&.email}"
       
         scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
@@ -613,7 +616,7 @@ module Api
       end
 
       def create_resolution_notification
-        if @ticket.assignee && @ticket.assignee != current_user && @ticket.assignee != @ticket.requester
+        if @ticket.assignee && @票.assignee != current_user && @ticket.assignee != @ticket.requester
           notification = Notification.create!(
             user: @ticket.assignee,
             organization: @ticket.organization,
