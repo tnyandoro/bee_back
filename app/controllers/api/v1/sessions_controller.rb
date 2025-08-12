@@ -3,23 +3,27 @@ module Api
     class SessionsController < Api::V1::ApiController
       skip_before_action :authenticate_user!, only: [:create]
 
+      before_action :set_cors_headers
+
       def create
+        Rails.logger.info "Login attempt: email=#{params[:email]}, subdomain=#{params[:subdomain]}, origin=#{request.headers['Origin']}"
+
         subdomain = params[:subdomain]&.downcase&.gsub(/[^a-z0-9-]/, "")
         unless @organization
-          Rails.logger.info "Organization not found for subdomain=#{subdomain}"
+          Rails.logger.warn "Organization not found for subdomain=#{subdomain}"
           render json: { error: "Organization not found" }, status: :not_found
           return
         end
 
-        user = @organization.users.find_by("LOWER(email) = ?", params[:email].downcase)
+        user = @organization.users.find_by("LOWER(email) = ?", params[:email]&.downcase)
         unless user
-          Rails.logger.info "Login failed: User not found for email=#{params[:email]}"
+          Rails.logger.warn "Login failed: User not found for email=#{params[:email]}"
           render json: { error: "Invalid email or password" }, status: :unauthorized
           return
         end
 
         unless user.authenticate(params[:password])
-          Rails.logger.info "Login failed: Invalid password for email=#{params[:email]}"
+          Rails.logger.warn "Login failed: Invalid password for email=#{params[:email]}"
           render json: { error: "Invalid email or password" }, status: :unauthorized
           return
         end
@@ -38,7 +42,7 @@ module Api
             end
           end
         rescue StandardError => e
-          Rails.logger.error "Failed to update auth_token for user #{user.id}: #{e.message}"
+          Rails.logger.error "Failed to update auth_token for user #{user.id}: #{e.message}, backtrace: #{e.backtrace.join("\n")}"
           render json: { error: "Failed to generate authentication token" }, status: :internal_server_error
           return
         end
@@ -64,6 +68,7 @@ module Api
       end
 
       def destroy
+        set_cors_headers
         token = request.headers['Authorization']&.split(' ')&.last
         user = User.find_by(auth_token: token)
 
@@ -78,6 +83,7 @@ module Api
       end
 
       def verify
+        set_cors_headers
         if current_user
           Rails.logger.info "Token verified for user #{current_user.id}"
           render json: { message: "Token valid", role: current_user.role }, status: :ok
@@ -88,6 +94,7 @@ module Api
       end
 
       def verify_admin
+        set_cors_headers
         if current_user&.is_admin?
           Rails.logger.info "Admin token verified for user #{current_user.id}"
           head :ok
@@ -98,6 +105,11 @@ module Api
       end
 
       private
+
+      def set_cors_headers
+        response.headers['Access-Control-Allow-Origin'] = 'https://itsm-gss.netlify.app'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+      end
 
       def current_user
         token = request.headers['Authorization']&.split(' ')&.last
