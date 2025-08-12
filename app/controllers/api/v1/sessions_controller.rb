@@ -1,15 +1,17 @@
 module Api
   module V1
     class SessionsController < Api::V1::ApiController
+      skip_before_action :authenticate_user!, only: [:create]
 
       def create
+        subdomain = params[:subdomain]&.downcase&.gsub(/[^a-z0-9-]/, "")
         unless @organization
-          Rails.logger.info "Organization not found for subdomain=#{params[:subdomain]}"
+          Rails.logger.info "Organization not found for subdomain=#{subdomain}"
           render json: { error: "Organization not found" }, status: :not_found
           return
         end
 
-        user = @organization.users.find_by(email: params[:email])
+        user = @organization.users.find_by("LOWER(email) = ?", params[:email].downcase)
         unless user
           Rails.logger.info "Login failed: User not found for email=#{params[:email]}"
           render json: { error: "Invalid email or password" }, status: :unauthorized
@@ -22,10 +24,8 @@ module Api
           return
         end
 
-        Rails.logger.info "User found: id=#{user.id}, email=#{user.email}, attributes=#{user.attributes.inspect}"
-
         unless user.role.present? && User.roles.key?(user.role)
-          Rails.logger.error "User #{user.id} has invalid role: #{user.role.inspect}, db role: #{user.attributes['role']}"
+          Rails.logger.error "User #{user.id} has invalid role: #{user.role.inspect}"
           render json: { error: "User role is invalid or missing" }, status: :unprocessable_entity
           return
         end
@@ -34,12 +34,12 @@ module Api
           if user.auth_token.blank?
             loop do
               token = SecureRandom.hex(20)
-              break user.update!(auth_token: token) unless User.exists?(auth_token: token)
+              break user.update!(auth_token: token, token_expires_at: 1.day.from_now) unless User.exists?(auth_token: token)
             end
           end
         rescue StandardError => e
           Rails.logger.error "Failed to update auth_token for user #{user.id}: #{e.message}"
-          render json: { error: "Failed to generate authentication token: #{e.message}" }, status: :internal_server_error
+          render json: { error: "Failed to generate authentication token" }, status: :internal_server_error
           return
         end
 
@@ -55,11 +55,11 @@ module Api
             team_id: user.team_id,
             team_ids: user.team_id ? [user.team_id] : []
           },
-          subdomain: params[:subdomain],
+          subdomain: subdomain,
           organization_id: @organization.id
         }
 
-        Rails.logger.info "Login response: #{response.inspect}"
+        Rails.logger.info "Login response: #{response.except(:auth_token).inspect}"
         render json: response, status: :ok
       end
 
@@ -68,7 +68,7 @@ module Api
         user = User.find_by(auth_token: token)
 
         if user
-          user.update(auth_token: nil)
+          user.update(auth_token: nil, token_expires_at: nil)
           Rails.logger.info "User #{user.id} logged out successfully"
           render json: { message: "Logged out successfully" }, status: :ok
         else
@@ -95,7 +95,7 @@ module Api
           Rails.logger.warn "Admin verification failed: User not admin or invalid token"
           head :forbidden
         end
-      end      
+      end
 
       private
 
@@ -104,6 +104,10 @@ module Api
         return unless token
 
         @current_user ||= User.find_by(auth_token: token).tap do |user|
+          if user && user.token_expires_at&.past?
+            user.update(auth_token: nil, token_expires_at: nil)
+            Rails.logger.warn "Token expired for user #{user.id}"
+          end
           Rails.logger.warn "No user found for token" unless user
         end
       end
