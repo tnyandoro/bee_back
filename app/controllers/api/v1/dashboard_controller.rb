@@ -6,7 +6,7 @@ module Api
 
         Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v29:org_#{@organization.id}" # Updated version
+        cache_key = "dashboard:v30:org_#{@organization.id}" # Updated version
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -21,7 +21,7 @@ module Api
       private
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v29 (problems/status fix)"
+        Rails.logger.info "Using DashboardController version v30 (priority validation fix)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
@@ -120,14 +120,29 @@ module Api
 
       def compute_priority_counts(tickets)
         priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
-        raw_counts = tickets.group(:priority).count.transform_keys(&:to_s)
-        invalid_priorities = raw_counts.keys - priority_labels.keys
+        counts = priority_labels.values.index_with { 0 }
+        invalid_priorities = []
 
-        if invalid_priorities.any?
-          Rails.logger.warn "Invalid ticket priorities found: #{invalid_priorities.map { |p| "#{p}: #{raw_counts[p]}" }.join(', ')}"
+        tickets.group(:priority).count.each do |priority, count|
+          priority_key = priority.to_s
+          if priority_labels.values.include?(priority_key)
+            counts[priority_key] = count
+          else
+            invalid_priorities << [priority, count]
+          end
         end
 
-        priority_labels.transform_values { |label| raw_counts[label].to_i rescue 0 }
+        if invalid_priorities.any?
+          Rails.logger.warn "Invalid ticket priorities found: #{invalid_priorities.map { |p, c| "#{p}: #{c}" }.join(', ')}"
+          # Clean up invalid priorities
+          tickets.where(priority: invalid_priorities.map(&:first)).update_all(priority: '0') # Maps to p4
+          counts = priority_labels.values.index_with { 0 }
+          tickets.group(:priority).count.each do |priority, count|
+            counts[priority_labels[priority.to_s]] = count if priority_labels[priority.to_s]
+          end
+        end
+
+        counts
       end
 
       def compute_sla_metrics(tickets)
