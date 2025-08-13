@@ -25,13 +25,20 @@ test:
   host: <%= ENV.fetch("DB_HOST", "localhost") %>
 
 production:
-  url: <%= ENV["DATABASE_URL"] %>
   <<: *default
-  prepared_statements: false
-  statement_timeout: 30000
-  # Connection pool and timeouts
+  adapter: postgresql
+  encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
   timeout: 10000
   connect_timeout: 30
   checkout_timeout: 30
   reaping_frequency: 10
+  sslmode: require
+  prepared_statements: false
+  statement_timeout: 30000 <% if ENV["DATABASE_URL"] %>
+  url: <%= ENV["DATABASE_URL"] %> <% else %>
+  database: <%= ENV["RDS_DB_NAME"] || ENV["DB_NAME"] %>
+  username: <%= ENV["RDS_USERNAME"] || ENV["DB_USERNAME"] %>
+  password: <%= ENV["RDS_PASSWORD"] || ENV["DB_PASSWORD"] %>
+  host: <%= ENV["RDS_HOSTNAME"] || ENV["DB_HOST"] %>
+  port: <%= ENV["RDS_PORT"] || ENV["DB_PORT"] || 5432 %> <% end %>
