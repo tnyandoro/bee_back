@@ -54,32 +54,32 @@
 version: "3.8"
 
 services:
-  db:
-    image: postgres:16
-    container_name: itsm_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: itsm_production_db_plyf_user
-      POSTGRES_PASSWORD: raQ0f5pTjvb2f0khenurB3lWwv6jwoDf
-      POSTGRES_DB: itsm_production_db_plyf
-      POSTGRES_HOST: dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    networks:
-      - itsm_network
+  # db:
+  #   image: postgres:16
+  #   container_name: itsm_postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: itsm_production_db_plyf_user
+  #     POSTGRES_PASSWORD: raQ0f5pTjvb2f0khenurB3lWwv6jwoDf
+  #     POSTGRES_DB: itsm_production_db_plyf
+  #     POSTGRES_HOST: dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pg_data:/var/lib/postgresql/data
+  #   networks:
+  #     - itsm_network
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: itsm_api
-    depends_on:
-      - db
+    # depends_on:
+    #   - db
     environment:
       # Rails database connection to local Postgres
-      DATABASE_URL: postgres://itsm_production_db_plyf_user:raQ0f5pTjvb2f0khenurB3lWwv6jwoDf@db:5432/itsm_production_db_plyf?sslmode=disable
+      DATABASE_URL: postgres://itsm_production_db_plyf_user:raQ0f5pTjvb2f0khenurB3lWwv6jwoDf@dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com:5432/itsm_production_db_plyf?sslmode=require
       RAILS_ENV: production
       SECRET_KEY_BASE: 4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916
       LD_PRELOAD: ""
