@@ -27,9 +27,9 @@ development:
 
 production:
   <<: *default
-  database: itsm_production_db_plyf
+  database: itsm_production_db_plyf_prod
   username: <%= ENV.fetch("DB_USERNAME", "itsm_production_db_plyf_user") %>
   password: <%= ENV.fetch("DB_PASSWORD", "raQ0f5pTjvb2f0khenurB3lWwv6jwoDf") %>
-  host: <%= ENV.fetch("DB_HOST", "dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com") %>   # Use "db" if Rails runs inside Docker
+  host: <%= ENV.fetch("DB_HOST", "dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com") %>   
   port: 5432
   sslmode: require
