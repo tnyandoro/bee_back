@@ -22,6 +22,7 @@ Rails.application.routes.draw do
       # Organization resources
       resources :organizations, param: :subdomain do
         # Organization-level routes
+        get 'knowledgebase', to: 'knowledgebase#index'
         member do
           post '/upload_logo', to: 'settings#upload_logo'
           get 'dashboard', to: 'dashboard#show'
@@ -31,7 +32,6 @@ Rails.application.routes.draw do
           post 'add_user', to: 'organizations#add_user'
           get 'settings', to: 'settings#index'
           put 'settings', to: 'settings#update'
-          get 'knowledgebase', to: 'knowledgebase#index'
         end
 
         # Registration route for admin

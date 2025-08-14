@@ -26,7 +26,7 @@ module Api
       end
 
       def valid_token?(token)
-        # Replace with actual token validation (e.g., JWT decoding)
+        # Replace with actual JWT validation
         true
       end
     end

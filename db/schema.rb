@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_04_050339) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_14_050450) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -70,6 +70,18 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_04_050339) do
     t.datetime "updated_at", null: false
     t.index ["organization_id", "name"], name: "index_departments_on_org_id_and_name", unique: true
     t.index ["organization_id"], name: "index_departments_on_organization_id"
+  end
+
+  create_table "knowledgebase_entries", force: :cascade do |t|
+    t.bigint "organization_id", null: false
+    t.string "issue"
+    t.text "description"
+    t.text "troubleshooting_steps"
+    t.string "assigned_group"
+    t.text "resolution_steps"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["organization_id"], name: "index_knowledgebase_entries_on_organization_id"
   end
 
   create_table "notifications", force: :cascade do |t|
@@ -240,6 +252,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_04_050339) do
   add_foreign_key "comments", "tickets"
   add_foreign_key "comments", "users"
   add_foreign_key "departments", "organizations"
+  add_foreign_key "knowledgebase_entries", "organizations"
   add_foreign_key "notifications", "organizations"
   add_foreign_key "notifications", "users"
   add_foreign_key "problems", "tickets"
