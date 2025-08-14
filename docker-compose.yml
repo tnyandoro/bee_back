@@ -75,7 +75,7 @@ services:
       - db
     environment:
       # Rails database connection to local Postgres
-      DATABASE_URL: postgres://itsm_production_db_plyf_user_prod:raQ0f5pTjvb2f0khenurB3lWwv6jwoDf@db:5432/itsm_production_db_plyf_prod_db?sslmode=require
+      DATABASE_URL: postgres://itsm_production_db_plyf_user:raQ0f5pTjvb2f0khenurB3lWwv6jwoDf@db:5432/itsm_production_db_plyf?sslmode=require
       RAILS_ENV: production
       SECRET_KEY_BASE: 4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916
       LD_PRELOAD: ""
