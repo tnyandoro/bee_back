@@ -111,7 +111,7 @@ ENV GEM_HOME="/usr/local/bundle" \
     BUNDLE_RETRY="3" \
     RAILS_LOG_TO_STDOUT="true" \
     RAILS_SERVE_STATIC_FILES="true" \
-    PORT="10000"
+    PORT="3000"
 
 # Set working directory
 WORKDIR /rails
