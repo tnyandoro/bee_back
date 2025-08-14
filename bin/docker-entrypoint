@@ -84,5 +84,14 @@ EOF
   echo "Pre-startup tasks completed. Starting Rails server..."
 fi
 
-# Execute the main command
-exec "$@"
+# # Execute the main command
+# exec "$@"
+
+echo "Pre-startup tasks completed. Starting Rails server..."
+
+# If no command was passed, start Rails server
+if [ $# -eq 0 ]; then
+  exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
+else
+  exec "$@"
+fi
