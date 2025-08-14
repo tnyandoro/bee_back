@@ -24,7 +24,8 @@ class Organization < ApplicationRecord
   has_many :problems, through: :tickets # Indirect association with problems through tickets
   has_many :teams, dependent: :destroy # Add this line if missing
   has_many :settings, class_name: "Setting", dependent: :destroy
-
+  has_many :knowledgebase_entries
+  
   # Custom Methods
   def total_tickets
     tickets.count

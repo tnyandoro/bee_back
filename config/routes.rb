@@ -31,6 +31,7 @@ Rails.application.routes.draw do
           post 'add_user', to: 'organizations#add_user'
           get 'settings', to: 'settings#index'
           put 'settings', to: 'settings#update'
+          get 'knowledgebase', to: 'knowledgebase#index'
         end
 
         # Registration route for admin

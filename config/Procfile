@@ -1,1 +1,28 @@
-web: bundle exec puma -C config/puma.rb
+# Puma configuration for Elastic Beanstalk
+
+# Number of Puma threads per worker (min and max)
+threads_count = ENV.fetch("RAILS_MAX_THREADS") { 5 }
+threads threads_count, threads_count
+
+# Number of Puma workers (processes) — default to 2 or use WEB_CONCURRENCY env var
+workers ENV.fetch("WEB_CONCURRENCY") { 2 }
+
+# Bind to the port EB provides
+port ENV.fetch("PORT") { 3000 }
+
+# Set the environment
+environment ENV.fetch("RAILS_ENV") { "production" }
+
+# Preload the app for faster worker spawn times and lower memory usage
+preload_app!
+
+# On worker boot — setup database connection
+on_worker_boot do
+  ActiveRecord::Base.establish_connection if defined?(ActiveRecord)
+end
+
+# Allow phased restarts (zero downtime deploys)
+plugin :tmp_restart
+
+# Ensure logs go to STDOUT (so EB/CloudWatch can capture them)
+stdout_redirect("/proc/1/fd/1", "/proc/1/fd/2", true)

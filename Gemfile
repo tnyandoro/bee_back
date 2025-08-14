@@ -47,6 +47,9 @@ group :development do
   gem 'mailcatcher'
   # Use eventmachine only if needed
   gem 'eventmachine', '~> 1.2.7'
+  gem 'rswag-api'
+  gem 'rswag-ui'
+  gem 'rswag-specs'
 end
 
 group :test do
