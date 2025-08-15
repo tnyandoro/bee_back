@@ -5,7 +5,6 @@ module Api
       include Rails.application.routes.url_helpers
 
       # --- Global error handlers ---
-      # This will catch exceptions raised in any controller action
       rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
       rescue_from ActionController::RoutingError, with: :render_not_found
       rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
@@ -23,9 +22,7 @@ module Api
       # Authentication
       # ---------------------------
       def authenticate_user!
-        unless current_user
-          render_error("Unauthorized", status: :unauthorized)
-        end
+        render_error("Unauthorized", status: :unauthorized) unless current_user
       end
 
       def current_user
@@ -34,11 +31,12 @@ module Api
         token = request.headers['Authorization']&.split(' ')&.last
         return @current_user = nil if token.blank?
 
-        Rails.logger.debug { "Authenticating with token: #{token[0..7]}..." }
+        # Only debug in development; never log tokens in production
+        Rails.logger.debug { "Authenticating with token (development only)" } if Rails.env.development?
 
         user = User.find_by(auth_token: token)
 
-        # Only enforce org match if @organization has been resolved
+        # Enforce org match if @organization is resolved
         if @organization && user && user.organization_id != @organization.id
           Rails.logger.warn "Token valid but user #{user.email} does not belong to org #{@organization.id}"
           return @current_user = nil
@@ -51,38 +49,23 @@ module Api
       # Organization resolution
       # ---------------------------
       def set_organization_from_subdomain
-        # Prefer explicit params for API calls (React frontend likely sends it in the URL)
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id]
         param_subdomain ||= request.subdomains.first
 
-        Rails.logger.info "Subdomain sources: " \
-          "params[:subdomain]=#{params[:subdomain]}, " \
-          "params[:organization_subdomain]=#{params[:organization_subdomain]}, " \
-          "params[:organization_id]=#{params[:organization_id]}, " \
-          "request.subdomains=#{request.subdomains.inspect}"
+        Rails.logger.info "Subdomain sources: params[:subdomain]=#{params[:subdomain]}, params[:organization_subdomain]=#{params[:organization_subdomain]}, params[:organization_id]=#{params[:organization_id]}, request.subdomains=#{request.subdomains.inspect}"
 
-        # Development fallback: default to demo org
-        if Rails.env.development? && param_subdomain.blank?
-          param_subdomain = 'demo'
-        end
+        param_subdomain = 'demo' if Rails.env.development? && param_subdomain.blank?
 
-        # Single-tenant shortcut
         if param_subdomain.blank? && Organization.count == 1
           @organization = Organization.first
           Rails.logger.info "Single-tenant fallback: Organization ID #{@organization.id}"
           return
         end
 
-        unless param_subdomain.present?
-          return render_error("Subdomain is missing in the request", status: :bad_request)
-        end
+        return render_error("Subdomain is missing in the request", status: :bad_request) unless param_subdomain.present?
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
-
-        unless @organization
-          Rails.logger.error "Organization not found for subdomain: #{param_subdomain}"
-          return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found)
-        end
+        return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found) unless @organization
 
         Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
       end
@@ -123,7 +106,7 @@ module Api
 
       def render_internal_server_error(exception = nil)
         Rails.logger.error "Internal Server Error: #{exception&.message}"
-        render_error("Internal server error", details: exception&.message, status: :internal_server_error)
+        render_error("Internal server error", details: Rails.env.production? ? nil : exception&.message, status: :internal_server_error)
       end
     end
   end

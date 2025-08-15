@@ -1,5 +1,5 @@
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
-  # Development environment settings
+  # Development environment
   if Rails.env.development?
     allow do
       origins(
@@ -8,11 +8,11 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
         'http://localhost:3001',
         'http://lvh.me:3001',
         'https://d10tmedpan81b6.cloudfront.net',
-        'https://gsolve360.greensoftsolutions.net', 
-        'https://www.gsolve360.greensoftsolutions.net', 
+        'https://gsolve360.greensoftsolutions.net',
+        'https://www.gsolve360.greensoftsolutions.net',
         'https://www.greensoftsolutions.net',
         /\.lvh\.me(:\d+)?$/,
-        /\.localhost(:\d+)?$/,
+        /\.localhost(:\d+)?$/
       )
 
       resource '*',
@@ -24,12 +24,12 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
     end
   end
 
-  # Production environment settings
+  # Production environment
   if Rails.env.production?
     allow do
-      origins 'https://itsm-gss.netlify.app','https://gsolve360.greensoftsolutions.net/'
+      origins 'https://itsm-gss.netlify.app', /https:\/\/.*\.greensoftsolutions\.net/
 
-      resource '/api/v1/*',
+      resource '*',  # Allow all API routes
         headers: :any,
         methods: [:get, :post, :put, :patch, :delete, :options, :head],
         credentials: true,

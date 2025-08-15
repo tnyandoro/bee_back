@@ -114,12 +114,13 @@ module Api
           'https://gsolve360.greensoftsolutions.net',
           'http://localhost:3000'
         ]
+        allowed_origins << /\.greensoftsolutions\.net$/  # regex for all subdomains
 
-        if allowed_origins.include?(origin)
-          response.headers['Access-Control-Allow-Origin'] = origin
-          response.headers['Access-Control-Allow-Credentials'] = 'true'
-          response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD'
-          response.headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,X-Organization-Subdomain'
+        if allowed_origins.any? { |o| o.is_a?(Regexp) ? o.match?(origin) : o == origin }
+          headers['Access-Control-Allow-Origin'] = origin
+          headers['Access-Control-Allow-Credentials'] = 'true'
+          headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD'
+          headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,X-Organization-Subdomain'
         end
       end
 
