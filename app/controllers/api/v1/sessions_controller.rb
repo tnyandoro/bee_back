@@ -109,7 +109,7 @@ module Api
 
       def set_cors_headers
         Rails.logger.info "Setting CORS headers for origin=#{request.headers['Origin']}"
-        response.headers['Access-Control-Allow-Origin'] = 'https://itsm-gss.netlify.app'
+        response.headers['Access-Control-Allow-Origin'] = 'https://gsolve360.greensoftsolutions.net'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD'
         response.headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,X-Organization-Subdomain'
