@@ -24,18 +24,15 @@ module Api
       # GET /users/:id
       def show
         authorize @user
-        render_success(user_attributes(@user))
+        render_success(user_profile_attributes(@user)) # Only safe attributes
       rescue StandardError => e
         render_internal_server_error(e)
       end
 
       # POST /users
       def create
-        sanitized_params = user_params.except(:password, :password_confirmation)
-        Rails.logger.info "Creating user with params: #{sanitized_params.inspect}"
-
         @user = @organization.users.new(user_params)
-        @user.auth_token = SecureRandom.hex(20)
+        @user.auth_token = SecureRandom.hex(20) # Do NOT return this in response
         @user.skip_auth_token = true if @user.respond_to?(:skip_auth_token=)
         authorize @user
 
@@ -46,11 +43,6 @@ module Api
         end
       rescue StandardError => e
         render_internal_server_error(e)
-      end
-
-      # GET /users/roles
-      def roles
-        render_success(User.roles.map { |key, _| { value: key, label: key.humanize } })
       end
 
       # PATCH/PUT /users/:id
@@ -72,6 +64,11 @@ module Api
         head :no_content
       rescue StandardError => e
         render_internal_server_error(e)
+      end
+
+      # GET /users/roles
+      def roles
+        render_success(User.roles.map { |key, _| { value: key, label: key.humanize } })
       end
 
       private
@@ -108,17 +105,18 @@ module Api
         if @users.empty?
           render_success([], "No users found")
         else
-          render_success(@users.map { |user| user_attributes(user) })
+          render_success(@users.map { |user| user_profile_attributes(user) })
         end
       end
 
+      # Only safe attributes sent to frontend
       def user_attributes(user)
         {
           id: user.id,
           name: user.name,
           username: user.username,
           email: user.email,
-          role: user.role,
+          role: user.role,           # Optional: remove if not needed
           team_id: user.team_id,
           department_id: user.department_id,
           position: user.position,
@@ -130,7 +128,7 @@ module Api
         {
           id: user.id,
           email: user.email,
-          role: user.role,
+          role: user.role,           # Optional
           is_admin: user.role.in?(['system_admin', 'domain_admin']),
           name: user.name,
           username: user.username,
