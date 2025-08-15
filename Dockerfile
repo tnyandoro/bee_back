@@ -176,8 +176,9 @@ RUN chmod +x /rails/bin/docker-entrypoint
 # Entrypoint
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 
-# Expose port
-EXPOSE $PORT
+# # Expose port
+# EXPOSE $PORT
+EXPOSE 3000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
@@ -185,3 +186,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
 
 # Default CMD: Puma
 CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
+
+

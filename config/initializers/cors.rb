@@ -24,8 +24,10 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
   if Rails.env.production?
     allow do
       # origins 'https://itsm-gss.netlify.app'
-       origins 'https://d10tmedpan81b6.cloudfront.net','https://gsolve360.greensoftsolutions.net/'
-
+       origins 'https://d10tmedpan81b6.cloudfront.net',
+               'https://gsolve360.greensoftsolutions.net/', 
+               'https://www.gsolve360.greensoftsolutions.net/', 
+               'https://www.greensoftsolutions.net'
       resource '/api/v1/*',
         headers: :any,
         methods: [:get, :post, :put, :patch, :delete, :options, :head],
