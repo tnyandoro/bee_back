@@ -1,98 +1,80 @@
 module Api
   module V1
     class UsersController < Api::V1::ApiController
-      include Pundit::Authorization
       before_action :set_user, only: [:show, :update, :destroy, :profile]
       after_action :verify_authorized
 
+      # GET /users/profile
       def profile
         authorize @user
-        render json: user_profile_attributes(@user)
-      rescue ActiveRecord::RecordNotFound
-        render_not_found('User')
+        render_success(user_profile_attributes(@user))
       rescue StandardError => e
-        render_server_error(e)
+        render_internal_server_error(e)
       end
 
+      # GET /users
       def index
         @users = policy_scope(User)
         apply_filters
         render_users
       rescue StandardError => e
-        render_server_error(e)
+        render_internal_server_error(e)
       end
 
+      # GET /users/:id
       def show
         authorize @user
-        render_user
-      rescue ActiveRecord::RecordNotFound
-        render_not_found('User')
+        render_success(user_attributes(@user))
       rescue StandardError => e
-        render_server_error(e)
+        render_internal_server_error(e)
       end
 
+      # POST /users
       def create
-        Rails.logger.info "Creating user with params: #{user_params.inspect}"
+        sanitized_params = user_params.except(:password, :password_confirmation)
+        Rails.logger.info "Creating user with params: #{sanitized_params.inspect}"
+
         @user = @organization.users.new(user_params)
         @user.auth_token = SecureRandom.hex(20)
         @user.skip_auth_token = true if @user.respond_to?(:skip_auth_token=)
         authorize @user
 
         if @user.save
-          Rails.logger.info "User created successfully: #{@user.id}"
-          render json: user_attributes(@user), status: :created
+          render_success(user_attributes(@user), "User created successfully", :created)
         else
-          log_and_render_validation_error
+          render_error(@user.errors.full_messages.join(', '))
         end
       rescue StandardError => e
-        Rails.logger.error "Exception in user creation: #{e.class.name}: #{e.message}"
-        Rails.logger.error e.backtrace.join("\n")
-        render_server_error(e)
+        render_internal_server_error(e)
       end
 
+      # GET /users/roles
       def roles
-        render json: User.roles.map { |key, _| { value: key, label: key.humanize } }
+        render_success(User.roles.map { |key, _| { value: key, label: key.humanize } })
       end
 
+      # PATCH/PUT /users/:id
       def update
         authorize @user
         if @user.update(user_params)
-          render json: user_attributes(@user), status: :ok
+          render_success(user_attributes(@user))
         else
-          log_and_render_validation_error
+          render_error(@user.errors.full_messages.join(', '))
         end
       rescue StandardError => e
-        render_server_error(e)
+        render_internal_server_error(e)
       end
 
+      # DELETE /users/:id
       def destroy
         authorize @user
         @user.destroy!
         head :no_content
-      rescue ActiveRecord::RecordNotFound
-        render_not_found('User')
       rescue StandardError => e
-        render_server_error(e)
+        render_internal_server_error(e)
       end
 
       private
-
-      def set_organization_from_subdomain
-        subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
-        Rails.logger.debug "Attempting to find organization with subdomain: #{subdomain.inspect}"
-
-        unless subdomain
-          Rails.logger.error "No subdomain provided in request. Params: #{params.inspect}, Host: #{request.host}"
-          render json: { error: "Subdomain is required" }, status: :not_found
-          return
-        end
-
-        @organization = Organization.find_by("LOWER(subdomain) = ?", subdomain.downcase)
-        unless @organization
-          Rails.logger.error "Organization not found for subdomain: #{subdomain}"
-          render json: { error: "Organization not found" }, status: :not_found
-        end
-      end
 
       def set_user
         @user = @organization.users.find(params[:id])
@@ -124,19 +106,10 @@ module Api
 
       def render_users
         if @users.empty?
-          render_empty_users
+          render_success([], "No users found")
         else
-          render json: @users.map { |user| user_attributes(user) }, status: :ok
+          render_success(@users.map { |user| user_attributes(user) })
         end
-      end
-
-      def render_empty_users
-        Rails.logger.info "No users found for organization: #{@organization.subdomain}"
-        render json: { message: "No users found", users: [] }, status: :ok
-      end
-
-      def render_user
-        render json: user_attributes(@user), status: :ok
       end
 
       def user_attributes(user)
@@ -164,36 +137,6 @@ module Api
           position: user.position,
           avatar_url: user.avatar.attached? ? url_for(user.avatar) : nil
         }
-      end
-
-      def organization_attributes
-        {
-          id: @organization.id,
-          name: @organization.name,
-          subdomain: @organization.subdomain,
-          email: @organization.email,
-          web_address: @organization.web_address
-        }
-      end
-
-      def log_and_render_validation_error
-        error_messages = @user.errors.full_messages
-        Rails.logger.error "User validation failed: #{error_messages.join(', ')}"
-        render json: { error: error_messages.join(', ') }, status: :unprocessable_entity
-      end
-
-      def render_server_error(exception)
-        Rails.logger.error "Server error in UsersController: #{exception.message}"
-        Rails.logger.error exception.backtrace.join("\n")
-        render json: { error: "Server error: #{exception.message}" }, status: :unprocessable_entity
-      end
-
-      def render_not_found(entity)
-        render json: { error: "#{entity} not found" }, status: :not_found
-      end
-
-      def render_forbidden
-        render json: { error: 'Forbidden' }, status: :forbidden
       end
     end
   end
