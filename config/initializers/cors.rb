@@ -8,11 +8,11 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
         'http://localhost:3001',
         'http://lvh.me:3001',
         'https://d10tmedpan81b6.cloudfront.net',
-        'https://gsolve360.greensoftsolutions.net/', 
-        'https://www.gsolve360.greensoftsolutions.net/', 
+        'https://gsolve360.greensoftsolutions.net', 
+        'https://www.gsolve360.greensoftsolutions.net', 
         'https://www.greensoftsolutions.net'
         /\.lvh\.me(:\d+)?$/,
-        /\.localhost(:\d+)?$/
+        /\.localhost(:\d+)?$/,
       )
 
       resource '*',
