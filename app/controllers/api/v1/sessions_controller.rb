@@ -1,14 +1,16 @@
 module Api
   module V1
     class SessionsController < Api::V1::ApiController
-      skip_before_action :authenticate_user!, only: [:create, :options]
+      skip_before_action :authenticate_user!, only: [:create, :options, :refresh]
       before_action :set_cors_headers
 
+      # OPTIONS for CORS preflight
       def options
         Rails.logger.info "Handling OPTIONS request for /api/v1/login, origin=#{request.headers['Origin']}"
         head :ok
       end
 
+      # Login
       def create
         Rails.logger.info "Login attempt: email=#{params[:email]}, subdomain=#{params[:subdomain]}, origin=#{request.headers['Origin']}"
 
@@ -20,14 +22,8 @@ module Api
         end
 
         user = @organization.users.find_by("LOWER(email) = ?", params[:email]&.downcase)
-        unless user
-          Rails.logger.warn "Login failed: User not found for email=#{params[:email]}"
-          render json: { error: "Invalid email or password" }, status: :unauthorized
-          return
-        end
-
-        unless user.authenticate(params[:password])
-          Rails.logger.warn "Login failed: Invalid password for email=#{params[:email]}"
+        unless user&.authenticate(params[:password])
+          Rails.logger.warn "Login failed for email=#{params[:email]}"
           render json: { error: "Invalid email or password" }, status: :unauthorized
           return
         end
@@ -39,21 +35,25 @@ module Api
         end
 
         begin
-          if user.auth_token.blank?
-            loop do
-              token = SecureRandom.hex(20)
-              break user.update!(auth_token: token, token_expires_at: 1.day.from_now) unless User.exists?(auth_token: token)
-            end
+          # Generate new tokens if blank or expired
+          if user.auth_token.blank? || user.token_expires_at&.past?
+            user.update!(
+              auth_token: SecureRandom.hex(20),
+              token_expires_at: 1.day.from_now,
+              refresh_token: SecureRandom.hex(30),
+              refresh_token_expires_at: 7.days.from_now
+            )
           end
         rescue StandardError => e
-          Rails.logger.error "Failed to update auth_token for user #{user.id}: #{e.message}, backtrace: #{e.backtrace.join("\n")}"
+          Rails.logger.error "Failed to generate tokens for user #{user.id}: #{e.message}"
           render json: { error: "Failed to generate authentication token" }, status: :internal_server_error
           return
         end
 
-        response = {
+        render json: {
           message: "Login successful",
           auth_token: user.auth_token,
+          refresh_token: user.refresh_token,
           user: {
             id: user.id,
             email: user.email,
@@ -65,18 +65,16 @@ module Api
           },
           subdomain: subdomain,
           organization_id: @organization.id
-        }
-
-        Rails.logger.info "Login response: #{response.except(:auth_token).inspect}"
-        render json: response, status: :ok
+        }, status: :ok
       end
 
+      # Logout
       def destroy
         token = request.headers['Authorization']&.split(' ')&.last
         user = User.find_by(auth_token: token)
 
         if user
-          user.update(auth_token: nil, token_expires_at: nil)
+          user.update(auth_token: nil, token_expires_at: nil, refresh_token: nil, refresh_token_expires_at: nil)
           Rails.logger.info "User #{user.id} logged out successfully"
           render json: { message: "Logged out successfully" }, status: :ok
         else
@@ -85,6 +83,7 @@ module Api
         end
       end
 
+      # Verify token validity
       def verify
         if current_user
           Rails.logger.info "Token verified for user #{current_user.id}"
@@ -95,6 +94,7 @@ module Api
         end
       end
 
+      # Verify admin token
       def verify_admin
         if current_user&.is_admin?
           Rails.logger.info "Admin token verified for user #{current_user.id}"
@@ -105,8 +105,25 @@ module Api
         end
       end
 
+      # Refresh auth_token using a valid refresh_token
+      def refresh
+        refresh_token = params[:refresh_token]
+        user = User.find_by(refresh_token: refresh_token)
+
+        if user && user.refresh_token_expires_at&.future?
+          user.update!(
+            auth_token: SecureRandom.hex(20),
+            token_expires_at: 1.day.from_now
+          )
+          render json: { auth_token: user.auth_token, message: "Token refreshed successfully" }, status: :ok
+        else
+          render json: { error: "Invalid or expired refresh token" }, status: :unauthorized
+        end
+      end
+
       private
 
+      # CORS headers
       def set_cors_headers
         origin = request.headers['Origin']
         allowed_origins = [
@@ -124,16 +141,16 @@ module Api
         end
       end
 
+      # Fetch current user from auth_token
       def current_user
         token = request.headers['Authorization']&.split(' ')&.last
         return unless token
 
-        @current_user ||= User.find_by(auth_token: token).tap do |user|
-          if user && user.token_expires_at&.past?
+        @current_user ||= User.find_by(auth_token: token)&.tap do |user|
+          if user.token_expires_at&.past?
             user.update(auth_token: nil, token_expires_at: nil)
             Rails.logger.warn "Token expired for user #{user.id}"
           end
-          Rails.logger.warn "No user found for token" unless user
         end
       end
     end
