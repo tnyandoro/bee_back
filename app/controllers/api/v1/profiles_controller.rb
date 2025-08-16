@@ -1,9 +1,7 @@
 module Api
   module V1
-    class ProfilesController < Api::V1::ApiController
-      # Skip auth for public profile access
+    class ProfilesController < ApiController
       skip_before_action :authenticate_user!, only: [:show]
-      before_action :set_organization_from_subdomain
       before_action :set_cors_headers
 
       def show
