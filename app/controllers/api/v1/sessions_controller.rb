@@ -3,6 +3,7 @@ module Api
     class SessionsController < Api::V1::ApiController
       skip_before_action :authenticate_user!, only: [:create, :options, :refresh]
       before_action :set_cors_headers
+      after_action :set_cors_headers # ensure headers are added to all responses
 
       # OPTIONS for CORS preflight
       def options
@@ -17,21 +18,18 @@ module Api
         subdomain = params[:subdomain]&.downcase&.gsub(/[^a-z0-9-]/, "")
         unless @organization
           Rails.logger.warn "Organization not found for subdomain=#{subdomain}"
-          render json: { error: "Organization not found" }, status: :not_found
-          return
+          render json: { error: "Organization not found" }, status: :not_found and return
         end
 
         user = @organization.users.find_by("LOWER(email) = ?", params[:email]&.downcase)
         unless user&.authenticate(params[:password])
           Rails.logger.warn "Login failed for email=#{params[:email]}"
-          render json: { error: "Invalid email or password" }, status: :unauthorized
-          return
+          render json: { error: "Invalid email or password" }, status: :unauthorized and return
         end
 
         unless user.role.present? && User.roles.key?(user.role)
           Rails.logger.error "User #{user.id} has invalid role: #{user.role.inspect}"
-          render json: { error: "User role is invalid or missing" }, status: :unprocessable_entity
-          return
+          render json: { error: "User role is invalid or missing" }, status: :unprocessable_entity and return
         end
 
         # ✅ Generate JWT tokens
@@ -43,7 +41,7 @@ module Api
 
         render json: {
           message: "Login successful",
-          auth_token: access_token,   # ✅ frontend still sees auth_token
+          auth_token: access_token,
           refresh_token: refresh_token,
           exp: access_exp,
           user: {
@@ -60,7 +58,7 @@ module Api
         }, status: :ok
       end
 
-      # Logout (JWT is stateless, so just let frontend drop it)
+      # Logout (JWT is stateless)
       def destroy
         Rails.logger.info "Logout requested (JWT is stateless, no server cleanup)"
         render json: { message: "Logged out successfully" }, status: :ok
@@ -115,11 +113,11 @@ module Api
         ]
         allowed_origins << /\.greensoftsolutions\.net$/  # regex for all subdomains
 
-        if allowed_origins.any? { |o| o.is_a?(Regexp) ? o.match?(origin) : o == origin }
+        if origin.present? && allowed_origins.any? { |o| o.is_a?(Regexp) ? o.match?(origin) : o == origin }
           headers['Access-Control-Allow-Origin'] = origin
           headers['Access-Control-Allow-Credentials'] = 'true'
-          headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD'
-          headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,X-Organization-Subdomain'
+          headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD'
+          headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, X-Organization-Subdomain'
         end
       end
 
