@@ -6,13 +6,6 @@ module Api
       before_action :set_organization_from_subdomain
 
       def show
-        # Fetch user from JWT if provided
-        if current_user
-          Rails.logger.info "Current user #{current_user.id} accessing profile"
-        else
-          Rails.logger.warn "No valid JWT provided; accessing organization profile as public"
-        end
-
         render json: {
           organization: {
             id: @organization.id,
@@ -29,7 +22,6 @@ module Api
 
       private
 
-      # CORS headers
       def set_cors_headers
         origin = request.headers['Origin']
         allowed_origins = [
