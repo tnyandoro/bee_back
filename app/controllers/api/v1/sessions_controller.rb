@@ -34,26 +34,18 @@ module Api
           return
         end
 
-        begin
-          # Generate new tokens if blank or expired
-          if user.auth_token.blank? || user.token_expires_at&.past?
-            user.update!(
-              auth_token: SecureRandom.hex(20),
-              token_expires_at: 1.day.from_now,
-              refresh_token: SecureRandom.hex(30),
-              refresh_token_expires_at: 7.days.from_now
-            )
-          end
-        rescue StandardError => e
-          Rails.logger.error "Failed to generate tokens for user #{user.id}: #{e.message}"
-          render json: { error: "Failed to generate authentication token" }, status: :internal_server_error
-          return
-        end
+        # ✅ Generate JWT tokens
+        access_exp = 24.hours.from_now.to_i
+        refresh_exp = 7.days.from_now.to_i
+
+        access_token = JwtService.encode({ user_id: user.id, org_id: @organization.id, exp: access_exp })
+        refresh_token = JwtService.encode({ user_id: user.id, org_id: @organization.id, exp: refresh_exp, type: "refresh" })
 
         render json: {
           message: "Login successful",
-          auth_token: user.auth_token,
-          refresh_token: user.refresh_token,
+          auth_token: access_token,   # ✅ frontend still sees auth_token
+          refresh_token: refresh_token,
+          exp: access_exp,
           user: {
             id: user.id,
             email: user.email,
@@ -68,19 +60,10 @@ module Api
         }, status: :ok
       end
 
-      # Logout
+      # Logout (JWT is stateless, so just let frontend drop it)
       def destroy
-        token = request.headers['Authorization']&.split(' ')&.last
-        user = User.find_by(auth_token: token)
-
-        if user
-          user.update(auth_token: nil, token_expires_at: nil, refresh_token: nil, refresh_token_expires_at: nil)
-          Rails.logger.info "User #{user.id} logged out successfully"
-          render json: { message: "Logged out successfully" }, status: :ok
-        else
-          Rails.logger.warn "Logout failed: Invalid token"
-          render json: { error: "Invalid token" }, status: :unauthorized
-        end
+        Rails.logger.info "Logout requested (JWT is stateless, no server cleanup)"
+        render json: { message: "Logged out successfully" }, status: :ok
       end
 
       # Verify token validity
@@ -105,17 +88,16 @@ module Api
         end
       end
 
-      # Refresh auth_token using a valid refresh_token
+      # Refresh auth_token using refresh_token
       def refresh
-        refresh_token = params[:refresh_token]
-        user = User.find_by(refresh_token: refresh_token)
+        token = params[:refresh_token]
+        payload = JwtService.decode(token)
 
-        if user && user.refresh_token_expires_at&.future?
-          user.update!(
-            auth_token: SecureRandom.hex(20),
-            token_expires_at: 1.day.from_now
-          )
-          render json: { auth_token: user.auth_token, message: "Token refreshed successfully" }, status: :ok
+        if payload && payload["type"] == "refresh" && payload["exp"] > Time.now.to_i
+          new_exp = 24.hours.from_now.to_i
+          new_token = JwtService.encode({ user_id: payload["user_id"], org_id: payload["org_id"], exp: new_exp })
+
+          render json: { auth_token: new_token, exp: new_exp, message: "Token refreshed successfully" }, status: :ok
         else
           render json: { error: "Invalid or expired refresh token" }, status: :unauthorized
         end
@@ -141,17 +123,15 @@ module Api
         end
       end
 
-      # Fetch current user from auth_token
+      # Fetch current user from JWT
       def current_user
         token = request.headers['Authorization']&.split(' ')&.last
         return unless token
 
-        @current_user ||= User.find_by(auth_token: token)&.tap do |user|
-          if user.token_expires_at&.past?
-            user.update(auth_token: nil, token_expires_at: nil)
-            Rails.logger.warn "Token expired for user #{user.id}"
-          end
-        end
+        payload = JwtService.decode(token)
+        return unless payload && payload["exp"] > Time.now.to_i
+
+        @current_user ||= User.find_by(id: payload["user_id"], organization_id: payload["org_id"])
       end
     end
   end
