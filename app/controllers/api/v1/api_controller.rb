@@ -13,8 +13,8 @@ module Api
       # --- Filters ---
       before_action :verify_admin, only: %i[update destroy], if: -> { respond_to?(:update) && respond_to?(:destroy) }
       before_action :set_organization_from_subdomain
-      before_action :authenticate_user!, except: [:create]
-      before_action :verify_user_organization, if: -> { current_user.present? && @organization.present? }, except: [:create, :validate_subdomain]
+      before_action :authenticate_user!, except: [:create, :refresh]
+      before_action :verify_user_organization, if: -> { current_user.present? && @organization.present? }, except: [:create, :refresh, :validate_subdomain]
 
       private
 
@@ -25,24 +25,22 @@ module Api
         render_error("Unauthorized", status: :unauthorized) unless current_user
       end
 
+      # Fetch current user using JWT
       def current_user
         return @current_user if defined?(@current_user)
 
         token = request.headers['Authorization']&.split(' ')&.last
         return @current_user = nil if token.blank?
 
-        # Only debug in development; never log tokens in production
-        Rails.logger.debug { "Authenticating with token (development only)" } if Rails.env.development?
-
-        user = User.find_by(auth_token: token)
-
-        # Enforce org match if @organization is resolved
-        if @organization && user && user.organization_id != @organization.id
-          Rails.logger.warn "Token valid but user #{user.email} does not belong to org #{@organization.id}"
-          return @current_user = nil
+        payload = JwtService.decode(token)
+        if payload && payload["exp"] > Time.now.to_i
+          @current_user = User.find_by(id: payload["user_id"], organization_id: payload["org_id"])
+        else
+          @current_user = nil
         end
-
-        @current_user = user
+      rescue JWT::DecodeError => e
+        Rails.logger.warn "JWT decode error: #{e.message}"
+        @current_user = nil
       end
 
       # ---------------------------

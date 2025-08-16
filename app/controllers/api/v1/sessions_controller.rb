@@ -5,13 +5,17 @@ module Api
       before_action :set_cors_headers
       after_action :set_cors_headers # ensure headers are added to all responses
 
+      # ---------------------------
       # OPTIONS for CORS preflight
+      # ---------------------------
       def options
         Rails.logger.info "Handling OPTIONS request for /api/v1/login, origin=#{request.headers['Origin']}"
         head :ok
       end
 
+      # ---------------------------
       # Login
+      # ---------------------------
       def create
         Rails.logger.info "Login attempt: email=#{params[:email]}, subdomain=#{params[:subdomain]}, origin=#{request.headers['Origin']}"
 
@@ -32,7 +36,7 @@ module Api
           render json: { error: "User role is invalid or missing" }, status: :unprocessable_entity and return
         end
 
-        # ✅ Generate JWT tokens
+        # Generate JWT tokens
         access_exp = 24.hours.from_now.to_i
         refresh_exp = 7.days.from_now.to_i
 
@@ -58,13 +62,17 @@ module Api
         }, status: :ok
       end
 
+      # ---------------------------
       # Logout (JWT is stateless)
+      # ---------------------------
       def destroy
         Rails.logger.info "Logout requested (JWT is stateless, no server cleanup)"
         render json: { message: "Logged out successfully" }, status: :ok
       end
 
+      # ---------------------------
       # Verify token validity
+      # ---------------------------
       def verify
         if current_user
           Rails.logger.info "Token verified for user #{current_user.id}"
@@ -75,7 +83,9 @@ module Api
         end
       end
 
+      # ---------------------------
       # Verify admin token
+      # ---------------------------
       def verify_admin
         if current_user&.is_admin?
           Rails.logger.info "Admin token verified for user #{current_user.id}"
@@ -86,7 +96,9 @@ module Api
         end
       end
 
+      # ---------------------------
       # Refresh auth_token using refresh_token
+      # ---------------------------
       def refresh
         token = params[:refresh_token]
         payload = JwtService.decode(token)
@@ -103,7 +115,9 @@ module Api
 
       private
 
+      # ---------------------------
       # CORS headers
+      # ---------------------------
       def set_cors_headers
         origin = request.headers['Origin']
         allowed_origins = [
@@ -121,7 +135,9 @@ module Api
         end
       end
 
+      # ---------------------------
       # Fetch current user from JWT
+      # ---------------------------
       def current_user
         token = request.headers['Authorization']&.split(' ')&.last
         return unless token
