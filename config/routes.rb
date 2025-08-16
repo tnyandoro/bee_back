@@ -11,6 +11,7 @@ Rails.application.routes.draw do
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
       get '/verify', to: 'sessions#verify'
+      post '/refresh', to: 'sessions#refresh'        # ✅ Refresh token endpoint
       post '/register', to: 'registrations#create'
       get '/verify_admin', to: 'sessions#verify_admin'
       post '/password/reset', to: 'passwords#reset'     
@@ -71,7 +72,7 @@ Rails.application.routes.draw do
     [200, { 'Content-Type' => 'application/json' }, [{ message: 'API is live' }.to_json]]
   }
 
-  # ✅ Catch-all fallback route for frontend
+  # ✅ Catch-all fallback route for frontend L
   get '*path', to: proc {
     [404, { 'Content-Type' => 'application/json' }, [{ error: 'Not found' }.to_json]]
   }, constraints: ->(req) { !req.path.start_with?('/api', '/cable', '/rails') }
