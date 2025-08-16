@@ -1,43 +1,50 @@
 module Api
   module V1
     class ProfilesController < Api::V1::ApiController
-
-      include Rails.application.routes.url_helpers
-      
+      skip_before_action :authenticate_user!, only: [:show]
+      before_action :set_cors_headers
+      before_action :set_organization_from_subdomain
 
       def show
-        user = current_user
-
-        unless user && user.organization_id == @organization.id
-          return render_unauthorized("Invalid user or organization")
+        # Fetch user from JWT if provided
+        if current_user
+          Rails.logger.info "Current user #{current_user.id} accessing profile"
+        else
+          Rails.logger.warn "No valid JWT provided; accessing organization profile as public"
         end
 
         render json: {
-          user: user_profile_json(user),
-          organization: organization_profile_json(@organization)
+          organization: {
+            id: @organization.id,
+            name: @organization.name,
+            subdomain: @organization.subdomain,
+            email: @organization.email,
+            web_address: @organization.web_address,
+            phone_number: @organization.phone_number,
+            logo_url: @organization.logo_url
+          },
+          current_user: current_user&.slice(:id, :name, :email, :role, :team_id)
         }, status: :ok
       end
 
       private
 
-      def user_profile_json(user)
-        user.as_json(only: [
-          :id, :email, :name, :username, :role, :position,
-          :phone_number, :department_id, :team_id, :organization_id,
-          :is_admin, :team_ids
-        ]).merge({
-          profile_picture_url: user.profile_picture.attached? ? url_for(user.profile_picture) : nil
-        })
-      end      
+      # CORS headers
+      def set_cors_headers
+        origin = request.headers['Origin']
+        allowed_origins = [
+          'https://itsm-gss.netlify.app',
+          'https://gsolve360.greensoftsolutions.net',
+          'http://localhost:3000'
+        ]
+        allowed_origins << /\.greensoftsolutions\.net$/
 
-      def organization_profile_json(org)
-        {
-          id: org.id,
-          name: org.name,
-          subdomain: org.subdomain,
-          web_address: org.web_address,
-          phone_number: org.phone_number
-        }
+        if origin.present? && allowed_origins.any? { |o| o.is_a?(Regexp) ? o.match?(origin) : o == origin }
+          headers['Access-Control-Allow-Origin'] = origin
+          headers['Access-Control-Allow-Credentials'] = 'true'
+          headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD'
+          headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, X-Organization-Subdomain'
+        end
       end
     end
   end
