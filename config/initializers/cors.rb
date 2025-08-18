@@ -10,7 +10,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
         'https://d10tmedpan81b6.cloudfront.net',
         'https://gsolve360.greensoftsolutions.net', 
         'https://www.gsolve360.greensoftsolutions.net', 
-        'https://www.greensoftsolutions.net'
+        'https://www.greensoftsolutions.net',
         /\.lvh\.me(:\d+)?$/,
         /\.localhost(:\d+)?$/,
       )
