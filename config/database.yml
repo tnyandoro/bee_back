@@ -7,22 +7,22 @@ default: &default
   reaping_frequency: 10
   checkout_timeout: 10
 
-# development:
-#   <<: *default
-#   database: itsm_production_db_plyf
-#   username: <%= ENV.fetch("DB_USERNAME", "itsm_production_db_plyf_user") %>
-#   password: <%= ENV.fetch("DB_PASSWORD", "raQ0f5pTjvb2f0khenurB3lWwv6jwoDf") %>
-#   host: <%= ENV.fetch("DB_HOST", "dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com") %>   # Use "db" if Rails runs inside Docker
-#   port: 5432
-#   sslmode: require
-
 development:
   <<: *default
-  database: itsm_development
-  username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
-  password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
-  host: <%= ENV.fetch("DB_HOST", "localhost") %>
+  database: itsm_production_db_plyf
+  username: <%= ENV.fetch("DB_USERNAME", "itsm_production_db_plyf_user") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "raQ0f5pTjvb2f0khenurB3lWwv6jwoDf") %>
+  host: <%= ENV.fetch("DB_HOST", "dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com") %>   # Use "db" if Rails runs inside Docker
   port: 5432
+  sslmode: require
+
+# development:
+#   <<: *default
+#   database: itsm_development
+#   username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
+#   password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
+#   host: <%= ENV.fetch("DB_HOST", "localhost") %>
+#   port: 5432
 
 # test:
 #   <<: *default
