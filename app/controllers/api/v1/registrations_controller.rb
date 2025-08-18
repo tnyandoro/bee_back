@@ -1,6 +1,11 @@
+# 
+
 module Api
   module V1
     class RegistrationsController < Api::V1::ApiController
+      # Skip the subdomain filter for registration
+      skip_before_action :set_organization_from_subdomain, only: [:create]
+
       # skip_before_action :authenticate_user!, only: [:create]
       rescue_from ActiveRecord::RecordInvalid, with: :handle_validation_error
 
