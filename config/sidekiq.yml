@@ -1,0 +1,6 @@
+:queues:
+  - default
+  - mailers
+:concurrency: 5
+:verbose: true
+:retry: true
