@@ -102,6 +102,7 @@ services:
     environment:
       RAILS_ENV: production
       REDIS_URL: redis://default:zKnV0z9cfr4J6GVk4WQ5@10.0.13.21:6379/1
+      SECRET_KEY_BASE: 4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916
     volumes:
       - .:/rails
     networks:
