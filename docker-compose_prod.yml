@@ -93,6 +93,23 @@ services:
     networks:
       - itsm_network
 
+  sidekiq:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sidekiq
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    environment:
+      RAILS_ENV: production
+      REDIS_URL: redis://default:zKnV0z9cfr4J6GVk4WQ5@10.0.13.21:6379/1
+    volumes:
+      - .:/rails
+    networks:
+      - itsm_network
+    depends_on:
+      # - redis
+      - itsm_api 
+
 volumes:
   pg_data:
 
