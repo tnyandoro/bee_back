@@ -106,9 +106,9 @@ services:
       - .:/rails
     networks:
       - itsm_network
-    depends_on:
-      # - redis
-      - itsm_api 
+    # depends_on:
+    #   # - redis
+    #   - itsm_api 
 
 volumes:
   pg_data:
