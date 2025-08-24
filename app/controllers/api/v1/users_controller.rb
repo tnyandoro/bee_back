@@ -4,6 +4,11 @@ module Api
       before_action :set_user, only: [:show, :update, :destroy, :profile]
       after_action :verify_authorized
 
+      # OPTIONS for CORS preflight
+      def options
+        head :ok
+      end
+
       # GET /users/profile
       def profile
         authorize @user
@@ -24,7 +29,7 @@ module Api
       # GET /users/:id
       def show
         authorize @user
-        render_success(user_profile_attributes(@user)) # Only safe attributes
+        render_success(user_profile_attributes(@user))
       rescue StandardError => e
         render_internal_server_error(e)
       end
@@ -32,7 +37,7 @@ module Api
       # POST /users
       def create
         @user = @organization.users.new(user_params)
-        @user.auth_token = SecureRandom.hex(20) # Do NOT return this in response
+        @user.auth_token = SecureRandom.hex(20) 
         @user.skip_auth_token = true if @user.respond_to?(:skip_auth_token=)
         authorize @user
 
@@ -81,17 +86,9 @@ module Api
 
       def user_params
         params.require(:user).permit(
-          :name,
-          :last_name,
-          :email,
-          :username,
-          :phone_number,
-          :position,
-          :role,
-          :password,
-          :password_confirmation,
-          :avatar,
-          :department_id
+          :name, :last_name, :email, :username, :phone_number,
+          :position, :role, :password, :password_confirmation,
+          :avatar, :department_id
         )
       end
 
@@ -109,14 +106,13 @@ module Api
         end
       end
 
-      # Only safe attributes sent to frontend
       def user_attributes(user)
         {
           id: user.id,
           name: user.name,
           username: user.username,
           email: user.email,
-          role: user.role,           # Optional: remove if not needed
+          role: user.role,
           team_id: user.team_id,
           department_id: user.department_id,
           position: user.position,
@@ -128,7 +124,7 @@ module Api
         {
           id: user.id,
           email: user.email,
-          role: user.role,           # Optional
+          role: user.role,
           is_admin: user.role.in?(['system_admin', 'domain_admin']),
           name: user.name,
           username: user.username,
