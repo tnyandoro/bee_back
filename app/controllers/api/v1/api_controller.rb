@@ -11,10 +11,9 @@ module Api
       rescue_from StandardError, with: :render_internal_server_error
 
       # --- Filters ---
-      before_action :verify_admin, only: %i[update destroy], if: -> { respond_to?(:update) && respond_to?(:destroy) }
       before_action :set_organization_from_subdomain
-      before_action :authenticate_user!, except: [:create, :refresh]
-      before_action :verify_user_organization, if: -> { current_user.present? && @organization.present? }, except: [:create, :refresh, :validate_subdomain]
+      before_action :authenticate_user!
+      before_action :verify_user_organization, if: -> { current_user.present? && @organization.present? }
 
       private
 
@@ -25,7 +24,6 @@ module Api
         render_error("Unauthorized", status: :unauthorized) unless current_user
       end
 
-      # Fetch current user using JWT
       def current_user
         return @current_user if defined?(@current_user)
 
@@ -47,25 +45,18 @@ module Api
       # Organization resolution
       # ---------------------------
       def set_organization_from_subdomain
-        param_subdomain = params[:subdomain] || params[:organization_subdomain] || params[:organization_id]
-        param_subdomain ||= request.subdomains.first
-
-        Rails.logger.info "Subdomain sources: params[:subdomain]=#{params[:subdomain]}, params[:organization_subdomain]=#{params[:organization_subdomain]}, params[:organization_id]=#{params[:organization_id]}, request.subdomains=#{request.subdomains.inspect}"
-
+        param_subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
         param_subdomain = 'demo' if Rails.env.development? && param_subdomain.blank?
 
         if param_subdomain.blank? && Organization.count == 1
           @organization = Organization.first
-          Rails.logger.info "Single-tenant fallback: Organization ID #{@organization.id}"
           return
         end
 
-        return render_error("Subdomain is missing in the request", status: :bad_request) unless param_subdomain.present?
+        return render_error("Subdomain is missing", status: :bad_request) unless param_subdomain.present?
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
-        return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found) unless @organization
-
-        Rails.logger.info "Organization found: #{@organization.id} - #{@organization.subdomain}"
+        return render_error("Organization not found", status: :not_found) unless @organization
       end
 
       # ---------------------------
@@ -75,7 +66,6 @@ module Api
         return if current_user.nil? || @organization.nil?
 
         if current_user.organization_id != @organization.id
-          Rails.logger.warn "User #{current_user.email} (org=#{current_user.organization_id}) tried to access org=#{@organization.id}"
           render_error("User does not belong to this organization", status: :forbidden)
         end
       end
@@ -83,7 +73,7 @@ module Api
       # ---------------------------
       # Rendering helpers
       # ---------------------------
-      def render_success(data, message = "Success", status = :ok)
+      def render_success(data, message = "Success", status: :ok)
         render json: { message: message, data: data }, status: status
       end
 

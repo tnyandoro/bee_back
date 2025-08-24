@@ -1,8 +1,9 @@
 module Api
   module V1
     class ProfilesController < ApiController
+      # Public endpoint: skip authentication & org verification
       skip_before_action :authenticate_user!, only: [:show]
-      skip_before_action :verify_user_organization, only: [:show] # <--- important
+      skip_before_action :verify_user_organization, only: [:show]
 
       before_action :set_cors_headers
 

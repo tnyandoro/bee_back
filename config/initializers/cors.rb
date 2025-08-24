@@ -33,11 +33,11 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
             'https://www.greensoftsolutions.net'
 
     resource '/api/v1/*',
-             headers: :any,
-             methods: [:get, :post, :put, :patch, :delete, :options, :head],
-             credentials: true,
-             expose: ['Authorization', 'X-Organization-Subdomain'],
-             max_age: 600
+              headers: :any,
+              methods: [:get, :post, :put, :patch, :delete, :options, :head],
+              credentials: true,
+              expose: ['Authorization', 'X-Organization-Subdomain'],
+              max_age: 600
+      end
   end
- end
 end

@@ -1,17 +1,18 @@
 module Api
   module V1
     class DashboardController < Api::V1::ApiController
+      before_action :set_organization
+
       def show
-        return render_error("Organization not found", status: :not_found) unless @organization
+        Rails.logger.info "📊 Dashboard request for subdomain=#{@organization.subdomain}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        Rails.logger.info "📊 Dashboard request for subdomain=#{params[:subdomain]}, org=#{@organization.name} (ID: #{@organization.id})"
-
-        cache_key = "dashboard:v30:org_#{@organization.id}" # Updated version
+        cache_key = "dashboard:v31:org_#{@organization.id}" # Updated version
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
 
-        render_success(data, "Dashboard loaded successfully", :ok)
+        # Fixed argument issue: status must be keyword
+        render_success(data, "Dashboard loaded successfully", status: :ok)
       rescue => e
         Rails.logger.error "❌ Dashboard error: #{e.class} - #{e.message}"
         Rails.logger.error e.backtrace.take(10).join("\n  ")
@@ -20,13 +21,18 @@ module Api
 
       private
 
+      def set_organization
+        @organization = Organization.find_by(subdomain: params[:subdomain])
+        render_error("Organization not found", status: :not_found) unless @organization
+      end
+
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v30 (priority validation fix)"
+        Rails.logger.info "Using DashboardController version v31 (safe queries fix)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
 
-        # Bulk preload queries
+        # Preload queries safely
         tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
         users_count = User.where(organization_id: org_id).count
         problems = Problem.where(organization_id: org_id)
@@ -90,52 +96,43 @@ module Api
       end
 
       def compute_status_counts(tickets)
-        status_labels = {
-          0 => "open",
-          1 => "assigned",
-          2 => "escalated",
-          3 => "closed",
-          4 => "suspended",
-          5 => "resolved",
-          6 => "pending"
-        }
+        status_labels = { 0=>"open", 1=>"assigned", 2=>"escalated", 3=>"closed", 4=>"suspended", 5=>"resolved", 6=>"pending" }
         counts = status_labels.values.index_with { 0 }
         invalid_statuses = []
 
         tickets.group(:status).count.each do |status, count|
-          status_key = status.is_a?(String) ? status.to_i : status
-          if status_labels.key?(status_key)
-            counts[status_labels[status_key]] = count
+          key = status.is_a?(String) ? status.to_i : status
+          if status_labels.key?(key)
+            counts[status_labels[key]] = count
           else
             invalid_statuses << [status, count]
           end
         end
 
         if invalid_statuses.any?
-          Rails.logger.warn "Invalid ticket statuses found: #{invalid_statuses.map { |s, c| "#{s}: #{c}" }.join(', ')}"
+          Rails.logger.warn "Invalid ticket statuses: #{invalid_statuses.map { |s,c| "#{s}:#{c}" }.join(', ')}"
         end
 
         counts
       end
 
       def compute_priority_counts(tickets)
-        priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
+        priority_labels = { "0"=>"p4", "1"=>"p3", "2"=>"p2", "3"=>"p1" }
         counts = priority_labels.values.index_with { 0 }
         invalid_priorities = []
 
         tickets.group(:priority).count.each do |priority, count|
-          priority_key = priority.to_s
-          if priority_labels.values.include?(priority_key)
-            counts[priority_key] = count
+          key = priority.to_s
+          if priority_labels.keys.include?(key)
+            counts[priority_labels[key]] = count
           else
             invalid_priorities << [priority, count]
           end
         end
 
         if invalid_priorities.any?
-          Rails.logger.warn "Invalid ticket priorities found: #{invalid_priorities.map { |p, c| "#{p}: #{c}" }.join(', ')}"
-          # Clean up invalid priorities
-          tickets.where(priority: invalid_priorities.map(&:first)).update_all(priority: '0') # Maps to p4
+          Rails.logger.warn "Invalid ticket priorities: #{invalid_priorities.map { |p,c| "#{p}:#{c}" }.join(', ')}"
+          tickets.where(priority: invalid_priorities.map(&:first)).update_all(priority: '0')
           counts = priority_labels.values.index_with { 0 }
           tickets.group(:priority).count.each do |priority, count|
             counts[priority_labels[priority.to_s]] = count if priority_labels[priority.to_s]
@@ -148,7 +145,7 @@ module Api
       def compute_sla_metrics(tickets)
         breached_count = tickets.where(sla_breached: true).count
         breaching_soon_count = if Ticket.column_names.include?("breaching_sla")
-                                 tickets.where(breaching_sla: true, status: [0, 1, 2]).count
+                                 tickets.where(breaching_sla: true, status: [0,1,2]).count
                                else
                                  0
                                end
@@ -168,13 +165,11 @@ module Api
                .order("count_all DESC")
                .limit(5)
                .count
-               .map { |(id, name), count| { name: name || "Unknown", count: count } }
+               .map { |(id,name),count| { name: name || "Unknown", count: count } }
       end
 
       def fetch_recent_tickets(tickets)
-        tickets.order("created_at DESC")
-               .limit(10)
-               .map do |t|
+        tickets.order("created_at DESC").limit(10).map do |t|
           {
             id: t.id,
             title: t.title || "Untitled",
@@ -190,22 +185,13 @@ module Api
       end
 
       def compute_status_label(status)
-        status_labels = {
-          0 => "open",
-          1 => "assigned",
-          2 => "escalated",
-          3 => "closed",
-          4 => "suspended",
-          5 => "resolved",
-          6 => "pending"
-        }
-        status_key = status.is_a?(String) ? status.to_i : status
-        status_labels[status_key] || "Unknown (#{status})"
+        labels = { 0=>"open", 1=>"assigned", 2=>"escalated", 3=>"closed", 4=>"suspended", 5=>"resolved", 6=>"pending" }
+        labels[status.is_a?(String) ? status.to_i : status] || "Unknown (#{status})"
       end
 
       def compute_priority_label(priority)
-        priority_labels = { "0" => "p4", "1" => "p3", "2" => "p2", "3" => "p1" }
-        priority_labels[priority.to_s] || "Unknown (#{priority})"
+        labels = { "0"=>"p4", "1"=>"p3", "2"=>"p2", "3"=>"p1" }
+        labels[priority.to_s] || "Unknown (#{priority})"
       end
 
       def safe_user_name(user, fallback_name, fallback_email)
