@@ -2,8 +2,6 @@ module Api
   module V1
     class SessionsController < Api::V1::ApiController
       skip_before_action :authenticate_user!, only: [:create, :options, :refresh]
-      before_action :set_cors_headers
-      after_action :set_cors_headers # ensure headers are added to all responses
 
       # ---------------------------
       # OPTIONS for CORS preflight
@@ -114,26 +112,6 @@ module Api
       end
 
       private
-
-      # ---------------------------
-      # CORS headers
-      # ---------------------------
-      def set_cors_headers
-        origin = request.headers['Origin']
-        allowed_origins = [
-          'https://itsm-gss.netlify.app',
-          'https://gsolve360.greensoftsolutions.net',
-          'http://localhost:3000'
-        ]
-        allowed_origins << /\.greensoftsolutions\.net$/  # regex for all subdomains
-
-        if origin.present? && allowed_origins.any? { |o| o.is_a?(Regexp) ? o.match?(origin) : o == origin }
-          headers['Access-Control-Allow-Origin'] = origin
-          headers['Access-Control-Allow-Credentials'] = 'true'
-          headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD'
-          headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, X-Organization-Subdomain'
-        end
-      end
 
       # ---------------------------
       # Fetch current user from JWT
