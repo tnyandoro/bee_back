@@ -116,7 +116,7 @@ module Api
           team_id: user.team_id,
           department_id: user.department_id,
           position: user.position,
-          avatar_url: user.avatar.attached? ? url_for(user.avatar) : nil
+          avatar_url: avatar_url(user)
         }
       end
 
@@ -129,8 +129,17 @@ module Api
           name: user.name,
           username: user.username,
           position: user.position,
-          avatar_url: user.avatar.attached? ? url_for(user.avatar) : nil
+          avatar_url: avatar_url(user)
         }
+      end
+
+      def avatar_url(user)
+        return nil unless user.avatar.attached?
+
+        # Generate full URL for the avatar
+        Rails.application.routes.url_helpers.rails_blob_url(user.avatar, only_path: false)
+      rescue StandardError
+        nil
       end
     end
   end

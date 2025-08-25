@@ -1,15 +1,7 @@
 module Api
   module V1
     class SessionsController < Api::V1::ApiController
-      skip_before_action :authenticate_user!, only: [:create, :options, :refresh]
-
-      # ---------------------------
-      # OPTIONS for CORS preflight
-      # ---------------------------
-      def options
-        Rails.logger.info "Handling OPTIONS request for /api/v1/login, origin=#{request.headers['Origin']}"
-        head :ok
-      end
+      skip_before_action :authenticate_user!, only: [:create, :refresh]
 
       # ---------------------------
       # Login
