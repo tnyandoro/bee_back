@@ -1,4 +1,4 @@
-# class TicketNotificationMailer < ApplicationMailer
+class TicketNotificationMailer < ApplicationMailer
 #   default from: 'gsolve360@yahoo.com'
 
 #   # Notify a user about a new ticket creation
@@ -41,4 +41,4 @@
 #       raise ArgumentError, "Invalid recipient: must be User or Team"
 #     end
 #   end
-# end
+end
