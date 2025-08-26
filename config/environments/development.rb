@@ -27,26 +27,24 @@ Rails.application.configure do
   # Store uploaded files locally
   config.active_storage.service = :local
 
-  # MAILER SETTINGS
-  config.action_mailer.delivery_method = :letter_opener
-  config.action_mailer.perform_deliveries = true
+  # === MAILER SETTINGS (Yahoo SMTP) ===
+
   config.action_mailer.perform_deliveries = true
   config.action_mailer.raise_delivery_errors = true
-  config.action_mailer.perform_caching = false
+  config.action_mailer.default_options = {from: 'greensoftsolutionstest@gmail.com'}
+
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-    address: 'localhost',
-    port: 1025
-  }
-  config.action_mailer.default_url_options = { host: 'lvh.me', port: 3001, protocol: 'http' }
-  config.action_mailer.asset_host = 'http://lvh.me:3001'
+  address:              'smtp.gmail.com',
+  port:                 587,
+  domain:               'tenda',
+  user_name:            'greensoftsolutionstest@gmail.com',
+  password:             'ohch uejg nkqx cqid',
+  authentication:       'plain',
+  enable_starttls_auto: true  }
 
-  # Alternative: Use Mailcatcher for SMTP testing
-  # config.action_mailer.delivery_method = :smtp
-  # config.action_mailer.smtp_settings = {
-  #   address: 'localhost',
-  #   port: 1025
-  # }
+  config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
+  # config.action_mailer.asset_host = "http://localhost:3000"
 
   # Print deprecation notices
   config.active_support.deprecation = :log
@@ -74,14 +72,13 @@ Rails.application.configure do
   config.action_controller.raise_on_missing_callback_actions = true
 
   # SUBDOMAIN ROUTING SUPPORT
-  config.hosts << "watoli.localhost"
+  # config.hosts << "watoli.localhost"
   config.hosts << "lvh.me"
   config.hosts << /.+\.lvh\.me/
   config.action_dispatch.tld_length = 1
 
   # ACTION CABLE (WebSockets) using Redis
   config.action_cable.url = "ws://localhost:3000/cable"
-  # config.action_cable.adapter = :redis
   config.action_cable.allowed_request_origins = [
     "http://localhost:3000",
     "http://localhost:3001",

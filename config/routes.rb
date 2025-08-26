@@ -50,7 +50,8 @@ Rails.application.routes.draw do
 
         resources :tickets, only: [:index, :show, :create, :update, :destroy] do
           collection do
-            get :export  
+            get :export
+            get :debug_visibility  # Added debug endpoint for troubleshooting ticket visibility
           end
         
           post :assign_to_user, on: :member
@@ -72,7 +73,7 @@ Rails.application.routes.draw do
     [200, { 'Content-Type' => 'application/json' }, [{ message: 'API is live' }.to_json]]
   }
 
-  # ✅ Catch-all fallback route for frontend L
+  # ✅ Catch-all fallback route for frontend
   get '*path', to: proc {
     [404, { 'Content-Type' => 'application/json' }, [{ error: 'Not found' }.to_json]]
   }, constraints: ->(req) { !req.path.start_with?('/api', '/cable', '/rails') }

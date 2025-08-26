@@ -1,8 +1,12 @@
 module Api
   module V1
     class ProfilesController < ApiController
-      skip_before_action :authenticate_user!, only: [:show]
-      skip_before_action :verify_user_organization, only: [:show] # <--- important
+      # skip_before_action :authenticate_user!, only: [:show]
+      # skip_before_action :verify_user_organization, only: [:show]
+      # Remove skip for show
+      before_action :authenticate_user!
+      before_action :verify_user_organization
+
 
       before_action :set_cors_headers
 

@@ -1,0 +1,19 @@
+Ticket Assigned to Your Team
+
+Hello <%= @user.name %>,
+
+A new ticket has been assigned to your team.
+
+Ticket Details:
+Ticket #: <%= @ticket.ticket_number %>
+Title: <%= @ticket.title %>
+Priority: <%= @ticket.priority %>
+Status: <%= @ticket.status %>
+<% if @ticket.description %>
+Description: <%= @ticket.description %>
+<% end %>
+
+Please log in to the system to view more details and take action.
+
+Best regards,
+Gsolve360 ITSM System

@@ -1,5 +1,5 @@
 class NotificationMailer < ApplicationMailer
-    default from: 'no-reply@itsm-system.com'
+    default from: 'gsolve360@​yahoo.com'
   
     def ticket_created_notification(ticket, recipient)
       @ticket = ticket
