@@ -1,32 +1,19 @@
 class TicketNotificationMailer < ApplicationMailer
   default from: 'greensoftsolutionstest@gmail.com'
 
-  # Notify a user about a new ticket creation
   def ticket_created(ticket, recipient)
     @ticket = ticket
-    mail(
-      to: recipient.email,
-      subject: "New Ticket Created: #{@ticket.title}"
-    )
+    mail(to: recipient.email, subject: "New Ticket Created: #{@ticket.title}")
   end
 
-  # Notify assignee(s) about ticket assignment
-  # recipient can be a User or a Team
   def ticket_assigned(ticket, recipient)
     @ticket = ticket
-    mail(
-      to: recipient_emails(recipient),
-      subject: "New Ticket Assigned: #{@ticket.title}"
-    )
+    mail(to: recipient_emails(recipient), subject: "New Ticket Assigned: #{@ticket.title}")
   end
 
-  # Notify a user about a generic notification
   def notify_user(notification)
     @notification = notification
-    mail(
-      to: @notification.user.email,
-      subject: "ITSM Notification: #{@notification.message.truncate(50)}"
-    )
+    mail(to: @notification.user.email, subject: "ITSM Notification: #{@notification.message.truncate(50)}")
   end
 
   private
