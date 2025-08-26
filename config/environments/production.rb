@@ -2,7 +2,7 @@
 
 # Rails.application.configure do
 #   # Settings specified here will take precedence over those in config/application.rb.
-#   Rails.application.routes.default_url_options[:host] = 'https://itsm-api.onrender.com'
+#   Rails.application.routes.default_url_options[:host] = 'https://itsmapi.greensoftsolutions.net'
 
   
 
@@ -76,10 +76,10 @@
 #     authentication: :plain,
 #     user_name: "apikey",
 #     password: ENV["SENDGRID_API_KEY"],
-#     domain: "https://itsm-api.onrender.com"
+#     domain: "https://itsmapi.greensoftsolutions.net"
 #   }
-#   config.action_mailer.default_url_options = { host: "https://itsm-api.onrender.com", protocol: "https" }
-#   config.action_mailer.asset_host = "https://itsm-api.onrender.com"
+#   config.action_mailer.default_url_options = { host: "https://itsmapi.greensoftsolutions.net", protocol: "https" }
+#   config.action_mailer.asset_host = "https://itsmapi.greensoftsolutions.net"
 
 #   # Enable locale fallbacks for I18n.
 #   config.i18n.fallbacks = true
@@ -94,89 +94,106 @@
 #   # config.hosts = [ "yourdomain.com", /.*\.yourdomain\.com/ ]
 #   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 # end
+
+
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
-  # Reload application's code on every request.
-  config.enable_reloading = true
+  # Settings specified here will take precedence over those in config/application.rb.
+  # Rails.application.routes.default_url_options[:host] = 'https://itsmapi.greensoftsolutions.net'
+  Rails.application.routes.default_url_options[:host] = 'https://itsm-api-w8vr.onrender.com'
 
-  # Do not eager load code on boot.
-  config.eager_load = false
 
-  # Show full error reports.
-  config.consider_all_requests_local = true
+  # Code is not reloaded between requests.
+  config.enable_reloading = false
 
-  # Enable server timing
-  config.server_timing = true
+  # Eager load code on boot.
+  config.eager_load = true
 
-  # Enable/disable caching. Run rails dev:cache to toggle.
-  if Rails.root.join("tmp/caching-dev.txt").exist?
-    config.cache_store = :memory_store
-    config.public_file_server.headers = {
-      "Cache-Control" => "public, max-age=#{2.days.to_i}"
-    }
-  else
-    config.action_controller.perform_caching = false
-    config.cache_store = :null_store
-  end
+  # Full error reports are disabled and caching is turned on.
+  config.consider_all_requests_local = false
 
-  # Store uploaded files locally
+  # Ensures that a master key has been made available in ENV["RAILS_MASTER_KEY"], config/master.key, or an environment
+  # key such as config/credentials/production.key.
+  # config.require_master_key = true
+
+  # Enable serving static files from `public/`, replacing rails_12factor functionality.
+  config.public_file_server.enabled = true
+
+  # Enable serving of images, stylesheets, and JavaScripts from an asset server.
+  # config.asset_host = "http://assets.example.com"
+
+  # Specifies the header that your server uses for sending files.
+  # config.action_dispatch.x_sendfile_header = "X-Sendfile" # for Apache
+  # config.action_dispatch.x_sendfile_header = "X-Accel-Redirect" # for NGINX
+
+  # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :local
+  # config.active_storage.service = :cloudinary
 
-  # === MAILER SETTINGS (Yahoo SMTP) ===
-  config.action_mailer.raise_delivery_errors = true
+  # Mount Action Cable outside main process or domain.
+  # config.action_cable.mount_path = nil
+  # config.action_cable.url = "wss://example.com/cable"
+  # config.action_cable.allowed_request_origins = [ "http://example.com", /http:\/\/example.*/ ]
+
+  # Assume all access to the app is happening through a SSL-terminating reverse proxy.
+  # config.assume_ssl = true
+
+  # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
+  # config.force_ssl = true
+  config.force_ssl = false
+
+  # Log to STDOUT, replacing rails_12factor functionality.
+  config.logger = ActiveSupport::Logger.new(STDOUT)
+    .tap  { |logger| logger.formatter = ::Logger::Formatter.new }
+    .then { |logger| ActiveSupport::TaggedLogging.new(logger) }
+
+  # Prepend all log lines with the following tags.
+  config.log_tags = [ :request_id ]
+
+  # Set log level from environment variable or default to "info".
+  config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
+
+  # Use a different cache store in production.
+  # config.cache_store = :mem_cache_store
+
+  # Use Sidekiq for Active Job.
+  config.active_job.queue_adapter = :sidekiq
+
+  config.action_mailer.perform_caching = false
+
+  # Configure Gmail SMTP for Action Mailer.
+  
   config.action_mailer.perform_deliveries = true
+  config.action_mailer.raise_delivery_errors = true
+  config.action_mailer.default_options = {from: 'greensoftsolutionstest@gmail.com'}
+
   config.action_mailer.delivery_method = :smtp
+  config.action_mailer.smtp_settings = {
+  address:              'smtp.gmail.com',
+  port:                 587,
+  domain:               'tenda',
+  user_name:            'greensoftsolutionstest@gmail.com',
+  password:             'ohch uejg nkqx cqid',
+  authentication:       'plain',
+  enable_starttls_auto: true  }
+  
+  # config.action_mailer.default_url_options = { host: "https://itsmapi.greensoftsolutions.net", protocol: "https" }
+  # config.action_mailer.asset_host = "https://itsmapi.greensoftsolutions.net"
 
-config.action_mailer.smtp_settings = {
-  address:              "smtp.mail.yahoo.com",
-  port:                 465,
-  domain:               "yahoo.com",
-  user_name:            "gsolve360@​yahoo.com", # plain string
-  password:             "Gr33nsoft123#",                       # plain string
-  authentication:       "plain",
-  enable_starttls_auto: true
-}
+  config.action_mailer.default_url_options = { host: "https://itsm-api-w8vr.onrender.com/", protocol: "https" }
+  config.action_mailer.asset_host = "https://itsm-api-w8vr.onrender.com/"
+  config.hosts << "itsm-api-w8vr.onrender.com"
+  # Enable locale fallbacks for I18n.
+  config.i18n.fallbacks = true
 
-  config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
-  config.action_mailer.asset_host = "http://localhost:3000"
+  # Don't log any deprecations.
+  config.active_support.report_deprecations = false
 
-  # Print deprecation notices
-  config.active_support.deprecation = :log
+  # Do not dump schema after migrations.
+  config.active_record.dump_schema_after_migration = false
 
-  # Raise exceptions for disallowed deprecations
-  config.active_support.disallowed_deprecation = :raise
-  config.active_support.disallowed_deprecation_warnings = []
-
-  # Raise error on page load if there are pending migrations
-  config.active_record.migration_error = :page_load
-
-  # Highlight code that triggered DB queries
-  config.active_record.verbose_query_logs = true
-
-  # Highlight code that enqueued jobs
-  config.active_job.verbose_enqueue_logs = true
-
-  # Raise for missing translations (optional)
-  # config.i18n.raise_on_missing_translations = true
-
-  # Annotate rendered view with partial names
-  config.action_view.annotate_rendered_view_with_filenames = true
-
-  # Raise error when before_action has unknown methods
-  config.action_controller.raise_on_missing_callback_actions = true
-
-  # SUBDOMAIN ROUTING SUPPORT
-  # config.hosts << "watoli.localhost"
-  config.hosts << "lvh.me"
-  config.hosts << /.+\.lvh\.me/
-  config.action_dispatch.tld_length = 1
-
-  # ACTION CABLE (WebSockets) using Redis
-  config.action_cable.url = "ws://localhost:3000/cable"
-  config.action_cable.allowed_request_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    /http:\/\/localhost:\d+/
-  ]
+  # Enable DNS rebinding protection.
+  # config.hosts = [ "yourdomain.com", /.*\.yourdomain\.com/ ]
+  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
