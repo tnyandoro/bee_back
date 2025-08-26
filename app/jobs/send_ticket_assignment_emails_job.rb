@@ -1,9 +1,21 @@
-# frozen_string_literal: true
 class SendTicketAssignmentEmailsJob < ApplicationJob
   queue_as :default
 
-  def perform(ticket, team, user)
-    TicketMailer.ticket_assigned_to_team(ticket, team).deliver_now
-    TicketMailer.ticket_assigned_to_user(ticket, user).deliver_now
+  def perform(ticket_id, team_id, user_id)
+    ticket = Ticket.find_by(id: ticket_id)
+    team = Team.find_by(id: team_id)
+    user = User.find_by(id: user_id)
+
+    return unless ticket # stop if ticket not found
+
+    # Send email to each team member individually
+    if team
+      team.users.find_each do |team_member|
+        TicketMailer.ticket_assigned_to_team(ticket, team_member).deliver_later
+      end
+    end
+
+    # Send email to individual user
+    TicketMailer.ticket_assigned_to_user(ticket, user).deliver_later if user
   end
 end

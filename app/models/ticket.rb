@@ -7,7 +7,7 @@ class Ticket < ApplicationRecord
 
   self.ignored_columns += ["user_id"]
 
-  after_create_commit :send_ticket_created_email
+  after_create :send_assignment_email, if: -> { assignee.present? }
 
   belongs_to :organization
   belongs_to :creator, class_name: "User"
@@ -277,6 +277,10 @@ class Ticket < ApplicationRecord
       read: false,
       notifiable: self
     )
+  end
+
+  def send_assignment_email
+  SendTicketAssignmentEmailsJob.perform_later(id, team_id, assignee_id)
   end
 
   def send_ticket_created_email

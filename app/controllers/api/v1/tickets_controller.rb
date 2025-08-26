@@ -47,7 +47,9 @@ module Api
         @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = current_user
         @ticket.requester = current_user
-        @ticket.reported_at ||= Time.current
+        # @ticket.reported_at ||= Time.zone.parse(ticket_params[:reported_at]) rescue Time.current
+        @ticket.reported_at ||= Time.zone.now
+
         @ticket.status = 'open'
       
         # Handle priority conversion
@@ -157,7 +159,7 @@ module Api
         end
 
         if @ticket.update(assignee: assignee, status: 'assigned')
-          SendTicketAssignmentEmailsJob.perform_later(@ticket, @ticket.team, assignee) if defined?(SendTicketAssignmentEmailsJob)
+          SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, assignee.id) if defined?(SendTicketAssignmentEmailsJob)
           create_assignment_notification(assignee)
           render json: ticket_attributes(@ticket).merge(
             notification: {
@@ -217,6 +219,14 @@ module Api
         end
       end
 
+      # Debug endpoint to check ticket visibility
+      def debug_visibility
+        return head :forbidden unless Rails.env.development? || current_user.admin?
+        
+        debug_info = debug_ticket_counts
+        render json: debug_info, status: :ok
+      end
+
       def tickets_to_csv(tickets)
         CSV.generate(headers: true) do |csv|
           csv << ["Ticket Number", "Title", "Status", "Priority", "Created At"]
@@ -235,19 +245,24 @@ module Api
       private
 
       def create_notifications
-        notification = Notification.create!(
-          user: @ticket.requester,
-          organization: @ticket.organization,
-          message: "New ticket created: #{@ticket.title} (#{@ticket.ticket_number})",
-          notifiable: @ticket,
-          read: false
-        )
-        NotificationMailer.notify_user(notification).deliver_later
-        if @ticket.assignee
-          notification = create_assignment_notification(@ticket.assignee)
+          # Notify requester
+          notification = Notification.create!(
+            user: @ticket.requester,
+            organization: @ticket.organization,
+            message: "New ticket created: #{@ticket.title} (#{@ticket.ticket_number})",
+            notifiable: @ticket,
+            read: false
+          )
           NotificationMailer.notify_user(notification).deliver_later
-          SendTicketAssignmentEmailsJob.perform_later(@ticket, @ticket.team, @ticket.assignee) if defined?(SendTicketAssignmentEmailsJob)
-        end
+
+          # Notify assignee and team
+          if @ticket.assignee
+            notification = create_assignment_notification(@ticket.assignee)
+            NotificationMailer.notify_user(notification).deliver_later
+
+            # Use IDs for job
+            SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, @ticket.assignee.id)
+          end
       end
 
       def ticket_attributes(ticket)
@@ -265,7 +280,7 @@ module Api
           assignee_id: ticket.assignee_id,
           requester_id: ticket.requester_id,
           creator_id: ticket.creator_id,
-          reported_at: ticket.reported_at&.iso8601,
+          reported_at: ticket.reported_at&.in_time_zone('Pretoria')&.strftime('%Y-%m-%dT%H:%M'),
           caller_name: ticket.caller_name,
           caller_surname: ticket.caller_surname,
           caller_email: ticket.caller_email,
@@ -273,12 +288,12 @@ module Api
           customer: ticket.customer,
           source: ticket.source,
           category: ticket.category,
-          response_due_at: ticket.response_due_at&.iso8601,
-          resolution_due_at: ticket.resolution_due_at&.iso8601,
+          response_due_at: ticket.response_due_at&.in_time_zone('Pretoria')&.iso8601,
+          resolution_due_at: ticket.resolution_due_at&.in_time_zone('Pretoria')&.iso8601,
           escalation_level: ticket.escalation_level,
           sla_breached: ticket.sla_breached,
           calculated_priority: ticket.calculated_priority,
-          resolved_at: ticket.resolved_at&.iso8601,
+          resolved_at: ticket.resolved_at&.in_time_zone('Pretoria')&.iso8601,
           resolution_note: ticket.resolution_note,
           reason: ticket.reason,
           resolution_method: ticket.resolution_method,
@@ -290,16 +305,18 @@ module Api
           assignee: ticket.assignee ? { id: ticket.assignee.id, name: ticket.assignee.name } : nil,
           creator: ticket.creator ? { id: ticket.creator.id, name: ticket.creator.name } : nil,
           requester: ticket.requester ? { id: ticket.requester.id, name: ticket.requester.name } : nil,
+          created_at: ticket.created_at&.in_time_zone('Pretoria')&.iso8601,
+          updated_at: ticket.updated_at&.in_time_zone('Pretoria')&.iso8601,
           notifications: ticket.notifications.map do |notification|
             {
               id: notification.id,
               message: notification.message,
               read: notification.read,
-              created_at: notification.created_at.iso8601
+              created_at: notification.created_at.in_time_zone('Pretoria').iso8601
             }
           end
         }
-      end      
+      end
 
       def ticket_params
         params.require(:ticket).permit(
@@ -353,10 +370,13 @@ module Api
         false
       end
 
+      # FIXED: apply_filters method with proper role-based filtering
       def apply_filters(scope)
         Rails.logger.info "Fetching tickets for organization: #{params[:organization_subdomain] || request.headers['X-Organization-Subdomain'] || request.subdomains.first}"
         Rails.logger.info "Current user: #{current_user&.id} - #{current_user&.email}"
+        Rails.logger.info "User roles: admin=#{current_user.admin?}, general_manager=#{current_user.general_manager?}, domain_admin=#{current_user.domain_admin?}"
       
+        # Apply parameter filters
         scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
@@ -364,7 +384,7 @@ module Api
         scope = scope.where(team_id: params[:team_id]) if params[:team_id].present?
         scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
       
-        # reported_at
+        # Date filtering (reported_at)
         if params[:reported_from].present? && params[:reported_to].present?
           from = Time.zone.parse(params[:reported_from]) rescue nil
           to = Time.zone.parse(params[:reported_to]) rescue nil
@@ -377,7 +397,7 @@ module Api
           scope = scope.where("reported_at <= ?", to.end_of_day) if to
         end
       
-        # created_at
+        # Date filtering (created_at)
         if params[:created_from].present? && params[:created_to].present?
           from = Time.zone.parse(params[:created_from]) rescue nil
           to = Time.zone.parse(params[:created_to]) rescue nil
@@ -390,7 +410,7 @@ module Api
           scope = scope.where("created_at <= ?", to.end_of_day) if to
         end
       
-        # resolved_at
+        # Date filtering (resolved_at)
         if params[:resolved_from].present? && params[:resolved_to].present?
           from = Time.zone.parse(params[:resolved_from]) rescue nil
           to = Time.zone.parse(params[:resolved_to]) rescue nil
@@ -403,7 +423,7 @@ module Api
           scope = scope.where("resolved_at <= ?", to.end_of_day) if to
         end
       
-        # updated_at
+        # Date filtering (updated_at)
         if params[:updated_from].present? && params[:updated_to].present?
           from = Time.zone.parse(params[:updated_from]) rescue nil
           to = Time.zone.parse(params[:updated_to]) rescue nil
@@ -416,17 +436,77 @@ module Api
           scope = scope.where("updated_at <= ?", to.end_of_day) if to
         end
       
-        # Role-based visibility filtering
+        # FIXED: Role-based visibility filtering
         unless current_user.general_manager? || current_user.admin? || current_user.domain_admin?
-          conditions = []
-          conditions << scope.where(assignee_id: current_user.id)
-          conditions << scope.where(team_id: current_user.team_id) if current_user.team_id.present?
-          conditions << scope.where(department_id: current_user.department_id) if current_user.department_id.present?
-          scope = conditions.reduce { |combined, cond| combined.or(cond) } if conditions.any?
+          Rails.logger.info "Applying role-based filtering for user #{current_user.id}"
+          Rails.logger.info "User team_id: #{current_user.team_id}, department_id: #{current_user.department_id}"
+          
+          # Build OR conditions for tickets the user can see
+          visibility_conditions = []
+          
+          # Can see tickets assigned to them
+          visibility_conditions << "assignee_id = #{current_user.id}"
+          
+          # Can see tickets in their team (if they have one)
+          if current_user.team_id.present?
+            visibility_conditions << "team_id = #{current_user.team_id}"
+          end
+          
+          # Can see tickets in their department (if they have one)  
+          if current_user.department_id.present?
+            visibility_conditions << "department_id = #{current_user.department_id}"
+          end
+          
+          # Apply the OR conditions
+          if visibility_conditions.any?
+            condition_sql = visibility_conditions.join(' OR ')
+            Rails.logger.info "Applying visibility condition: #{condition_sql}"
+            scope = scope.where(condition_sql)
+          else
+            # If no conditions apply, user can only see their assigned tickets
+            Rails.logger.info "No team/department, limiting to assigned tickets only"
+            scope = scope.where(assignee_id: current_user.id)
+          end
+          
+          Rails.logger.info "Filtered ticket count: #{scope.count}"
+        else
+          Rails.logger.info "User has admin/manager privileges, no filtering applied"
         end
       
         scope
-      end     
+      end
+
+      # Debug method to help troubleshoot ticket counting issues
+      def debug_ticket_counts
+        {
+          organization: {
+            id: @organization.id,
+            name: @organization.name,
+            subdomain: @organization.subdomain
+          },
+          current_user: {
+            id: current_user.id,
+            email: current_user.email,
+            team_id: current_user.team_id,
+            department_id: current_user.department_id,
+            roles: {
+              admin: current_user.admin?,
+              general_manager: current_user.general_manager?,
+              domain_admin: current_user.domain_admin?,
+              team_leader: current_user.team_leader?
+            }
+          },
+          ticket_counts: {
+            total_in_organization: @organization.tickets.count,
+            visible_to_user: apply_filters(@organization.tickets).count,
+            open_visible_to_user: apply_filters(@organization.tickets).where(status: 'open').count,
+            assigned_to_user: @organization.tickets.where(assignee_id: current_user.id).count,
+            in_user_team: current_user.team_id ? @organization.tickets.where(team_id: current_user.team_id).count : 0,
+            in_user_department: current_user.department_id ? @organization.tickets.where(department_id: current_user.department_id).count : 0
+          },
+          sample_visible_tickets: apply_filters(@organization.tickets).limit(5).pluck(:id, :status, :assignee_id, :team_id, :department_id)
+        }
+      end
       
       def stats
         group_by = params[:group_by] || 'daily'
@@ -616,7 +696,8 @@ module Api
       end
 
       def create_resolution_notification
-        if @ticket.assignee && @票.assignee != current_user && @ticket.assignee != @ticket.requester
+        # FIXED: Corrected typo from @票 to @ticket
+        if @ticket.assignee && @ticket.assignee != current_user && @ticket.assignee != @ticket.requester
           notification = Notification.create!(
             user: @ticket.assignee,
             organization: @ticket.organization,

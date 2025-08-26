@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.5;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        .message {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Hello <%= @notification.user.name %>,</h2>
+
+        <div class="message">
+            <p><%= @notification.message %></p>
+        </div>
+
+        <p>Thank you,<br>
+            The ITSM Team</p>
+
+        <div class="footer">
+            This is an automated notification. Please do not reply to this email.
+        </div>
+    </div>
+</body>
+
+</html>

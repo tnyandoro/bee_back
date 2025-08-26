@@ -133,11 +133,19 @@ module Api
         }
       end
 
+      # def avatar_url(user)
+      #   return nil unless user.avatar.attached?
+
+      #   # Generate full URL for the avatar
+      #   Rails.application.routes.url_helpers.rails_blob_url(user.avatar, only_path: false)
+      # rescue StandardError
+      #   nil
+      # end
       def avatar_url(user)
         return nil unless user.avatar.attached?
 
-        # Generate full URL for the avatar
-        Rails.application.routes.url_helpers.rails_blob_url(user.avatar, only_path: false)
+        # This will work in both controller and background job contexts
+        Rails.application.routes.url_helpers.polymorphic_url(user.avatar)
       rescue StandardError
         nil
       end
