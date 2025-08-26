@@ -13,8 +13,12 @@ class Rack::Attack
     end
   end
 
-  # Custom response when throttled
-  self.throttled_response = lambda do |env|
-    [429, { 'Content-Type' => 'application/json' }, [{ error: 'Too many login attempts. Please try again later.' }.to_json]]
+  # Custom response when throttled (new API)
+  self.throttled_responder = lambda do |env|
+    [
+      429,
+      { 'Content-Type' => 'application/json' },
+      [{ error: 'Too many login attempts. Please try again later.' }.to_json]
+    ]
   end
 end
