@@ -22,7 +22,8 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
 
   allow do
     # Production
-    origins 'https://d10tmedpan81b6.cloudfront.net',
+    origins 'https://d10tmedpan81b6.cloudfront.net','https://itsm-gss.netlify.app',
+            'https://itsm-api-w8vr.onrender.com','https://gsolve360.netlify.app',
             /\.greensoftsolutions\.net$/
 
     resource '/api/v1/*',
