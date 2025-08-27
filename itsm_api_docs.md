@@ -2,7 +2,7 @@
 
 ## Base Information
 
-- **Production URL**: `https://itsm-api.onrender.com/api/v1`
+- **Production URL**: `https://itsm-api-w8vr.onrender.com/api/v1`
 - **Content-Type**: `application/json`
 - **Authentication**: Custom token-based authentication
 - **Authorization Header**: `Authorization: Bearer <auth_token>`
@@ -606,7 +606,7 @@ PATCH /api/v1/organizations/{subdomain}/notifications/{id}/mark_as_read
 WebSocket connections are available at:
 
 ```
-wss://itsm-api.onrender.com/cable
+wss://https://itsm-api-w8vr.onrender.com//cable
 ```
 
 ## File Upload
@@ -687,7 +687,7 @@ _[Details needed about pagination format]_
 ### Base URLs
 
 - **Development**: `http://localhost:3000/api/v1` (with CORS enabled)
-- **Production**: `https://itsm-api.onrender.com/api/v1`
+- **Production**: `https://itsm-api-w8vr.onrender.com/api/v1`
 
 ### CORS Configuration
 
