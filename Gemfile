@@ -59,7 +59,7 @@ end
 # Production-only
 group :production do
   # Optional: for logging or Heroku-like platforms
-  gem 'rails_12factor'
+  # gem 'rails_12factor'
 end
 
 # === Debugging (uncomment only in dev) ===
