@@ -199,7 +199,18 @@ class User < ApplicationRecord
   end
 
   def can_resolve_tickets?(ticket_type)
-    can_create_tickets?(ticket_type)
+    case ticket_type
+    when "Incident", "Request"
+      role_system_admin? || role_domain_admin? || role_assignee_lvl_3? || 
+      role_assignment_group_tl? || role_assignee_lvl_1_2? || 
+      role_service_desk_agent? || role_service_desk_tl? ||  # Added these roles
+      role_department_manager? || role_general_manager?
+    when "Problem"
+      role_system_admin? || role_domain_admin? || role_problem_manager? || 
+      role_department_manager? || role_general_manager?
+    else
+      false
+    end
   end
 
   def can_reassign_tickets?
