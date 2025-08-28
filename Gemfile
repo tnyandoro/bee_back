@@ -63,6 +63,6 @@ group :production do
 end
 
 # === Debugging (uncomment only in dev) ===
-# group :development do
-#   gem "debug", platforms: %i[ mri ]
-# end
+group :development do
+  gem "debug", platforms: %i[ mri ]
+end

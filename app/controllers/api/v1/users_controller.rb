@@ -42,11 +42,22 @@ module Api
         authorize @user
 
         if @user.save
-          render_success(user_attributes(@user), "User created successfully", :created)
+          # Fix: Only pass 2 arguments instead of 3
+          render_success(user_attributes(@user), "User created successfully")
+          # Alternative: Set status separately if your render_success doesn't handle status
+          # render_success(user_attributes(@user), "User created successfully")
+          # response.status = 201 # :created
         else
+          # Enhanced error logging for debugging
+          Rails.logger.error "User creation failed for email: #{user_params[:email]}"
+          Rails.logger.error "Validation errors: #{@user.errors.full_messages}"
+          Rails.logger.error "Error details: #{@user.errors.details}"
+          
           render_error(@user.errors.full_messages.join(', '))
         end
       rescue StandardError => e
+        Rails.logger.error "Exception in user creation: #{e.message}"
+        Rails.logger.error "Backtrace: #{e.backtrace.first(5).join("\n")}"
         render_internal_server_error(e)
       end
 
@@ -116,7 +127,7 @@ module Api
           team_id: user.team_id,
           department_id: user.department_id,
           position: user.position,
-          avatar_url: avatar_url(user)
+          avatar_url: user.avatar_url
         }
       end
 
@@ -129,25 +140,8 @@ module Api
           name: user.name,
           username: user.username,
           position: user.position,
-          avatar_url: avatar_url(user)
+          avatar_url: user.avatar_url  # Fixed: Use model method consistently
         }
-      end
-
-      # def avatar_url(user)
-      #   return nil unless user.avatar.attached?
-
-      #   # Generate full URL for the avatar
-      #   Rails.application.routes.url_helpers.rails_blob_url(user.avatar, only_path: false)
-      # rescue StandardError
-      #   nil
-      # end
-      def avatar_url(user)
-        return nil unless user.avatar.attached?
-
-        # This will work in both controller and background job contexts
-        Rails.application.routes.url_helpers.polymorphic_url(user.avatar)
-      rescue StandardError
-        nil
       end
     end
   end
