@@ -34,6 +34,9 @@ module Api
       end
 
       def show
+        unless @ticket.organization_id == @organization.id
+          return render json: { error: "Ticket does not belong to this organization" }, status: :forbidden
+        end
         render json: ticket_attributes(@ticket)
       end
 
@@ -47,25 +50,20 @@ module Api
         @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = current_user
         @ticket.requester = current_user
-        # @ticket.reported_at ||= Time.zone.parse(ticket_params[:reported_at]) rescue Time.current
         @ticket.reported_at ||= Time.zone.now
-
         @ticket.status = 'open'
       
-        # Handle priority conversion
         if ticket_params_adjusted[:priority].present?
           priority_value = ticket_params_adjusted[:priority].to_i
           @ticket.priority = Ticket.priorities.key([0, [3, priority_value].min].max)
         end
       
-        # Process team and assignee
         begin
           process_team_and_assignee(ticket_params_adjusted)
         rescue ActiveRecord::RecordNotFound => e
           return render json: { error: e.message }, status: :not_found
         end
       
-        # Validate category
         unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
           return render json: {
             error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}"
@@ -73,12 +71,10 @@ module Api
         end
       
         if @ticket.save
-          # ✅ Handle Active Storage attachment (optional file upload)
           if params[:ticket][:attachment].present?
             @ticket.attachment.attach(params[:ticket][:attachment])
           end
 
-          # ✅ Calculate SLA times
           begin
             SlaCalculator.new(@ticket).calculate
           rescue => e
@@ -123,7 +119,6 @@ module Api
           }, status: :unprocessable_entity
         end
 
-        # Handle resolution fields if provided (for fallback PUT request)
         if params[:ticket].present?
           resolution_fields = params.require(:ticket).permit(
             :status, :resolved_at, :resolution_note, :reason, :resolution_method,
@@ -148,7 +143,7 @@ module Api
       end
 
       def destroy
-        unless current_user.is_admin? || current_user.domain_admin?
+        unless current_user.is_admin? || current_user.domain_admin? || current_user.system_admin?
           return render_forbidden("Only admins can delete tickets")
         end
         @ticket.destroy!
@@ -180,7 +175,7 @@ module Api
       end
 
       def escalate_to_problem
-        unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin?
+        unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin? || current_user.system_admin?
           return render json: { error: 'Only team leads or higher can escalate tickets to problems' }, status: :forbidden
         end
 
@@ -226,9 +221,8 @@ module Api
         end
       end
 
-      # Debug endpoint to check ticket visibility
       def debug_visibility
-        return head :forbidden unless Rails.env.development? || current_user.admin?
+        return head :forbidden unless Rails.env.development? || current_user.admin? || current_user.domain_admin? || current_user.system_admin?
         
         debug_info = debug_ticket_counts
         render json: debug_info, status: :ok
@@ -252,24 +246,20 @@ module Api
       private
 
       def create_notifications
-          # Notify requester
-          notification = Notification.create!(
-            user: @ticket.requester,
-            organization: @ticket.organization,
-            message: "New ticket created: #{@ticket.title} (#{@ticket.ticket_number})",
-            notifiable: @ticket,
-            read: false
-          )
+        notification = Notification.create!(
+          user: @ticket.requester,
+          organization: @ticket.organization,
+          message: "New ticket created: #{@ticket.title} (#{@ticket.ticket_number})",
+          notifiable: @ticket,
+          read: false
+        )
+        NotificationMailer.notify_user(notification).deliver_later
+
+        if @ticket.assignee
+          notification = create_assignment_notification(@ticket.assignee)
           NotificationMailer.notify_user(notification).deliver_later
-
-          # Notify assignee and team
-          if @ticket.assignee
-            notification = create_assignment_notification(@ticket.assignee)
-            NotificationMailer.notify_user(notification).deliver_later
-
-            # Use IDs for job
-            SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, @ticket.assignee.id)
-          end
+          SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, @ticket.assignee.id)
+        end
       end
 
       def ticket_attributes(ticket)
@@ -377,12 +367,11 @@ module Api
         false
       end
 
-      # FIXED: apply_filters method with proper role-based filtering
       def apply_filters(scope)
         Rails.logger.info "Fetching tickets for organization: #{params[:organization_subdomain] || request.headers['X-Organization-Subdomain'] || request.subdomains.first}"
         Rails.logger.info "Current user: #{current_user&.id} - #{current_user&.email}"
-        Rails.logger.info "User roles: admin=#{current_user.admin?}, general_manager=#{current_user.general_manager?}, domain_admin=#{current_user.domain_admin?}"
-      
+        Rails.logger.info "User roles: admin=#{current_user.admin?}, general_manager=#{current_user.general_manager?}, domain_admin=#{current_user.domain_admin?}, system_admin=#{current_user.system_admin?}"
+
         # Apply parameter filters
         scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
@@ -390,7 +379,7 @@ module Api
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
         scope = scope.where(team_id: params[:team_id]) if params[:team_id].present?
         scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
-      
+
         # Date filtering (reported_at)
         if params[:reported_from].present? && params[:reported_to].present?
           from = Time.zone.parse(params[:reported_from]) rescue nil
@@ -403,7 +392,7 @@ module Api
           to = Time.zone.parse(params[:reported_to]) rescue nil
           scope = scope.where("reported_at <= ?", to.end_of_day) if to
         end
-      
+
         # Date filtering (created_at)
         if params[:created_from].present? && params[:created_to].present?
           from = Time.zone.parse(params[:created_from]) rescue nil
@@ -416,7 +405,7 @@ module Api
           to = Time.zone.parse(params[:created_to]) rescue nil
           scope = scope.where("created_at <= ?", to.end_of_day) if to
         end
-      
+
         # Date filtering (resolved_at)
         if params[:resolved_from].present? && params[:resolved_to].present?
           from = Time.zone.parse(params[:resolved_from]) rescue nil
@@ -429,7 +418,7 @@ module Api
           to = Time.zone.parse(params[:resolved_to]) rescue nil
           scope = scope.where("resolved_at <= ?", to.end_of_day) if to
         end
-      
+
         # Date filtering (updated_at)
         if params[:updated_from].present? && params[:updated_to].present?
           from = Time.zone.parse(params[:updated_from]) rescue nil
@@ -442,48 +431,11 @@ module Api
           to = Time.zone.parse(params[:updated_to]) rescue nil
           scope = scope.where("updated_at <= ?", to.end_of_day) if to
         end
-      
-        # FIXED: Role-based visibility filtering
-        unless current_user.general_manager? || current_user.admin? || current_user.domain_admin?
-          Rails.logger.info "Applying role-based filtering for user #{current_user.id}"
-          Rails.logger.info "User team_id: #{current_user.team_id}, department_id: #{current_user.department_id}"
-          
-          # Build OR conditions for tickets the user can see
-          visibility_conditions = []
-          
-          # Can see tickets assigned to them
-          visibility_conditions << "assignee_id = #{current_user.id}"
-          
-          # Can see tickets in their team (if they have one)
-          if current_user.team_id.present?
-            visibility_conditions << "team_id = #{current_user.team_id}"
-          end
-          
-          # Can see tickets in their department (if they have one)  
-          if current_user.department_id.present?
-            visibility_conditions << "department_id = #{current_user.department_id}"
-          end
-          
-          # Apply the OR conditions
-          if visibility_conditions.any?
-            condition_sql = visibility_conditions.join(' OR ')
-            Rails.logger.info "Applying visibility condition: #{condition_sql}"
-            scope = scope.where(condition_sql)
-          else
-            # If no conditions apply, user can only see their assigned tickets
-            Rails.logger.info "No team/department, limiting to assigned tickets only"
-            scope = scope.where(assignee_id: current_user.id)
-          end
-          
-          Rails.logger.info "Filtered ticket count: #{scope.count}"
-        else
-          Rails.logger.info "User has admin/manager privileges, no filtering applied"
-        end
-      
+
+        Rails.logger.info "Filtered ticket count: #{scope.count}"
         scope
       end
 
-      # Debug method to help troubleshoot ticket counting issues
       def debug_ticket_counts
         {
           organization: {
@@ -500,6 +452,7 @@ module Api
               admin: current_user.admin?,
               general_manager: current_user.general_manager?,
               domain_admin: current_user.domain_admin?,
+              system_admin: current_user.system_admin?,
               team_leader: current_user.team_leader?
             }
           },
@@ -517,7 +470,7 @@ module Api
       
       def stats
         group_by = params[:group_by] || 'daily'
-        date_field = params[:date_field] || 'created_at' # allow created_at, resolved_at, updated_at
+        date_field = params[:date_field] || 'created_at'
       
         unless %w[daily monthly].include?(group_by)
           return render json: { error: "Invalid group_by parameter. Use 'daily' or 'monthly'" }, status: :bad_request
@@ -529,11 +482,9 @@ module Api
       
         scope = @organization.tickets
       
-        # Optional filter: status=resolved or ticket_type=Incident
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
       
-        # Optional date range filtering
         if params[:start_date].present? && params[:end_date].present?
           start_date = Date.parse(params[:start_date]) rescue nil
           end_date = Date.parse(params[:end_date]) rescue nil
@@ -542,7 +493,6 @@ module Api
           end
         end
       
-        # Grouping logic
         case group_by
         when 'daily'
           data = scope
@@ -599,7 +549,7 @@ module Api
       end
 
       def export
-        tickets = apply_filters(@organization.tickets).limit(10_000) # Export up to 10,000
+        tickets = apply_filters(@organization.tickets).limit(10_000)
       
         respond_to do |format|
           format.csv do
@@ -703,7 +653,6 @@ module Api
       end
 
       def create_resolution_notification
-        # FIXED: Corrected
         if @ticket.assignee && @ticket.assignee != current_user && @ticket.assignee != @ticket.requester
           notification = Notification.create!(
             user: @ticket.assignee,

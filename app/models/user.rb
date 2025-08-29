@@ -96,7 +96,7 @@ class User < ApplicationRecord
   def can_create_ticket?
     role_call_center_agent? || role_service_desk_agent? || 
     role_service_desk_tl? || role_service_desk_manager? || 
-    role_incident_manager?
+    role_incident_manager? || role_system_admin? || role_domain_admin?
   end
   
   def can_view_all_tickets?
@@ -189,7 +189,10 @@ class User < ApplicationRecord
     when "Incident", "Request"
       role_system_admin? || role_domain_admin? || role_assignee_lvl_3? || 
       role_assignment_group_tl? || role_assignee_lvl_1_2? || 
-      role_department_manager? || role_general_manager?
+      role_department_manager? || role_general_manager? ||
+      role_call_center_agent? || role_service_desk_agent? || 
+      role_service_desk_tl? || role_service_desk_manager? || 
+      role_incident_manager?
     when "Problem"
       role_system_admin? || role_domain_admin? || role_problem_manager? || 
       role_department_manager? || role_general_manager?
@@ -198,6 +201,14 @@ class User < ApplicationRecord
     end
   end
 
+  def can_access_ticket_creation?
+    role_system_admin? || role_domain_admin? || role_sub_domain_admin? ||
+    role_call_center_agent? || role_service_desk_agent? || 
+    role_service_desk_tl? || role_service_desk_manager? || 
+    role_incident_manager? || role_general_manager? || 
+    role_department_manager?
+  end 
+  
   def can_resolve_tickets?(ticket_type)
     case ticket_type
     when "Incident", "Request"
