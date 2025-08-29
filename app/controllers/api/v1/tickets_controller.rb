@@ -77,7 +77,14 @@ module Api
           if params[:ticket][:attachment].present?
             @ticket.attachment.attach(params[:ticket][:attachment])
           end
-      
+
+          # ✅ Calculate SLA times
+          begin
+            SlaCalculator.new(@ticket).calculate
+          rescue => e
+            Rails.logger.warn "SLA calculation failed for Ticket ##{@ticket.id}: #{e.message}"
+          end
+
           create_initial_comment
           create_notifications
           render json: ticket_attributes(@ticket), status: :created
@@ -696,7 +703,7 @@ module Api
       end
 
       def create_resolution_notification
-        # FIXED: Corrected typo from @票 to @ticket
+        # FIXED: Corrected
         if @ticket.assignee && @ticket.assignee != current_user && @ticket.assignee != @ticket.requester
           notification = Notification.create!(
             user: @ticket.assignee,

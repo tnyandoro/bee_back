@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_16_105144) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_28_201507) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -49,6 +49,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_16_105144) do
     t.time "end_time", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "active", default: true, null: false
     t.index ["organization_id", "day_of_week"], name: "index_business_hours_on_organization_id_and_day_of_week", unique: true
     t.index ["organization_id"], name: "index_business_hours_on_organization_id"
   end
@@ -108,6 +109,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_16_105144) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "logo_url"
+    t.uuid "uuid"
     t.index ["subdomain"], name: "index_organizations_on_subdomain", unique: true
   end
 
@@ -141,6 +143,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_16_105144) do
     t.integer "resolution_time"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "description"
+    t.index ["organization_id", "priority"], name: "index_sla_policies_on_org_id_and_priority", unique: true
     t.index ["organization_id"], name: "index_sla_policies_on_organization_id"
   end
 
@@ -199,8 +203,12 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_16_105144) do
     t.index ["creator_id"], name: "index_tickets_on_creator_id"
     t.index ["department_id"], name: "index_tickets_on_department_id"
     t.index ["impact"], name: "index_tickets_on_impact"
+    t.index ["organization_id", "sla_breached"], name: "index_tickets_on_org_id_and_sla_breached"
     t.index ["organization_id"], name: "index_tickets_on_organization_id"
     t.index ["priority"], name: "index_tickets_on_priority"
+    t.index ["resolution_due_at"], name: "index_tickets_on_resolution_due_at"
+    t.index ["response_due_at"], name: "index_tickets_on_response_due_at"
+    t.index ["sla_breached"], name: "index_tickets_on_sla_breached"
     t.index ["sla_policy_id"], name: "index_tickets_on_sla_policy_id"
     t.index ["status"], name: "index_tickets_on_status"
     t.index ["team_id"], name: "index_tickets_on_team_id"
@@ -229,6 +237,8 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_16_105144) do
     t.string "last_name"
     t.string "refresh_token"
     t.datetime "refresh_token_expires_at"
+    t.uuid "uuid"
+    t.datetime "token_expires_at"
     t.index ["department_id"], name: "index_users_on_department_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["new_reset_password_token"], name: "index_users_on_new_reset_password_token", unique: true

@@ -14,6 +14,8 @@ class Organization < ApplicationRecord
   # Callbacks
   before_validation :generate_subdomain, on: :create
   before_validation :normalize_subdomain
+  after_create :log_organization_creation
+  after_update :log_organization_update
 
   # Associations
   has_one_attached :logo
@@ -22,9 +24,11 @@ class Organization < ApplicationRecord
   has_many :users, dependent: :destroy
   has_many :tickets, dependent: :destroy # Direct association with tickets
   has_many :problems, through: :tickets # Indirect association with problems through tickets
-  has_many :teams, dependent: :destroy # Add this line if missing
+  has_many :teams, dependent: :destroy
   has_many :settings, class_name: "Setting", dependent: :destroy
-  has_many :knowledgebase_entries
+  has_many :knowledgebase_entries, dependent: :destroy
+  has_many :departments, dependent: :destroy
+  has_many :notifications, dependent: :destroy
   
   # Custom Methods
   def total_tickets
@@ -59,6 +63,116 @@ class Organization < ApplicationRecord
     tickets.closed.average(:resolution_time) || 0
   end
 
+  # SLA Configuration Methods
+  def has_sla_configuration?
+    sla_policies.exists? && business_hours.exists?
+  end
+
+  def setup_default_business_hours!
+    return if business_hours.exists?
+    
+    transaction do
+      # Monday to Friday, 8 AM to 5 PM
+      (1..5).each do |day|
+        business_hours.create!(
+          day_of_week: day,
+          start_time: '08:00',
+          end_time: '17:00',
+          active: true
+        )
+      end
+    end
+    
+    Rails.logger.info "Default business hours created for organization: #{name}"
+    true
+  rescue => e
+    Rails.logger.error "Failed to setup business hours for #{name}: #{e.message}"
+    false
+  end
+
+  def setup_default_sla_policies!
+    return if sla_policies.exists?
+    
+    transaction do
+      sla_policies.create!(
+        priority: 'critical',
+        response_time: 120, # 2 hours for P1 as requested
+        resolution_time: 240, # 4 hours  
+        description: 'Critical priority tickets - 2 hour response SLA'
+      )
+      
+      sla_policies.create!(
+        priority: 'high', 
+        response_time: 240, # 4 hours
+        resolution_time: 480, # 8 hours
+        description: 'High priority tickets'
+      )
+      
+      sla_policies.create!(
+        priority: 'medium',
+        response_time: 480, # 8 hours
+        resolution_time: 1440, # 24 hours
+        description: 'Medium priority tickets'
+      )
+      
+      sla_policies.create!(
+        priority: 'low',
+        response_time: 1440, # 24 hours
+        resolution_time: 4320, # 72 hours
+        description: 'Low priority tickets'
+      )
+    end
+    
+    Rails.logger.info "Default SLA policies created for organization: #{name}"
+    true
+  rescue => e
+    Rails.logger.error "Failed to setup SLA policies for #{name}: #{e.message}"
+    false
+  end
+
+  def setup_complete_sla_configuration!
+    success = true
+    success &= setup_default_business_hours!
+    success &= setup_default_sla_policies!
+    
+    if success
+      Rails.logger.info "Complete SLA configuration setup for organization: #{name}"
+    else
+      Rails.logger.error "Failed to complete SLA configuration setup for: #{name}"
+    end
+    
+    success
+  end
+
+  # SLA Policy helpers
+  def sla_policy_for_priority(priority)
+    priority_mapping = {
+      'p1' => 'critical',
+      'p2' => 'high', 
+      'p3' => 'medium',
+      'p4' => 'low'
+    }
+    
+    mapped_priority = priority_mapping[priority.to_s] || priority.to_s
+    sla_policies.find_by(priority: mapped_priority)
+  end
+
+  def business_hours_for_day(day_of_week)
+    business_hours.active.where(day_of_week: day_of_week).first
+  end
+
+  # Debugging/Status methods
+  def sla_configuration_status
+    {
+      has_business_hours: business_hours.exists?,
+      business_hours_count: business_hours.count,
+      has_sla_policies: sla_policies.exists?,
+      sla_policies_count: sla_policies.count,
+      configured_priorities: sla_policies.pluck(:priority),
+      is_fully_configured: has_sla_configuration?
+    }
+  end
+
   private
 
   # Generate subdomain from the organization name if not provided
@@ -84,10 +198,6 @@ class Organization < ApplicationRecord
       errors.add(:base, "An organization must have at least one admin user")
     end
   end
-
-  # Logging
-  after_create :log_organization_creation
-  after_update :log_organization_update
 
   def log_organization_creation
     Rails.logger.info "Organization created: #{name} (ID: #{id})"

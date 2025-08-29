@@ -1,13 +1,8 @@
 module Api
   module V1
     class ProfilesController < ApiController
-      # skip_before_action :authenticate_user!, only: [:show]
-      # skip_before_action :verify_user_organization, only: [:show]
-      # Remove skip for show
       before_action :authenticate_user!
       before_action :verify_user_organization
-
-
       before_action :set_cors_headers
 
       def show
@@ -21,7 +16,21 @@ module Api
             phone_number: @organization.phone_number,
             logo_url: @organization.logo_url
           },
-          current_user: current_user&.slice(:id, :name, :email, :role, :team_id)
+          current_user: {
+            id: current_user.id,
+            full_name: current_user.full_name,
+            name: current_user.name,
+            email: current_user.email,
+            username: current_user.username,
+            phone_number: current_user.phone_number,
+            position: current_user.position,
+            department_id: current_user.department_id,
+            team_id: current_user.team_id,
+            role: current_user.role,
+            organization_id: current_user.organization_id,
+            organization_subdomain: @organization.subdomain,
+            avatar_url: current_user.avatar_url
+          }
         }, status: :ok
       end
 

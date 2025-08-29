@@ -43,6 +43,8 @@ class Ticket < ApplicationRecord
     where(creator_id: user_id, organization_id: organization_id)
   end
   scope :sla_breached, -> { where(sla_breached: true) }
+  scope :response_overdue, -> { where('response_due_at < ?', Time.current) }
+  scope :resolution_overdue, -> { where('resolution_due_at < ?', Time.current) }
   scope :pending_response, -> { where("response_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
   scope :pending_resolution, -> { where("resolution_due_at < ?", Time.current).where.not(status: [:closed, :resolved]) }
   scope :search_by_title_or_description, ->(query) do
@@ -52,7 +54,8 @@ class Ticket < ApplicationRecord
   before_validation :generate_ticket_number, on: :create
   before_validation :normalize_priority
   before_save :set_calculated_priority
-  after_commit :update_sla_dates, on: [:create, :update]
+  after_create :calculate_sla_on_create
+  after_update :recalculate_sla_if_needed
 
   def create?
     requester.can_create_ticket?
@@ -60,13 +63,13 @@ class Ticket < ApplicationRecord
 
   def resolve(resolved_by:)
     raise ArgumentError, "resolved_by must be a User" unless resolved_by.is_a?(User)
-    update!(status: :resolved, assignee: resolved_by)
+    update!(status: :resolved, assignee: resolved_by, resolved_at: Time.current)
     create_resolution_notifications(resolved_by)
   end
 
   def reopen(reopened_by:)
     raise ArgumentError, "reopened_by must be a User" unless reopened_by.is_a?(User)
-    update!(status: :open, assignee: nil)
+    update!(status: :open, assignee: nil, resolved_at: nil)
     create_reopen_notification(reopened_by)
   end
 
@@ -81,29 +84,80 @@ class Ticket < ApplicationRecord
     end
   end
 
-  def calculate_sla_dates
-    self.sla_policy ||= organization.sla_policies.find_by(priority: calculated_priority || priority) ||
-                        organization.sla_policies.find_by(priority: :p4)
-    unless sla_policy && organization.business_hours.any?
-      Rails.logger.warn "Skipping SLA calculation for Ticket ##{id}: No SLA policy or business hours found"
-      return
-    end
+  def calculate_sla!
+    return unless organization.has_sla_configuration?
+    
+    # Find SLA policy based on calculated priority, then priority, then fallback to p4
+    policy = organization.sla_policies.find_by(priority: priority_for_sla_lookup) ||
+             organization.sla_policies.find_by(priority: 'p4')
+    
+    return unless policy
+    
+    self.sla_policy = policy
+    SlaCalculator.new(self).calculate
+    save! if changed?
+  end
 
-    business_hours = organization.business_hours
-    reported_time = reported_at || Time.current
+  def response_overdue?
+    response_due_at && Time.current > response_due_at && !%w[closed resolved].include?(status)
+  end
 
-    self.response_due_at = calculate_due_date(reported_time, sla_policy.response_time, business_hours)
-    self.resolution_due_at = calculate_due_date(reported_time, sla_policy.resolution_time, business_hours)
-    self.sla_breached = sla_breached?
+  def resolution_overdue?
+    resolution_due_at && Time.current > resolution_due_at && !%w[closed resolved].include?(status)
   end
 
   def sla_breached?
-    return false if status.in?(['closed', 'resolved'])
-    (response_due_at && Time.current > response_due_at) ||
-    (resolution_due_at && Time.current > resolution_due_at)
+    return false if %w[closed resolved].include?(status)
+    response_overdue? || resolution_overdue?
+  end
+
+  def update_sla_breach_status!
+    was_breached = sla_breached
+    is_breached = sla_breached?
+    
+    if was_breached != is_breached
+      update_columns(sla_breached: is_breached, breaching_sla: is_breached)
+      if is_breached
+        Rails.logger.info "Ticket #{ticket_number} SLA breached"
+        # Could trigger notifications here
+      end
+    end
   end
 
   private
+
+  def priority_for_sla_lookup
+    # Map priority enum to what SLA policies expect
+    case priority
+    when 'p1' then 'critical'
+    when 'p2' then 'high'
+    when 'p3' then 'medium'
+    when 'p4' then 'low'
+    else 'low'
+    end
+  end
+
+  def calculate_sla_on_create
+    return unless persisted?
+    
+    begin
+      calculate_sla!
+    rescue => e
+      Rails.logger.error "SLA calculation failed for ticket #{ticket_number}: #{e.message}"
+      # Don't fail ticket creation if SLA calculation fails
+    end
+  end
+
+  def recalculate_sla_if_needed
+    return unless persisted?
+    return unless priority_changed? || urgency_changed? || impact_changed?
+    
+    begin
+      calculate_sla!
+    rescue => e
+      Rails.logger.error "SLA recalculation failed for ticket #{ticket_number}: #{e.message}"
+    end
+  end
 
   def generate_ticket_number
     return if ticket_number.present?
@@ -158,13 +212,6 @@ class Ticket < ApplicationRecord
                     end
   end
 
-  def validate_priority_value
-    return unless priority_changed?
-    unless Ticket.priorities.keys.include?(priority.to_s)
-      errors.add(:priority, "must be one of: #{Ticket.priorities.keys.join(', ')} or 0-3")
-    end
-  end
-
   def set_calculated_priority
     calculated = priority_matrix["#{urgency}_#{impact}"] || :p4
     self.calculated_priority = self.class.priorities[calculated]
@@ -183,65 +230,6 @@ class Ticket < ApplicationRecord
       "low_medium" => :p4,
       "low_low" => :p4
     }.with_indifferent_access
-  end
-
-  def update_sla_dates
-    return if destroyed?
-    begin
-      calculate_sla_dates
-      update_columns(
-        response_due_at: response_due_at,
-        resolution_due_at: resolution_due_at,
-        sla_breached: sla_breached
-      )
-    rescue => e
-      Rails.logger.error "Failed to update SLA dates for Ticket ##{id}: #{e.message}"
-    end
-  end
-
-  def calculate_due_date(start_time, duration_minutes, business_hours)
-    return start_time + duration_minutes.minutes unless business_hours.any?
-    remaining_minutes = duration_minutes
-    current_time = start_time.dup
-    max_days = 365
-    max_days.times do
-      current_day = business_hours.find { |bh| bh.day_of_week == current_time.wday.to_s }
-      if current_day && within_business_hours?(current_time, current_day)
-        end_of_day = Time.zone.parse("#{current_time.to_date} #{current_day.end_time.strftime('%H:%M:%S')}")
-        time_until_end = ((end_of_day - current_time) / 60).floor
-        minutes_to_add = [remaining_minutes, time_until_end].min
-        current_time += minutes_to_add.minutes
-        remaining_minutes -= minutes_to_add
-        break if remaining_minutes <= 0
-      else
-        next_day = current_time + 1.day
-        next_day_start = Time.zone.parse("#{next_day.to_date} 00:00:00")
-        next_business_day = nil
-        7.times do |i|
-          check_day = next_day_start + i.days
-          if business_hours.any? { |bh| bh.day_of_week == check_day.wday.to_s }
-            next_business_day = check_day
-            break
-          end
-        end
-        unless next_business_day
-          Rails.logger.warn "No business hours found within a week from #{next_day_start} for Ticket ##{id}"
-          return current_time + remaining_minutes.minutes
-        end
-        start_of_next_day = business_hours.find { |bh| bh.day_of_week == next_business_day.wday.to_s }.start_time
-        current_time = Time.zone.parse("#{next_business_day.to_date} #{start_of_next_day.strftime('%H:%M:%S')}")
-      end
-    end
-    if remaining_minutes > 0
-      Rails.logger.warn "SLA calculation exceeded #{max_days} days for Ticket ##{id}, remaining: #{remaining_minutes} minutes"
-      current_time += remaining_minutes.minutes
-    end
-    current_time
-  end
-
-  def within_business_hours?(time, business_hour)
-    time_of_day = time.seconds_since_midnight
-    business_hour.working_hours.cover?(time_of_day)
   end
 
   def create_resolution_notifications(resolved_by)
@@ -280,7 +268,7 @@ class Ticket < ApplicationRecord
   end
 
   def send_assignment_email
-  SendTicketAssignmentEmailsJob.perform_later(id, team_id, assignee_id)
+    SendTicketAssignmentEmailsJob.perform_later(id, team_id, assignee_id)
   end
 
   def send_ticket_created_email
