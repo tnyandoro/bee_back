@@ -25,7 +25,9 @@ Rails.application.configure do
   end
 
   # Store uploaded files locally
-  config.active_storage.service = :local
+  # config.active_storage.service = :local
+  config.active_storage.variant_processor = :mini_magick
+  config.active_storage.service = :development
 
   # === MAILER SETTINGS (Yahoo SMTP) ===
 

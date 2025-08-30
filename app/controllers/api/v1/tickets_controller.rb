@@ -37,6 +37,12 @@ module Api
         unless @ticket.organization_id == @organization.id
           return render json: { error: "Ticket does not belong to this organization" }, status: :forbidden
         end
+
+        # Add team visibility check for non-admins
+        unless current_user.domain_admin? || current_user.system_admin? || @ticket.team_id == current_user.team_id
+          return render json: { error: "You are not authorized to view this ticket" }, status: :forbidden
+        end
+
         render json: ticket_attributes(@ticket)
       end
 
@@ -372,7 +378,16 @@ module Api
         Rails.logger.info "Current user: #{current_user&.id} - #{current_user&.email}"
         Rails.logger.info "User roles: admin=#{current_user.admin?}, general_manager=#{current_user.general_manager?}, domain_admin=#{current_user.domain_admin?}, system_admin=#{current_user.system_admin?}"
 
-        # Apply parameter filters
+        # Add role-based team scoping for non-admins
+        unless current_user.domain_admin? || current_user.system_admin?
+          if current_user.team_id.present?
+            scope = scope.where(team_id: current_user.team_id)
+          else
+            scope = scope.none
+          end
+        end
+
+        # Apply parameter filters (unchanged)
         scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
@@ -380,7 +395,7 @@ module Api
         scope = scope.where(team_id: params[:team_id]) if params[:team_id].present?
         scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
 
-        # Date filtering (reported_at)
+        # Date filtering (reported_at) - unchanged
         if params[:reported_from].present? && params[:reported_to].present?
           from = Time.zone.parse(params[:reported_from]) rescue nil
           to = Time.zone.parse(params[:reported_to]) rescue nil
@@ -393,7 +408,7 @@ module Api
           scope = scope.where("reported_at <= ?", to.end_of_day) if to
         end
 
-        # Date filtering (created_at)
+        # Date filtering (created_at) - unchanged
         if params[:created_from].present? && params[:created_to].present?
           from = Time.zone.parse(params[:created_from]) rescue nil
           to = Time.zone.parse(params[:created_to]) rescue nil
@@ -406,7 +421,7 @@ module Api
           scope = scope.where("created_at <= ?", to.end_of_day) if to
         end
 
-        # Date filtering (resolved_at)
+        # Date filtering (resolved_at) - unchanged
         if params[:resolved_from].present? && params[:resolved_to].present?
           from = Time.zone.parse(params[:resolved_from]) rescue nil
           to = Time.zone.parse(params[:resolved_to]) rescue nil
@@ -419,7 +434,7 @@ module Api
           scope = scope.where("resolved_at <= ?", to.end_of_day) if to
         end
 
-        # Date filtering (updated_at)
+        # Date filtering (updated_at) - unchanged
         if params[:updated_from].present? && params[:updated_to].present?
           from = Time.zone.parse(params[:updated_from]) rescue nil
           to = Time.zone.parse(params[:updated_to]) rescue nil
