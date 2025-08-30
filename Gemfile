@@ -27,6 +27,7 @@ gem 'will_paginate', '~> 3.3'
 gem 'strong_migrations'
 gem 'sidekiq-cron'
 gem 'business_time'
+gem 'mini_magick', '~> 4.5', '>= 4.5.1'
 
 gem "bootsnap", require: false
 gem "rack-cors"
