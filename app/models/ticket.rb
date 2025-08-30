@@ -15,9 +15,10 @@ class Ticket < ApplicationRecord
   belongs_to :assignee, class_name: "User", optional: true
   belongs_to :team, optional: true
   belongs_to :sla_policy, optional: true
-
+  
   has_one_attached :attachment
 
+  has_many_attached :files
   has_many :problems, dependent: :destroy
   has_many :comments, dependent: :destroy
   has_many :created_tickets, class_name: "Ticket", foreign_key: "creator_id", dependent: :nullify
@@ -38,6 +39,8 @@ class Ticket < ApplicationRecord
   validates :category, inclusion: { in: %w[Technical Billing Support Hardware Software Other], message: "must be one of: Technical, Billing, Support, Hardware, Software, Other" }
   validates :status, inclusion: { in: statuses.keys }
   validate :assignee_belongs_to_team, if: -> { assignee_id.present? && team_id.present? }
+  validate :attachment
+  validate :files_format
 
   scope :for_user_in_organization, ->(user_id, organization_id) do
     where(creator_id: user_id, organization_id: organization_id)
@@ -232,6 +235,16 @@ class Ticket < ApplicationRecord
     }.with_indifferent_access
   end
 
+  def files_format
+    return unless files.attached?
+    files.each do |file|
+      unless file.content_type == "application/pdf"
+        errors.add(:files, "must all be PDF files")
+        break
+      end
+    end
+  end
+
   def create_resolution_notifications(resolved_by)
     begin
       Notification.create!(
@@ -274,4 +287,11 @@ class Ticket < ApplicationRecord
   def send_ticket_created_email
     TicketMailer.ticket_created(self).deliver_later
   end
+
+  def attachment_format
+    return unless attachment.attached?
+    unless attachment.content_type == "application/pdf"
+      errors.add(:attachment, "must be a PDF file")
+    end
+  end 
 end

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
+# frozen_string_literal: true
 module Api
   module V1
     class TicketsController < Api::V1::ApiController
-      before_action :set_ticket, only: %i[show update destroy assign_to_user escalate_to_problem resolve]
+      before_action :set_ticket, only: %i[show update destroy assign_to_user escalate_to_problem resolve download_attachment]
       before_action :set_creator, only: [:create]
       before_action :validate_params, only: [:index]
 
@@ -10,6 +11,9 @@ module Api
       VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
       VALID_CATEGORIES = %w[Technical Billing Support Hardware Software Other].freeze
 
+      # -------------------------------
+      # INDEX
+      # -------------------------------
       def index
         @tickets = apply_filters(@organization.tickets)
         page = (params[:page] || 1).to_i
@@ -33,12 +37,14 @@ module Api
         }, status: :ok
       end
 
+      # -------------------------------
+      # SHOW
+      # -------------------------------
       def show
         unless @ticket.organization_id == @organization.id
           return render json: { error: "Ticket does not belong to this organization" }, status: :forbidden
         end
 
-        # Add team visibility check for non-admins
         unless current_user.domain_admin? || current_user.system_admin? || @ticket.team_id == current_user.team_id
           return render json: { error: "You are not authorized to view this ticket" }, status: :forbidden
         end
@@ -46,41 +52,55 @@ module Api
         render json: ticket_attributes(@ticket)
       end
 
+      # -------------------------------
+      # CREATE
+      # -------------------------------
+      
+
       def create
+        # Check permission
         unless current_user.can_create_tickets?(ticket_params[:ticket_type])
           return render_forbidden("Unauthorized to create #{ticket_params[:ticket_type]} ticket")
         end
-      
+
         ticket_params_adjusted = ticket_params_with_enums
-      
         @ticket = @organization.tickets.new(ticket_params_adjusted)
         @ticket.creator = current_user
         @ticket.requester = current_user
         @ticket.reported_at ||= Time.zone.now
         @ticket.status = 'open'
-      
+
+        # Set priority safely
         if ticket_params_adjusted[:priority].present?
           priority_value = ticket_params_adjusted[:priority].to_i
           @ticket.priority = Ticket.priorities.key([0, [3, priority_value].min].max)
         end
-      
+
+        # Assign team and assignee
         begin
           process_team_and_assignee(ticket_params_adjusted)
         rescue ActiveRecord::RecordNotFound => e
           return render json: { error: e.message }, status: :not_found
         end
-      
+
+        # Validate category
         unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
-          return render json: {
-            error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}"
-          }, status: :unprocessable_entity
+          return render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" },
+                        status: :unprocessable_entity
         end
-      
+
         if @ticket.save
+          # Attach single attachment
           if params[:ticket][:attachment].present?
             @ticket.attachment.attach(params[:ticket][:attachment])
           end
 
+          # Attach multiple files
+          if params[:ticket][:files].present?
+            @ticket.files.attach(params[:ticket][:files])
+          end
+
+          # Calculate SLA
           begin
             SlaCalculator.new(@ticket).calculate
           rescue => e
@@ -89,22 +109,24 @@ module Api
 
           create_initial_comment
           create_notifications
+
           render json: ticket_attributes(@ticket), status: :created
         else
-          render json: {
-            errors: @ticket.errors.full_messages,
-            details: @ticket.errors.details
-          }, status: :unprocessable_entity
+          render json: { errors: @ticket.errors.full_messages, details: @ticket.errors.details },
+                status: :unprocessable_entity
         end
-      end      
+      end
 
+      # -------------------------------
+      # UPDATE
+      # -------------------------------
       def update
         unless current_user.can_resolve_tickets?(@ticket.ticket_type) || current_user.can_reassign_tickets? || current_user.can_change_urgency?
           return render_forbidden("Unauthorized to update this ticket")
         end
 
         ticket_params_adjusted = ticket_params_with_enums
-        
+
         if ticket_params_adjusted[:priority].present?
           unless current_user.can_change_urgency?
             return render_forbidden("Unauthorized to change ticket urgency")
@@ -120,9 +142,7 @@ module Api
         end
 
         if ticket_params_adjusted[:category].present? && !VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
-          return render json: { 
-            error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" 
-          }, status: :unprocessable_entity
+          return render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
         end
 
         if params[:ticket].present?
@@ -131,7 +151,7 @@ module Api
             :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer
           ).to_h.symbolize_keys
           ticket_params_adjusted.merge!(resolution_fields) if resolution_fields.present?
-        end        
+        end
 
         if @ticket.update(ticket_params_adjusted)
           if ticket_params_adjusted[:status] == 'resolved' && !@ticket.resolved_at_was
@@ -148,6 +168,9 @@ module Api
         end
       end
 
+      # -------------------------------
+      # DESTROY
+      # -------------------------------
       def destroy
         unless current_user.is_admin? || current_user.domain_admin? || current_user.system_admin?
           return render_forbidden("Only admins can delete tickets")
@@ -156,6 +179,9 @@ module Api
         head :no_content
       end
 
+      # -------------------------------
+      # ASSIGN TO USER
+      # -------------------------------
       def assign_to_user
         unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == @ticket.team)
           return render json: { error: 'You are not authorized to assign this ticket' }, status: :forbidden
@@ -180,6 +206,9 @@ module Api
         end
       end
 
+      # -------------------------------
+      # ESCALATE TO PROBLEM
+      # -------------------------------
       def escalate_to_problem
         unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin? || current_user.system_admin?
           return render json: { error: 'Only team leads or higher can escalate tickets to problems' }, status: :forbidden
@@ -202,6 +231,9 @@ module Api
         end
       end
 
+      # -------------------------------
+      # RESOLVE
+      # -------------------------------
       def resolve
         unless current_user.can_resolve_tickets?(@ticket.ticket_type)
           return render json: { error: "You are not authorized to resolve this #{@ticket.ticket_type} ticket" }, status: :forbidden
@@ -227,27 +259,21 @@ module Api
         end
       end
 
-      def debug_visibility
-        return head :forbidden unless Rails.env.development? || current_user.admin? || current_user.domain_admin? || current_user.system_admin?
-        
-        debug_info = debug_ticket_counts
-        render json: debug_info, status: :ok
+      # -------------------------------
+      # DOWNLOAD ATTACHMENT
+      # -------------------------------
+
+      def download_attachment
+        if @ticket.attachment.attached?
+          redirect_to rails_blob_url(@ticket.attachment, disposition: "attachment")
+        else
+          render json: { error: "Attachment not found" }, status: :not_found
+        end
       end
 
-      def tickets_to_csv(tickets)
-        CSV.generate(headers: true) do |csv|
-          csv << ["Ticket Number", "Title", "Status", "Priority", "Created At"]
-          tickets.each do |ticket|
-            csv << [
-              ticket.ticket_number,
-              ticket.title,
-              ticket.status,
-              ticket.priority_before_type_cast,
-              ticket.created_at&.iso8601
-            ]
-          end
-        end
-      end      
+      # -------------------------------
+      # OTHER METHODS (PRIVATE)
+      # -------------------------------
 
       private
 
@@ -267,6 +293,7 @@ module Api
           SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, @ticket.assignee.id)
         end
       end
+
 
       def ticket_attributes(ticket)
         {
@@ -310,6 +337,8 @@ module Api
           requester: ticket.requester ? { id: ticket.requester.id, name: ticket.requester.name } : nil,
           created_at: ticket.created_at&.in_time_zone('Pretoria')&.iso8601,
           updated_at: ticket.updated_at&.in_time_zone('Pretoria')&.iso8601,
+          attachment: ticket.attachment.attached? ? { filename: ticket.attachment.filename.to_s, url: rails_blob_url(ticket.attachment) } : nil,
+          files: ticket.files.attached? ? ticket.files.map { |file| { filename: file.filename.to_s, url: rails_blob_url(file) } } : [],
           notifications: ticket.notifications.map do |notification|
             {
               id: notification.id,
@@ -326,9 +355,10 @@ module Api
           :title, :description, :ticket_type, :urgency, :priority, :impact,
           :team_id, :caller_name, :caller_surname, :caller_email, :caller_phone,
           :customer, :source, :category, :assignee_id, :ticket_number, :reported_at,
-          :creator_id, :requester_id,
-          :status, :resolved_at, :resolution_note, :reason, :resolution_method,
-          :cause_code, :resolution_details, :end_customer, :support_center, :total_kilometer, :attachment 
+          :creator_id, :requester_id, :status, :resolved_at, :resolution_note,
+          :reason, :resolution_method, :cause_code, :resolution_details,
+          :end_customer, :support_center, :total_kilometer,
+          :attachment, files: [] 
         )
       end
 
