@@ -24,24 +24,6 @@ module Api
       end
 
       # POST /api/v1/organizations/:organization_subdomain/teams
-      # def create
-      #   @team = @organization.teams.new(team_params.except(:user_ids))
-        
-      #   ActiveRecord::Base.transaction do
-      #     if @team.save
-      #       if team_params[:user_ids].present?
-      #         assign_users_to_team(@team, team_params[:user_ids]) 
-      #       end
-      #       render json: team_attributes(@team), status: :created,
-      #              location: api_v1_organization_team_url(@organization.subdomain, @team)
-      #     else
-      #       render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
-      #     end
-      #   end
-      # rescue ActiveRecord::RecordInvalid => e
-      #   render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
-      # end
-
       def create
         Rails.logger.info("Create Team Params: #{params.inspect}")
         Rails.logger.info("Organization: #{@organization.inspect}")
@@ -125,19 +107,31 @@ module Api
         # Convert to integers and remove duplicates
         user_ids = user_ids.map(&:to_i).uniq
         
-        # Find users that belong to this organization
-        users = @organization.users.where(id: user_ids)
+        # Get current user IDs for the team
+        current_user_ids = team.users.pluck(:id)
         
-        # Verify all requested users were found
-        if users.count != user_ids.size
-          missing_ids = user_ids - users.pluck(:id)
-          raise ActiveRecord::RecordInvalid.new(
-            Team.new.tap { |t| t.errors.add(:user_ids, "Users not found: #{missing_ids.join(', ')}") }
-          )
+        # Calculate users to remove (set team_id to nil)
+        to_remove = current_user_ids - user_ids
+        if to_remove.present?
+          User.where(id: to_remove).update_all(team_id: nil)
         end
+        
+        # Assign new users if provided
+        if user_ids.present?
+          # Find users that belong to this organization
+          users = @organization.users.where(id: user_ids)
+          
+          # Verify all requested users were found
+          if users.count != user_ids.size
+            missing_ids = user_ids - users.pluck(:id)
+            raise ActiveRecord::RecordInvalid.new(
+              Team.new.tap { |t| t.errors.add(:user_ids, "Users not found: #{missing_ids.join(', ')}") }
+            )
+          end
 
-        # Update all users in a single query
-        User.where(id: user_ids).update_all(team_id: team.id)
+          # Update all users in a single query
+          User.where(id: user_ids).update_all(team_id: team.id)
+        end
       end
 
       def team_attributes(team)
