@@ -39,6 +39,9 @@ gem 'paper_trail'
 # === Active Storage: Required for image/video/pdf processing ===
 gem "image_processing", "~> 1.2"  # Required for variants
 gem "aws-sdk-s3", require: false  # If using S3 or Cloudinary fallback
+gem 'azure-storage-blob', require: false
+
+gem 'clamby' # For virus scanning (optional for local dev)
 
 group :development, :test do
   gem 'better_errors', '~> 2.9', '>= 2.9.1'
