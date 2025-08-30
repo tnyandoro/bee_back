@@ -21,7 +21,7 @@ gem 'caxlsx_rails'
 gem "csv"
 gem "roo"
 
-gem "active_model_secure_token"
+# REMOVED: gem "active_model_secure_token" - Rails 7.1+ has this built-in
 gem "bcrypt", "~> 3.1.7"
 gem 'will_paginate', '~> 3.3'
 gem 'strong_migrations'

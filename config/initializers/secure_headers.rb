@@ -16,6 +16,4 @@ Rails.application.config.action_dispatch.default_headers.merge!({
   # Force HTTPS (HSTS)
   "Strict-Transport-Security" => "max-age=31536000; includeSubDomains",
 
-  "X-Content-Type-Options" => "nosniff"
-
 })
