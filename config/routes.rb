@@ -11,11 +11,11 @@ Rails.application.routes.draw do
       post '/login', to: 'sessions#create'
       delete '/logout', to: 'sessions#destroy'
       get '/verify', to: 'sessions#verify'
-      post '/refresh', to: 'sessions#refresh'        # ✅ Refresh token endpoint
+      post '/refresh', to: 'sessions#refresh'
       post '/register', to: 'registrations#create'
       get '/verify_admin', to: 'sessions#verify_admin'
-      post '/password/reset', to: 'passwords#reset'     
-      post '/password/update', to: 'passwords#update'    
+      post '/password/reset', to: 'passwords#reset'
+      post '/password/update', to: 'passwords#update'
 
       # Profile route
       resource :profile, only: [:show]
@@ -44,20 +44,22 @@ Rails.application.routes.draw do
           resources :problems, only: [:index]
         end
 
-        resources :teams, only: [:index, :show, :create, :update, :destroy] do
-          get 'users', on: :member
+        resources :teams, only: [:index, :show, :create, :update] do
+          member do
+            get 'users'
+            patch :deactivate # Added for soft deletion
+          end
         end
 
         resources :tickets, only: [:index, :show, :create, :update, :destroy] do
           collection do
             get :export
-            get :debug_visibility  # Added debug endpoint for troubleshooting ticket visibility
+            get :debug_visibility
           end
-        
           post :assign_to_user, on: :member
           post :escalate_to_problem, on: :member
           post :resolve, on: :member
-        end        
+        end
 
         resources :problems, only: [:index, :show, :create, :update, :destroy]
 
@@ -68,12 +70,12 @@ Rails.application.routes.draw do
     end
   end
 
-  # ✅ Root route returns simple confirmation for base GET /
+  # Root route returns simple confirmation for base GET /
   root to: proc {
     [200, { 'Content-Type' => 'application/json' }, [{ message: 'API is live' }.to_json]]
   }
 
-  # ✅ Catch-all fallback route for frontend
+  # Catch-all fallback route for frontend
   get '*path', to: proc {
     [404, { 'Content-Type' => 'application/json' }, [{ error: 'Not found' }.to_json]]
   }, constraints: ->(req) { !req.path.start_with?('/api', '/cable', '/rails') }

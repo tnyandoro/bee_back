@@ -4,11 +4,11 @@ module Api
   module V1
     class TeamsController < Api::V1::ApiController
       before_action :authorize_admin_or_super_user, except: [:index, :show, :users]
-      before_action :set_team, only: [:show, :update, :destroy, :users]
+      before_action :set_team, only: [:show, :update, :deactivate, :users]
 
       # GET /api/v1/organizations/:organization_subdomain/teams
       def index
-        @teams = @organization.teams.includes(:users) # Eager loading users
+        @teams = @organization.teams.includes(:users).where(deactivated_at: nil) # Filter active teams
         render json: @teams.map { |team| team_attributes(team) }, status: :ok
       end
 
@@ -19,7 +19,7 @@ module Api
 
       # GET /api/v1/organizations/:organization_subdomain/teams/:team_id/users
       def users
-        @users = @team.users.includes(:team) # Eager loading team
+        @users = @team.users.includes(:team)
         render json: @users.map { |user| user_attributes(user) }, status: :ok
       end
 
@@ -68,29 +68,24 @@ module Api
         render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
       end
 
-      # DELETE /api/v1/organizations/:organization_subdomain/teams/:id
-      def destroy
-        if @team.destroy
-          head :no_content
-        else
-          render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
+      # PATCH /api/v1/organizations/:organization_subdomain/teams/:id/deactivate
+      def deactivate
+        ActiveRecord::Base.transaction do
+          @team.update!(deactivated_at: Time.current)
+          User.where(team_id: @team.id).update_all(team_id: nil) # Unassign users
+          @organization.tickets.where(team_id: @team.id).update_all(team_id: nil) # Unassign tickets
         end
+        render json: { message: "Team deactivated successfully" }, status: :ok
+      rescue ActiveRecord::RecordInvalid => e
+        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
       end
 
       private
 
-      def set_organization_from_subdomain
-        @organization = Organization.find_by(subdomain: params[:organization_subdomain])
-        unless @organization
-          render json: { error: 'Organization not found' }, status: :not_found
-          return
-        end
-      end
-
       def set_team
-        @team = @organization.teams.find(params[:id] || params[:team_id])
+        @team = @organization.teams.where(deactivated_at: nil).find(params[:id] || params[:team_id])
       rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Team not found in this organization' }, status: :not_found
+        render json: { error: 'Team not found or already deactivated' }, status: :not_found
       end
 
       def team_params
@@ -104,32 +99,22 @@ module Api
       end
 
       def assign_users_to_team(team, user_ids)
-        # Convert to integers and remove duplicates
         user_ids = user_ids.map(&:to_i).uniq
-        
-        # Get current user IDs for the team
         current_user_ids = team.users.pluck(:id)
-        
-        # Calculate users to remove (set team_id to nil)
         to_remove = current_user_ids - user_ids
+        
         if to_remove.present?
           User.where(id: to_remove).update_all(team_id: nil)
         end
         
-        # Assign new users if provided
         if user_ids.present?
-          # Find users that belong to this organization
           users = @organization.users.where(id: user_ids)
-          
-          # Verify all requested users were found
           if users.count != user_ids.size
             missing_ids = user_ids - users.pluck(:id)
             raise ActiveRecord::RecordInvalid.new(
               Team.new.tap { |t| t.errors.add(:user_ids, "Users not found: #{missing_ids.join(', ')}") }
             )
           end
-
-          # Update all users in a single query
           User.where(id: user_ids).update_all(team_id: team.id)
         end
       end
@@ -139,10 +124,11 @@ module Api
           id: team.id,
           name: team.name,
           organization_id: team.organization_id,
-          user_ids: team.user_ids,
+          user_ids: team.users.pluck(:id),
           user_count: team.users.count,
-          created_at: team.created_at.iso8601,
-          updated_at: team.updated_at.iso8601
+          created_at: team.created_at&.in_time_zone('Pretoria')&.iso8601,
+          updated_at: team.updated_at&.in_time_zone('Pretoria')&.iso8601,
+          deactivated_at: team.deactivated_at&.in_time_zone('Pretoria')&.iso8601
         }
       end
 
