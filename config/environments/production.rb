@@ -33,6 +33,7 @@ Rails.application.configure do
   config.active_storage.service = :local
   # config.active_storage.service = :cloudinary
 
+
   # Mount Action Cable outside main process or domain.
   # config.action_cable.mount_path = nil
   # config.action_cable.url = "wss://example.com/cable"
@@ -61,6 +62,7 @@ Rails.application.configure do
   # config.cache_store = :redis_cache_store, { url: ENV.fetch("REDIS_URL") }
   # config/environments/production.rb
 config.cache_store = :memory_store
+
 
 
   # Use Sidekiq for Active Job.
