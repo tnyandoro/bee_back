@@ -2,10 +2,12 @@
 <html>
 
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta content='text/html; charset=UTF-8' http-equiv='Content-Type' />
     <style>
         body {
             font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
         }
 
         .container {
@@ -15,8 +17,8 @@
         }
 
         .header {
-            background-color: #f8f9fa;
-            padding: 20px;
+            background-color: #f4f4f4;
+            padding: 10px;
             text-align: center;
         }
 
@@ -24,36 +26,96 @@
             padding: 20px;
         }
 
-        .ticket-info {
-            background-color: #e9ecef;
+        .ticket-details {
+            border: 1px solid #ddd;
             padding: 15px;
-            margin: 15px 0;
+            background-color: #f9f9f9;
+        }
+
+        .ticket-details dt {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .ticket-details dd {
+            margin-bottom: 10px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #777;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Ticket Assigned to You</h1>
+    <div class='container'>
+        <div class='header'>
+            <h2>Ticket Assignment Notification</h2>
         </div>
-        <div class="content">
+        <div class='content'>
             <p>Hello <%= @user.name %>,</p>
-            <p>A ticket has been assigned directly to you.</p>
+            <p>A new ticket has been assigned to you in the ITSM system.</p>
 
-            <div class="ticket-info">
-                <h3>Ticket Details:</h3>
-                <p><strong>Ticket #:</strong> <%= @ticket.ticket_number %></p>
-                <p><strong>Title:</strong> <%= @ticket.title %></p>
-                <p><strong>Priority:</strong> <%= @ticket.priority %></p>
-                <p><strong>Status:</strong> <%= @ticket.status %></p>
-                <% if @ticket.description %>
-                <p><strong>Description:</strong> <%= simple_format(@ticket.description) %></p>
-                <% end %>
+            <div class='ticket-details'>
+                <h3>Ticket Details</h3>
+                <dl>
+                    <dt>Ticket Number:</dt>
+                    <dd><%= @ticket.ticket_number %></dd>
+
+                    <dt>Title:</dt>
+                    <dd><%= @ticket.title %></dd>
+
+                    <dt>Description:</dt>
+                    <dd><%= @ticket.description || 'No description provided' %></dd>
+
+                    <dt>Status:</dt>
+                    <dd><%= @ticket.status.capitalize %></dd>
+
+                    <dt>Priority:</dt>
+                    <dd><%= @ticket.priority&.capitalize || 'Not set' %></dd>
+
+                    <dt>Category:</dt>
+                    <dd><%= @ticket.category || 'Not set' %></dd>
+
+                    <dt>Urgency:</dt>
+                    <dd><%= @ticket.urgency&.capitalize || 'Not set' %></dd>
+
+                    <dt>Impact:</dt>
+                    <dd><%= @ticket.impact&.capitalize || 'Not set' %></dd>
+
+                    <dt>Reported At:</dt>
+                    <dd><%= @ticket.reported_at&.in_time_zone('Pretoria')&.strftime('%Y-%m-%d %H:%M') || 'Not set' %></dd>
+
+                    <dt>Team:</dt>
+                    <dd><%= @ticket.team&.name || 'Not assigned' %></dd>
+
+                    <dt>Requester:</dt>
+                    <dd><%= @ticket.requester&.name || 'Not set' %></dd>
+
+                    <% if @ticket.attachment.attached? %>
+                    <dt>Attachment:</dt>
+                    <dd><%= @ticket.attachment.filename %></dd>
+                    <% end %>
+
+                    <% if @ticket.files.attached? %>
+                    <dt>Files:</dt>
+                    <dd>
+                        <ul>
+                            <% @ticket.files.each do |file| %>
+                            <li><%= file.filename %></li>
+                            <% end %>
+                        </ul>
+                    </dd>
+                    <% end %>
+                </dl>
             </div>
 
-            <p>Please log in to the system to view more details and take action on this ticket.</p>
-            <p>Best regards,<br>ITSM System</p>
+            <p>Please log in to the ITSM system to view and manage this ticket.</p>
+        </div>
+        <div class='footer'>
+            <p>This is an automated message from the ITSM system. Please do not reply directly to this email.</p>
         </div>
     </div>
 </body>

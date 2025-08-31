@@ -19,6 +19,6 @@ one:
   caller_phone: "07720938746"
   customer: Johannesburg
   source: Web
-  category: Software
+  category: Query
   created_at: <%= Time.now %>
   updated_at: <%= Time.now %>

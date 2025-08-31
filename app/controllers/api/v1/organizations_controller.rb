@@ -1,6 +1,8 @@
 module Api
   module V1
-    class OrganizationsController < Api::V1::ApiController
+    class OrganizationsController < ApiController
+      before_action :set_organization_from_subdomain
+      before_action :authenticate_user!
 
       def index
         @organizations = Organization.all
@@ -120,6 +122,8 @@ module Api
 
         tickets = scope.paginate(page: page, per_page: per_page)
 
+        Rails.logger.info "Tickets query result for ticket_number #{params[:ticket_number]}: #{tickets.pluck(:ticket_number).inspect}"
+
         render json: {
           tickets: tickets.map { |t| ticket_attributes(t) },
           pagination: {
@@ -132,7 +136,7 @@ module Api
 
       private
 
-      def set_organization
+      def set_organization_from_subdomain
         subdomain = params[:subdomain]
         @organization = Organization.find_by("LOWER(subdomain) = ?", subdomain&.downcase)
         render_error("Organization not found", status: :not_found) unless @organization
@@ -156,6 +160,7 @@ module Api
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
+        scope = scope.where(ticket_number: params[:ticket_number]) if params[:ticket_number].present?
         scope
       end
 

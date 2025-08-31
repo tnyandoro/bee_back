@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-# frozen_string_literal: true
 module Api
   module V1
     class TicketsController < Api::V1::ApiController
@@ -9,7 +8,7 @@ module Api
 
       VALID_STATUSES = %w[open assigned escalated closed suspended resolved pending].freeze
       VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
-      VALID_CATEGORIES = %w[Technical Billing Support Hardware Software Other].freeze
+      VALID_CATEGORIES = %w[Query Complaints Compliment Other].freeze
 
       # -------------------------------
       # INDEX
@@ -38,7 +37,7 @@ module Api
       end
 
       # -------------------------------
-      # SHOW
+      # SHOW new changes
       # -------------------------------
       def show
         unless @ticket.organization_id == @organization.id
@@ -55,10 +54,7 @@ module Api
       # -------------------------------
       # CREATE
       # -------------------------------
-      
-
       def create
-        # Check permission
         unless current_user.can_create_tickets?(ticket_params[:ticket_type])
           return render_forbidden("Unauthorized to create #{ticket_params[:ticket_type]} ticket")
         end
@@ -70,37 +66,31 @@ module Api
         @ticket.reported_at ||= Time.zone.now
         @ticket.status = 'open'
 
-        # Set priority safely
         if ticket_params_adjusted[:priority].present?
           priority_value = ticket_params_adjusted[:priority].to_i
           @ticket.priority = Ticket.priorities.key([0, [3, priority_value].min].max)
         end
 
-        # Assign team and assignee
         begin
           process_team_and_assignee(ticket_params_adjusted)
         rescue ActiveRecord::RecordNotFound => e
           return render json: { error: e.message }, status: :not_found
         end
 
-        # Validate category
         unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
           return render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" },
                         status: :unprocessable_entity
         end
 
         if @ticket.save
-          # Attach single attachment
           if params[:ticket][:attachment].present?
             @ticket.attachment.attach(params[:ticket][:attachment])
           end
 
-          # Attach multiple files
           if params[:ticket][:files].present?
             @ticket.files.attach(params[:ticket][:files])
           end
 
-          # Calculate SLA
           begin
             SlaCalculator.new(@ticket).calculate
           rescue => e
@@ -262,7 +252,6 @@ module Api
       # -------------------------------
       # DOWNLOAD ATTACHMENT
       # -------------------------------
-
       def download_attachment
         if @ticket.attachment.attached?
           redirect_to rails_blob_url(@ticket.attachment, disposition: "attachment")
@@ -293,7 +282,6 @@ module Api
           SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, @ticket.assignee.id)
         end
       end
-
 
       def ticket_attributes(ticket)
         {
@@ -408,7 +396,6 @@ module Api
         Rails.logger.info "Current user: #{current_user&.id} - #{current_user&.email}"
         Rails.logger.info "User roles: admin=#{current_user.admin?}, general_manager=#{current_user.general_manager?}, domain_admin=#{current_user.domain_admin?}, system_admin=#{current_user.system_admin?}"
 
-        # Add role-based team scoping for non-admins
         unless current_user.domain_admin? || current_user.system_admin?
           if current_user.team_id.present?
             scope = scope.where(team_id: current_user.team_id)
@@ -417,7 +404,6 @@ module Api
           end
         end
 
-        # Apply parameter filters (unchanged)
         scope = scope.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
         scope = scope.where(assignee_id: params[:user_id]) if params[:user_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
@@ -425,7 +411,6 @@ module Api
         scope = scope.where(team_id: params[:team_id]) if params[:team_id].present?
         scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
 
-        # Date filtering (reported_at) - unchanged
         if params[:reported_from].present? && params[:reported_to].present?
           from = Time.zone.parse(params[:reported_from]) rescue nil
           to = Time.zone.parse(params[:reported_to]) rescue nil
@@ -438,7 +423,6 @@ module Api
           scope = scope.where("reported_at <= ?", to.end_of_day) if to
         end
 
-        # Date filtering (created_at) - unchanged
         if params[:created_from].present? && params[:created_to].present?
           from = Time.zone.parse(params[:created_from]) rescue nil
           to = Time.zone.parse(params[:created_to]) rescue nil
@@ -451,7 +435,6 @@ module Api
           scope = scope.where("created_at <= ?", to.end_of_day) if to
         end
 
-        # Date filtering (resolved_at) - unchanged
         if params[:resolved_from].present? && params[:resolved_to].present?
           from = Time.zone.parse(params[:resolved_from]) rescue nil
           to = Time.zone.parse(params[:resolved_to]) rescue nil
@@ -464,7 +447,6 @@ module Api
           scope = scope.where("resolved_at <= ?", to.end_of_day) if to
         end
 
-        # Date filtering (updated_at) - unchanged
         if params[:updated_from].present? && params[:updated_to].present?
           from = Time.zone.parse(params[:updated_from]) rescue nil
           to = Time.zone.parse(params[:updated_to]) rescue nil
@@ -512,24 +494,24 @@ module Api
           sample_visible_tickets: apply_filters(@organization.tickets).limit(5).pluck(:id, :status, :assignee_id, :team_id, :department_id)
         }
       end
-      
+
       def stats
         group_by = params[:group_by] || 'daily'
         date_field = params[:date_field] || 'created_at'
-      
+
         unless %w[daily monthly].include?(group_by)
           return render json: { error: "Invalid group_by parameter. Use 'daily' or 'monthly'" }, status: :bad_request
         end
-      
+
         unless %w[created_at resolved_at updated_at].include?(date_field)
           return render json: { error: "Invalid date_field parameter. Use 'created_at', 'resolved_at', or 'updated_at'" }, status: :bad_request
         end
-      
+
         scope = @organization.tickets
-      
+
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
-      
+
         if params[:start_date].present? && params[:end_date].present?
           start_date = Date.parse(params[:start_date]) rescue nil
           end_date = Date.parse(params[:end_date]) rescue nil
@@ -537,7 +519,7 @@ module Api
             scope = scope.where("#{date_field} BETWEEN ? AND ?", start_date.beginning_of_day, end_date.end_of_day)
           end
         end
-      
+
         case group_by
         when 'daily'
           data = scope
@@ -550,30 +532,30 @@ module Api
                    .order("DATE_TRUNC('month', #{date_field})")
                    .count
         end
-      
+
         formatted = data.map do |date, count|
           { date: date.to_date.to_s, count: count }
         end
-      
+
         render json: {
           grouped_by: group_by,
           field: date_field,
           organization: @organization.subdomain,
           data: formatted
         }, status: :ok
-      end      
+      end
 
       def set_ticket
-        @ticket = @organization.tickets.find_by(id: params[:id]) || 
+        @ticket = @organization.tickets.find_by(id: params[:id]) ||
                   @organization.tickets.find_by(ticket_number: params[:id])
         raise ActiveRecord::RecordNotFound unless @ticket
       rescue ActiveRecord::RecordNotFound
         render json: { error: 'Ticket not found' }, status: :not_found
-      end          
+      end
 
       def ticket_params_with_enums
         permitted_params = ticket_params.dup
-        
+
         if permitted_params[:urgency].present?
           urgency_value = permitted_params[:urgency].downcase
           permitted_params[:urgency] = Ticket.urgencies[urgency_value]
@@ -581,7 +563,7 @@ module Api
             raise ArgumentError, "Invalid urgency: #{urgency_value}. Allowed values are: #{Ticket.urgencies.keys.join(', ')}"
           end
         end
-        
+
         if permitted_params[:impact].present?
           impact_value = permitted_params[:impact].downcase
           permitted_params[:impact] = Ticket.impacts[impact_value]
@@ -589,26 +571,26 @@ module Api
             raise ArgumentError, "Invalid impact: #{impact_value}. Allowed values are: #{Ticket.impacts.keys.join(', ')}"
           end
         end
-        
+
         permitted_params
       end
 
       def export
         tickets = apply_filters(@organization.tickets).limit(10_000)
-      
+
         respond_to do |format|
           format.csv do
             headers["Content-Disposition"] = "attachment; filename=tickets-#{Date.today}.csv"
             headers["Content-Type"] = "text/csv"
             render plain: tickets_to_csv(tickets)
           end
-      
+
           format.xlsx do
             render xlsx: "export", filename: "tickets-#{Date.today}.xlsx", locals: { tickets: tickets }
           end
         end
       end
-      
+
       def process_team_and_assignee(params)
         if params[:team_id].present?
           team = @organization.teams.find_by(id: params[:team_id])
@@ -625,42 +607,77 @@ module Api
             unless assignee
               raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"
             end
-            
+
             unless team.users.exists?(id: assignee.id)
               raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in team #{team.id}"
             end
-            
+
+            @ticket.assignee = assignee
+            @ticket.status = 'assigned'
+          elsif @ticket.assignee.nil? # Auto-assign if no assignee provided
+            assignee = find_least_busy_user(team)
+            if assignee
+              @ticket.assignee = assignee
+              @ticket.status = 'assigned'
+            end
+          end
+        end
+      end
+
+      def process_team_and_assignee_for_update(params)
+        team_changed = false
+        new_team = nil
+
+        if params[:team_id].present?
+          new_team = @organization.teams.find_by(id: params[:team_id])
+          unless new_team
+            raise ActiveRecord::RecordNotFound, 'Team not found in this organization'
+          end
+          team_changed = @ticket.team_id != new_team.id
+
+          if team_changed && @ticket.assignee.present? && !new_team.users.include?(@ticket.assignee)
+            @ticket.assignee = nil
+          end
+
+          @ticket.team = new_team
+        end
+
+        if params[:assignee_id].present?
+          team = new_team || @ticket.team
+          unless team
+            raise ArgumentError, 'Cannot assign user without a team'
+          end
+          unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == team)
+            raise ArgumentError, 'Unauthorized to assign this ticket'
+          end
+          assignee = @organization.users.find_by(id: params[:assignee_id])
+          unless assignee
+            raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"
+          end
+
+          unless team.users.exists?(id: assignee.id)
+            raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in team #{team.id}"
+          end
+
+          @ticket.assignee = assignee
+          @ticket.status = 'assigned'
+        elsif params[:team_id].present? && @ticket.assignee.nil? # Auto-assign if team specified and no assignee
+          assignee = find_least_busy_user(@ticket.team)
+          if assignee
             @ticket.assignee = assignee
             @ticket.status = 'assigned'
           end
         end
       end
 
-      def process_team_and_assignee_for_update(params)
-        if params[:team_id].present?
-          team = @organization.teams.find_by(id: params[:team_id])
-          unless team
-            raise ActiveRecord::RecordNotFound, 'Team not found in this organization'
-          end
-          @ticket.team = team
-
-          if params[:assignee_id].present?
-            unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == team)
-              raise ArgumentError, 'Unauthorized to assign this ticket'
-            end
-            assignee = @organization.users.find_by(id: params[:assignee_id])
-            unless assignee
-              raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in organization"
-            end
-            
-            unless team.users.exists?(id: assignee.id)
-              raise ActiveRecord::RecordNotFound, "User #{params[:assignee_id]} not found in team #{team.id}"
-            end
-            
-            @ticket.assignee = assignee
-            @ticket.status = 'assigned'
-          end
-        end
+      def find_least_busy_user(team)
+        active_statuses = %w[open assigned escalated pending suspended].map { |status| Ticket.statuses[status] }
+        team.users
+          .left_joins(:assigned_tickets)
+          .group('users.id')
+          .having("COUNT(CASE WHEN tickets.status IN (?) THEN 1 ELSE NULL END) = 0", active_statuses)
+          .order('users.id ASC')
+          .first
       end
 
       def create_initial_comment
