@@ -37,7 +37,7 @@ class Ticket < ApplicationRecord
   validates :ticket_type, :reported_at, :category, :caller_name, :caller_surname,
             :caller_email, :caller_phone, :customer, :source, presence: true
   validates :ticket_type, inclusion: { in: %w[Incident Request Problem], message: "must be one of: Incident, Request, Problem" }
-  validates :category, inclusion: { in: %w[Query Complaint Compliment Other], message: "must be one of: Query, Complaint, Compliment, Other" }
+  validates :category, inclusion: { in: %w[Query Complaint Compliment Other], message: "must be one of: Query, Complaint, Compliment, Other" } # updated categories
   validates :status, inclusion: { in: statuses.keys }
   validate :assignee_belongs_to_team, if: -> { assignee_id.present? && team_id.present? }
   validate :attachment
