@@ -16,13 +16,21 @@ default: &default
 #   port: 5432
 #   sslmode: require
 
-development:
-  <<: *default
-  database: itsm_development
-  username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
-  password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
-  host: <%= ENV.fetch("DB_HOST", "localhost") %>
-  port: 5432
+# development:
+#   <<: *default
+#   database: itsm_development
+#   username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
+#   password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
+#   host: <%= ENV.fetch("DB_HOST", "localhost") %>
+#   port: 5432
+
+# development:
+#   <<: *default
+#   database: itsm_development
+#   username: <%= ENV.fetch("DB_USERNAME", "tal") %>
+#   password: <%= ENV.fetch("DB_PASSWORD", "EggyOfJhb") %>
+#   host: <%= ENV.fetch("DB_HOST", "localhost") %>
+#   port: 5432
 
 # test:
 #   <<: *default

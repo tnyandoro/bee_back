@@ -13,50 +13,55 @@ greensoft_org = Organization.create!(
 # Create users
 it_manager = User.create!(
   name: "IT Manager",
+  username: "it.manager@greensoft.com",
   email: "it.manager@greensoft.com",
   password: "password123",
   password_confirmation: "password123",
-  role: :team_leader,
+  role: :service_desk_tl,
   organization: greensoft_org,
   auth_token: "itmanager_token_456"
 )
 
 support_tech = User.create!(
   name: "Support Tech",
+  username: "support.tech@greensoft.com",
   email: "support.tech@greensoft.com",
   password: "password123",
   password_confirmation: "password123",
-  role: :agent,
+  role: :service_desk_agent,
   organization: greensoft_org,
   auth_token: "supporttech_token_789"
 )
 
 network_tech = User.create!(
   name: "Network Tech",
+  username: "network@greensoft.com",
   email: "network@greensoft.com",
   password: "password123",
   password_confirmation: "password123",
-  role: :agent,
+  role: :assignee_lvl_3,
   organization: greensoft_org,
   auth_token: "networktech_token_012"
 )
 
 helpdesk = User.create!(
-  name: "Helpdesk",
+  name: "Helpdesk Agent",
+  username: "helpdesk@greensoft.com",
   email: "helpdesk@greensoft.com",
   password: "password123",
   password_confirmation: "password123",
-  role: :agent,
+  role: :call_center_agent,
   organization: greensoft_org,
   auth_token: "helpdesk_token_345"
 )
 
 admin = User.create!(
-  name: "Admin",
+  name: "System Admin",
+  username: "admin@greensoft.com",
   email: "admin@greensoft.com",
   password: "password123",
   password_confirmation: "password123",
-  role: :admin,
+  role: :system_admin,
   organization: greensoft_org,
   auth_token: "admin_token_123"
 )
@@ -73,7 +78,7 @@ it_team.users << [it_manager, support_tech, network_tech, helpdesk]
 # Create SLA policy
 sla_policy = SlaPolicy.create!(
   organization: greensoft_org,
-  priority: :p3,
+  priority: :critical,
   response_time: 60, # minutes
   resolution_time: 480 # minutes (8 hours)
 )
@@ -95,7 +100,7 @@ tickets = [
     description: "User reports email client crashing on launch.",
     ticket_type: "Incident",
     status: :assigned,
-    priority: :p3,
+    priority: :critical,
     urgency: :medium,
     impact: :medium,
     creator: it_manager,

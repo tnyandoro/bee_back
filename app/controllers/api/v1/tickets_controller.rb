@@ -160,7 +160,7 @@ module Api
             end
             @ticket.update!(resolved_at: Time.current)
             create_resolution_comment(ticket_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
-            create_resolution_notification
+            create_resolution_notifications
           end
           render json: ticket_attributes(@ticket)
         else
@@ -224,7 +224,8 @@ module Api
 
         if @problem.save
           @ticket.update!(status: 'escalated')
-          create_escalation_notification if @ticket.assignee
+          create_assignee_escalation_notification if @ticket.assignee
+          create_requester_escalation_notification
           render json: { message: 'Ticket escalated to problem', problem: @problem.as_json }, status: :created
         else
           render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
@@ -251,7 +252,7 @@ module Api
           ActiveRecord::Base.transaction do
             @ticket.update!(resolution_params_adjusted)
             create_resolution_comment(resolution_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
-            create_resolution_notification
+            create_resolution_notifications
           end
           render json: ticket_attributes(@ticket), status: :ok
         rescue ActiveRecord::RecordInvalid => e
@@ -680,11 +681,21 @@ module Api
         )
       end
 
-      def create_escalation_notification
+      def create_assignee_escalation_notification
         Notification.create!(
           user: @ticket.assignee,
           organization: @ticket.organization,
           message: "Ticket #{@ticket.ticket_number} has been escalated to a problem",
+          read: false,
+          notifiable: @problem
+        )
+      end
+
+      def create_requester_escalation_notification
+        Notification.create!(
+          user: @ticket.requester,
+          organization: @ticket.organization,
+          message: "Your ticket has been escalated: #{@ticket.title} (#{@ticket.ticket_number})",
           read: false,
           notifiable: @problem
         )
@@ -697,16 +708,27 @@ module Api
         )
       end
 
-      def create_resolution_notification
+      def create_resolution_notifications
         if @ticket.assignee && @ticket.assignee != current_user && @ticket.assignee != @ticket.requester
-          notification = Notification.create!(
+          # Create notification for the assignee and send mail
+          assignee_notification = Notification.create!(
             user: @ticket.assignee,
             organization: @ticket.organization,
             message: "Ticket resolved by #{current_user.name}: #{@ticket.title} (#{@ticket.ticket_number})",
             read: false,
             notifiable: @ticket
           )
-          NotificationMailer.notify_user(notification).deliver_later
+          NotificationMailer.notify_user(assignee_notification).deliver_later
+
+          # Create notification for the requester and send mail
+          requester_notification = Notification.create!(
+            user: @ticket.assignee,
+            organization: @ticket.organization,
+            message: "Your ticket has been resolved: #{@ticket.title} (#{@ticket.ticket_number})",
+            read: false,
+            notifiable: @ticket
+          )
+          NotificationMailer.notify_user(requester_notification).deliver_later
         end
       end
     end

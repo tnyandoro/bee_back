@@ -5,8 +5,10 @@ class SendTicketAssignmentEmailsJob < ApplicationJob
     ticket = Ticket.find_by(id: ticket_id)
     team = Team.find_by(id: team_id)
     user = User.find_by(id: user_id)
-
+    
     return unless ticket # stop if ticket not found
+
+    requester = User.find_by(id: ticket.requester_id)
 
     # Send email to each team member individually
     if team
@@ -17,5 +19,8 @@ class SendTicketAssignmentEmailsJob < ApplicationJob
 
     # Send email to individual user
     TicketMailer.ticket_assigned_to_user(ticket, user).deliver_later if user
+
+    # Send email to requester user
+    TicketMailer.ticket_assigned_for_requester(ticket, requester).deliver_later if requester && ticket.assignee_id != ticket.requester_id
   end
 end

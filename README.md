@@ -288,11 +288,15 @@ If any of these are missing, follow the installation instructions below:
    ```bash
    rails db:create
    ```
-4. Run migrations:
+4. Create initial schema:
+   ```bash
+   rails db:schema:load
+   ```
+5. Run migrations:
    ```bash
    rails db:migrate
    ```
-5. (Optional) Seed the database with sample data:
+6. (Optional) Seed the database with sample data:
    ```bash
    rails db:seed
    ```
