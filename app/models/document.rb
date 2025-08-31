@@ -8,7 +8,7 @@ class Document < ApplicationRecord
 
   validates :pdf_file, presence: true
 #   validates :pdf_file, content_type: ['application/pdf'], size: { less_than: 10.megabytes }
-
+# commented out above line to allow all file types for now
   before_save :set_file_path
 
   private
