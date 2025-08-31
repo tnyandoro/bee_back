@@ -33,7 +33,7 @@ class Api::V1::TicketsControllerTest < ActionDispatch::IntegrationTest
         caller_phone: "07720938746",
         customer: "Johannesburg",
         source: "Web",
-        category: "Software"
+        category: "Query",
       }
     }
 

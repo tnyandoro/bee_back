@@ -9,7 +9,7 @@ module Api
 
       VALID_STATUSES = %w[open assigned escalated closed suspended resolved pending].freeze
       VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
-      VALID_CATEGORIES = %w[Technical Billing Support Hardware Software Other].freeze
+      VALID_CATEGORIES = %w[Query Complaints Compliment Other].freeze
 
       # -------------------------------
       # INDEX
