@@ -1,0 +1,19 @@
+Ticket Assigned to You
+
+Hello <%= @user.name %>,
+
+A ticket has been assigned directly to you.
+
+Ticket Details:
+Ticket #: <%= @ticket.ticket_number %>
+Title: <%= @ticket.title %>
+Priority: <%= @ticket.priority %>
+Status: <%= @ticket.status %>
+<% if @ticket.description %>
+Description: <%= @ticket.description %>
+<% end %>
+
+Please log in to the system to view more details and take action on this ticket.
+
+Best regards,
+Gsolve360 ITSM System
