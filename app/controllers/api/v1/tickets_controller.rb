@@ -37,7 +37,7 @@ module Api
       end
 
       # -------------------------------
-      # SHOW
+      # SHOW new changes
       # -------------------------------
       def show
         unless @ticket.organization_id == @organization.id
