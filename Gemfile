@@ -20,6 +20,8 @@ gem 'caxlsx_rails'
 
 gem "csv"
 gem "roo"
+# Add to your Gemfile
+gem 'active_storage_validations', '~> 3.0', '>= 3.0.1'
 
 # REMOVED: gem "active_model_secure_token" - Rails 7.1+ has this built-in
 gem "bcrypt", "~> 3.1.7"
