@@ -6,9 +6,10 @@ class Document < ApplicationRecord
     attachable.variant :thumbnail, resize_to_limit: [200, 200]
   end
 
-  validates :pdf_file, presence: true
-#   validates :pdf_file, content_type: ['application/pdf'], size: { less_than: 10.megabytes }
-# commented out above line to allow all file types for now
+  validates :pdf_file, attached: true,
+                       content_type: ['application/pdf'],
+                       size: { less_than: 10.megabytes }
+
   before_save :set_file_path
 
   private
