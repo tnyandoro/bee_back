@@ -1,19 +1,33 @@
-Ticket Assigned to You
+<!-- app/views/ticket_mailer/ticket_assigned_to_user.text.erb -->
+Ticket Assigned to You: <%= @ticket.title %>
 
-Hello <%= @user.name %>,
+Hello <%= @user&.name || 'User' %>,
 
 A ticket has been assigned directly to you.
 
 Ticket Details:
 Ticket #: <%= @ticket.ticket_number %>
 Title: <%= @ticket.title %>
-Priority: <%= @ticket.priority %>
-Status: <%= @ticket.status %>
-<% if @ticket.description %>
-Description: <%= @ticket.description %>
+Description: <%= @ticket.description || 'No description provided' %>
+Status: <%= @ticket.status&.capitalize || 'Not set' %>
+Priority: <%= @ticket.priority&.capitalize || 'Not set' %>
+Category: <%= @ticket.category || 'Not set' %>
+Urgency: <%= @ticket.urgency&.capitalize || 'Not set' %>
+Impact: <%= @ticket.impact&.capitalize || 'Not set' %>
+Reported At: <%= @ticket.reported_at&.in_time_zone('Africa/Johannesburg')&.strftime('%Y-%m-%d %H:%M') || 'Not set' %>
+Team: <%= @team_name %>
+Requester: <%= @ticket.requester&.name || 'Not set' %>
+<% if @attachment %>
+Attachment: <%= @attachment.filename.to_s %>
+<% end %>
+<% if @files.any? %>
+Files:
+<% @files.each do |file| %>
+- <%= file.filename.to_s %>
+<% end %>
 <% end %>
 
-Please log in to the system to view more details and take action on this ticket.
+Please log in to the ITSM system to view and manage this ticket.
 
 Best regards,
 Gsolve360 ITSM System
