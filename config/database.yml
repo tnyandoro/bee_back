@@ -24,13 +24,13 @@ default: &default
 #   host: <%= ENV.fetch("DB_HOST", "localhost") %>
 #   port: 5432
 
-# development:
-#   <<: *default
-#   database: itsm_development
-#   username: <%= ENV.fetch("DB_USERNAME", "tal") %>
-#   password: <%= ENV.fetch("DB_PASSWORD", "EggyOfJhb") %>
-#   host: <%= ENV.fetch("DB_HOST", "localhost") %>
-#   port: 5432
+development:
+  <<: *default
+  database: itsm_development
+  username: <%= ENV.fetch("DB_USERNAME", "tal") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "EggyOfJhb") %>
+  host: <%= ENV.fetch("DB_HOST", "localhost") %>
+  port: 5432
 
 # test:
 #   <<: *default
