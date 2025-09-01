@@ -7,14 +7,12 @@ development:
   root: <%= Rails.root.join("storage") %>
 
 # Add this missing local service configuration
-local:
-  service: Disk
-  root: <%= Rails.root.join("storage") %>
+# local:
+#   service: Disk
+#   root: <%= Rails.root.join("storage") %>
 
+# updatae for prod
 production:
-  service: Disk
-  root: <%= Rails.root.join("storage") %>
-cloudinary:
   service: Cloudinary
   cloud_name: <%= ENV['CLOUDINARY_CLOUD_NAME'] %>
   api_key: <%= ENV['CLOUDINARY_API_KEY'] %>
