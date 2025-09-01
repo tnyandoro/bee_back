@@ -21,7 +21,6 @@ gem 'caxlsx_rails'
 gem "csv"
 gem "roo"
 # Add to your Gemfile
-# gem 'active_storage_validations', '~> 3.0', '>= 3.0.1'
 
 gem 'active_storage_validations', '~> 3.0', '>= 3.0.1'
 
