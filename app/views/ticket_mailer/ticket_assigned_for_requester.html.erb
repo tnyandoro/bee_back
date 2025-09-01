@@ -35,11 +35,11 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Ticket Assigned to You</h1>
+            <h1>Your ticket has been assigned</h1>
         </div>
         <div class="content">
             <p>Hello <%= @user.name %>,</p>
-            <p>A ticket has been assigned directly to you.</p>
+            <p>Your ticket has been assigned to <%= @assignee.name %>.</p>
 
             <div class="ticket-info">
                 <h3>Ticket Details:</h3>
@@ -52,7 +52,7 @@
                 <% end %>
             </div>
 
-            <p>Please log in to the system to view more details and take action on this ticket.</p>
+            <p>Please log in to the system to view more details.</p>
             <p>Best regards,<br>ITSM System</p>
         </div>
     </div>

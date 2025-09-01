@@ -46,6 +46,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
     # Development
     origins 'http://localhost:3000', 'http://localhost:3001',
             'http://127.0.0.1:3000', 'http://127.0.0.1:3001',
+            'http://lvh.me:3000', 'http://lvh.me:3001',
             /\.localhost(:\d+)?$/, /\.lvh\.me(:\d+)?$/
 
     resource '*',

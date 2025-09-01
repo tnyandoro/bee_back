@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .ticket-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Your Ticket has been assigned</h1>
+        </div>
+        <div class="content">
+            <p>Hello <%= @name %> <%= @surname %>,</p>
+            <p>Your ticket has been assigned and will be attended to shortly.</p>
+
+            <div class="ticket-info">
+                <h3>Ticket Details:</h3>
+                <p><strong>Ticket #:</strong> <%= @ticket.ticket_number %></p>
+                <p><strong>Title:</strong> <%= @ticket.title %></p>
+                <p><strong>Priority:</strong> <%= @ticket.priority %></p>
+                <p><strong>Status:</strong> <%= @ticket.status %></p>
+                <% if @ticket.description %>
+                <p><strong>Description:</strong> <%= simple_format(@ticket.description) %></p>
+                <% end %>
+            </div>
+
+            <p>Best regards,<br>ITSM System</p>
+        </div>
+    </div>
+</body>
+
+</html>

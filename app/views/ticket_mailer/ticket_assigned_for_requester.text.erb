@@ -2,7 +2,7 @@ Ticket Assigned to You
 
 Hello <%= @user.name %>,
 
-A ticket has been assigned directly to you.
+Your ticket has been assigned to <%= @assignee.name %>.
 
 Ticket Details:
 Ticket #: <%= @ticket.ticket_number %>
@@ -13,7 +13,7 @@ Status: <%= @ticket.status %>
 Description: <%= @ticket.description %>
 <% end %>
 
-Please log in to the system to view more details and take action on this ticket.
+Please log in to the system to view more details.
 
 Best regards,
 Gsolve360 ITSM System

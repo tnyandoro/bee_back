@@ -22,5 +22,8 @@ class SendTicketAssignmentEmailsJob < ApplicationJob
 
     # Send email to requester user
     TicketMailer.ticket_assigned_for_requester(ticket, requester).deliver_later if requester && ticket.assignee_id != ticket.requester_id
+  
+    # Send email to caller
+    TicketMailer.ticket_assigned_for_caller(ticket, ticket.caller_name, ticket.caller_surname, ticket.caller_email, ticket.caller_phone).deliver_later if ticket.caller_email.present?
   end
 end

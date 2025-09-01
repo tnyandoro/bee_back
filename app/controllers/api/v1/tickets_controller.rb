@@ -729,6 +729,7 @@ module Api
             notifiable: @ticket
           )
           NotificationMailer.notify_user(requester_notification).deliver_later
+          NotificationMailer.notify_caller(ticket.caller_name + " " + ticket.caller_surname, ticket.caller_email, "Your ticket has been resolved: #{ticket.title} (#{ticket.ticket_number})").deliver_later if ticket.caller_email.present?
         end
       end
     end

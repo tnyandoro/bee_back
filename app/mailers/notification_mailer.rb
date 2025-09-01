@@ -11,4 +11,10 @@ class NotificationMailer < ApplicationMailer
       @notification = notification
       mail(to: @notification.user.email, subject: "ITSM Notification: #{@notification.message.truncate(50)}")
     end
+
+    def notify_caller(name, email, message)
+      @name = name
+      @message = message
+      mail(to: email, subject: "ITSM Notification: #{@message.truncate(50)}")
+    end
 end

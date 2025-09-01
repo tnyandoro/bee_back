@@ -1,0 +1,17 @@
+Your ticket has been assigned
+
+Hello <%= @name %> <%= @surname %>,
+
+Your ticket has been assigned and will be attended to shortly.
+
+Ticket Details:
+Ticket #: <%= @ticket.ticket_number %>
+Title: <%= @ticket.title %>
+Priority: <%= @ticket.priority %>
+Status: <%= @ticket.status %>
+<% if @ticket.description %>
+Description: <%= @ticket.description %>
+<% end %>
+
+Best regards,
+Gsolve360 ITSM System
