@@ -36,6 +36,7 @@ gem "bootsnap", require: false
 gem "rack-cors"
 gem "rack-attack"
 gem "redis", ">= 4.0.1"
+gem "tzinfo-data"
 gem 'dotenv-rails', groups: [:development, :test]
 gem 'paper_trail'
 
