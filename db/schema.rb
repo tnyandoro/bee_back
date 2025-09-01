@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_09_01_040649) do
+ActiveRecord::Schema[7.1].define(version: 2025_09_01_100907) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -71,6 +71,13 @@ ActiveRecord::Schema[7.1].define(version: 2025_09_01_040649) do
     t.datetime "updated_at", null: false
     t.index ["organization_id", "name"], name: "index_departments_on_org_id_and_name", unique: true
     t.index ["organization_id"], name: "index_departments_on_organization_id"
+  end
+
+  create_table "documents", force: :cascade do |t|
+    t.bigint "tenant_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tenant_id"], name: "index_documents_on_tenant_id"
   end
 
   create_table "knowledgebase_entries", force: :cascade do |t|
@@ -271,6 +278,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_09_01_040649) do
   add_foreign_key "comments", "tickets"
   add_foreign_key "comments", "users"
   add_foreign_key "departments", "organizations"
+  add_foreign_key "documents", "tenants"
   add_foreign_key "knowledgebase_entries", "organizations"
   add_foreign_key "notifications", "organizations"
   add_foreign_key "notifications", "users"

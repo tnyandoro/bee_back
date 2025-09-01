@@ -1,3 +1,4 @@
+<!-- app/views/ticket_mailer/ticket_assigned_to_user.html.erb -->
 <!DOCTYPE html>
 <html>
 
@@ -55,8 +56,8 @@
             <h2>Ticket Assignment Notification</h2>
         </div>
         <div class='content'>
-            <p>Hello <%= @user.name %>,</p>
-            <p>A new ticket has been assigned to you in the ITSM system.</p>
+            <p>Hello <%= @user&.name || 'User' %>,</p>
+            <p>A new ticket has been assigned directly to you in the ITSM system.</p>
 
             <div class='ticket-details'>
                 <h3>Ticket Details</h3>
@@ -71,7 +72,7 @@
                     <dd><%= @ticket.description || 'No description provided' %></dd>
 
                     <dt>Status:</dt>
-                    <dd><%= @ticket.status.capitalize %></dd>
+                    <dd><%= @ticket.status&.capitalize || 'Not set' %></dd>
 
                     <dt>Priority:</dt>
                     <dd><%= @ticket.priority&.capitalize || 'Not set' %></dd>
@@ -86,25 +87,25 @@
                     <dd><%= @ticket.impact&.capitalize || 'Not set' %></dd>
 
                     <dt>Reported At:</dt>
-                    <dd><%= @ticket.reported_at&.in_time_zone(Time.zone)&.strftime('%Y-%m-%d %H:%M') || 'Not set' %></dd>
+                    <dd><%= @ticket.reported_at&.in_time_zone('Africa/Johannesburg')&.strftime('%Y-%m-%d %H:%M') || 'Not set' %></dd>
 
                     <dt>Team:</dt>
-                    <dd><%= @ticket.team&.name || 'Not assigned' %></dd>
+                    <dd><%= @team_name %></dd>
 
                     <dt>Requester:</dt>
                     <dd><%= @ticket.requester&.name || 'Not set' %></dd>
 
-                    <% if @ticket.attachment.attached? %>
+                    <% if @attachment %>
                     <dt>Attachment:</dt>
-                    <dd><%= @ticket.attachment.filename %></dd>
+                    <dd><%= @attachment.filename.to_s %></dd>
                     <% end %>
 
-                    <% if @ticket.files.attached? %>
+                    <% if @files.any? %>
                     <dt>Files:</dt>
                     <dd>
                         <ul>
-                            <% @ticket.files.each do |file| %>
-                            <li><%= file.filename %></li>
+                            <% @files.each do |file| %>
+                            <li><%= file.filename.to_s %></li>
                             <% end %>
                         </ul>
                     </dd>
