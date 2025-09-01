@@ -1,21 +1,21 @@
 # frozen_string_literal: true
 class Document < ApplicationRecord
-  include TenantScoped
+    include TenantScoped
 
-  has_one_attached :pdf_file do |attachable|
-    attachable.variant :thumbnail, resize_to_limit: [200, 200]
-  end
+    has_one_attached :pdf_file do |attachable|
+        attachable.variant :thumbnail, resize_to_limit: [200, 200]
+    end
 
-  validates :pdf_file, attached: true,
-                       content_type: ['application/pdf'],
-                       size: { less_than: 10.megabytes }
+    validates :pdf_file, attached: true,
+                        content_type: ['application/pdf'],
+                        size: { less_than: 10.megabytes }
 
-  before_save :set_file_path
+    after_commit :set_file_path!, on: :create
 
-  private
+    private
 
-  def set_file_path
-    return unless pdf_file.attached?
-    self.file_path = "tenants/#{tenant.id}/documents/#{id}"
-  end
+    def set_file_path!
+        return unless pdf_file.attached? && tenant.present?
+        update_column(:file_path, "tenants/#{tenant.id}/documents/#{id}")
+    end
 end

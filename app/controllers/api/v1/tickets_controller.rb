@@ -8,7 +8,7 @@ module Api
 
       VALID_STATUSES = %w[open assigned escalated closed suspended resolved pending].freeze
       VALID_TICKET_TYPES = %w[Incident Request Problem].freeze
-      VALID_CATEGORIES = %w[Query Complaints Compliment Other].freeze
+      VALID_CATEGORIES = %w[Query Complaint Compliment Other].freeze
 
       # -------------------------------
       # INDEX
@@ -671,11 +671,11 @@ module Api
       end
 
       def find_least_busy_user(team)
-        active_statuses = %w[open assigned escalated pending suspended].map { |status| Ticket.statuses[status] }
+        active_statuses = %w[open assigned escalated pending suspended].map { |s| Ticket.statuses[s] }
         team.users
           .left_joins(:assigned_tickets)
           .group('users.id')
-          .having("COUNT(CASE WHEN tickets.status IN (?) THEN 1 ELSE NULL END) = 0", active_statuses)
+          .having("COALESCE(SUM(CASE WHEN assigned_tickets.status IN (?) THEN 1 ELSE 0 END), 0) = 0", active_statuses)
           .order('users.id ASC')
           .first
       end

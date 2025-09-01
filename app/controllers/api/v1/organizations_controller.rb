@@ -1,8 +1,8 @@
 module Api
   module V1
     class OrganizationsController < ApiController
-      before_action :set_organization_from_subdomain
       before_action :authenticate_user!
+      before_action :set_organization_from_subdomain, except: %i[index create validate_subdomain]
 
       def index
         @organizations = Organization.all
