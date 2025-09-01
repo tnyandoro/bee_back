@@ -86,7 +86,7 @@
                     <dd><%= @ticket.impact&.capitalize || 'Not set' %></dd>
 
                     <dt>Reported At:</dt>
-                    <dd><%= @ticket.reported_at&.in_time_zone('Pretoria')&.strftime('%Y-%m-%d %H:%M') || 'Not set' %></dd>
+                    <dd><%= @ticket.reported_at&.in_time_zone(Time.zone)&.strftime('%Y-%m-%d %H:%M') || 'Not set' %></dd>
 
                     <dt>Team:</dt>
                     <dd><%= @ticket.team&.name || 'Not assigned' %></dd>
