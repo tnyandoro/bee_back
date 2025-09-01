@@ -8,7 +8,7 @@ class Document < ApplicationRecord
 
     validates :pdf_file, attached: true,
                         content_type: ['application/pdf'],
-                        size: { less_than: 10.megabytes }
+                        size: { less_than: 2.megabytes }
 
     after_commit :set_file_path!, on: :create
 
