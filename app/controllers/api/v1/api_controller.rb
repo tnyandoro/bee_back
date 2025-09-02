@@ -21,7 +21,7 @@ module Api
       # Authentication
       # ---------------------------
       def authenticate_user!
-        render_error("Unauthorized", status: :unauthorized) unless current_user
+        render_error(message: ErrorCodes::Messages.UNAUTHORIZED, error_code: ErrorCodes::Codes.UNAUTHORIZED, status: :unauthorized) unless current_user
       end
 
       def current_user
@@ -68,10 +68,10 @@ module Api
           return
         end
 
-        return render_error("Subdomain is missing", status: :bad_request) unless param_subdomain.present?
+        return render_error(message: ErrorCodes::Messages.SUBDOMAIN_MISSING, error_code: ErrorCodes::Codes.SUBDOMAIN_MISSING, status: :bad_request) unless param_subdomain.present?
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
-        return render_error("Organization not found", status: :not_found) unless @organization
+        return render_error(message: ErrorCodes::Messages.ORGANIZATION_NOT_FOUND, error_code: ErrorCodes::Codes.ORGANIZATION_NOT_FOUND, status: :not_found) unless @organization
       end
 
       # ---------------------------
@@ -81,7 +81,7 @@ module Api
         return if current_user.nil? || @organization.nil?
 
         if current_user.organization_id != @organization.id
-          render_error("User does not belong to this organization", status: :forbidden)
+          render_error(message: ErrorCodes::Messages.USER_NOT_IN_ORGANIZATION, error_code: ErrorCodes::Codes.USER_NOT_IN_ORGANIZATION, status: :forbidden)
         end
       end
 
@@ -92,24 +92,25 @@ module Api
         render json: { message: message, data: data }, status: status
       end
 
-      def render_error(errors, message: nil, details: nil, status: :unprocessable_entity)
+      def render_error(errors: nil, message: nil, error_code: nil, details: nil, status: :unprocessable_entity)
         render json: {
           error: message || "An error occurred",
-          details: details || errors
+          error_code: error_code || 1,
+          details: details || errors || [message] || ["An error occurred"]
         }, status: status
       end
 
       def render_not_found(exception = nil)
-        render_error("Resource not found", details: exception&.message, status: :not_found)
+        render_error(message: ErrorCodes::Messages.RESOURCE_NOT_FOUND, error_code: ErrorCodes::Codes.RESOURCE_NOT_FOUND, details: exception&.message, status: :not_found)
       end
 
       def render_forbidden(exception = nil)
-        render_error("You are not authorized to perform this action", details: exception&.message, status: :forbidden)
+        render_error(message: ErrorCodes::Messages.FORBIDDEN, error_code: ErrorCodes::Codes.FORBIDDEN, details: exception&.message, status: :forbidden)
       end
 
       def render_internal_server_error(exception = nil)
         Rails.logger.error "Internal Server Error: #{exception&.message}"
-        render_error("Internal server error", details: Rails.env.production? ? nil : exception&.message, status: :internal_server_error)
+        render_error(message: ErrorCodes::Messages.INTERNAL_SERVER_ERROR, error_code: ErrorCodes::Codes.INTERNAL_SERVER_ERROR, details: Rails.env.production? ? nil : exception&.message, status: :internal_server_error)
       end
     end
   end

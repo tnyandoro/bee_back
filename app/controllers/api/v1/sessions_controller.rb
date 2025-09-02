@@ -12,18 +12,21 @@ module Api
         subdomain = params[:subdomain]&.downcase&.gsub(/[^a-z0-9-]/, "")
         unless @organization
           Rails.logger.warn "Organization not found for subdomain=#{subdomain}"
-          render json: { error: "Organization not found" }, status: :not_found and return
+          render_error(message: ErrorCodes::Messages::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, error_code: ErrorCodes::Codes::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, status: :not_found)
+          return
         end
 
         user = @organization.users.find_by("LOWER(email) = ?", params[:email]&.downcase)
         unless user&.authenticate(params[:password])
           Rails.logger.warn "Login failed for email=#{params[:email]}"
-          render json: { error: "Invalid email or password" }, status: :unauthorized and return
+          render_error(message: ErrorCodes::Messages::INVALID_USERNAME_OR_PASSWORD, error_code: ErrorCodes::Codes::INVALID_USERNAME_OR_PASSWORD, status: :unauthorized)
+          return
         end
 
         unless user.role.present? && User.roles.key?(user.role)
           Rails.logger.error "User #{user.id} has invalid role: #{user.role.inspect}"
-          render json: { error: "User role is invalid or missing" }, status: :unprocessable_entity and return
+          render_error(message: ErrorCodes::Messages::USER_ROLE_MISSING_OR_INVALID, error_code: ErrorCodes::Codes::USER_ROLE_MISSING_OR_INVALID, status: :unprocessable_entity)
+          return
         end
 
         # Generate JWT tokens
@@ -69,7 +72,7 @@ module Api
           render json: { message: "Token valid", role: current_user.role }, status: :ok
         else
           Rails.logger.warn "Token verification failed: Invalid token"
-          render json: { error: "Invalid token" }, status: :unauthorized
+          render_error(message: ErrorCodes::Messages::INVALID_TOKEN, error_code: ErrorCodes::Codes::INVALID_TOKEN, status: :unauthorized)
         end
       end
 
@@ -99,7 +102,8 @@ module Api
 
           render json: { auth_token: new_token, exp: new_exp, message: "Token refreshed successfully" }, status: :ok
         else
-          render json: { error: "Invalid or expired refresh token" }, status: :unauthorized
+          render_error(message: ErrorCodes::Messages::INVALID_OR_EXPIRED_REFRESH_TOKEN, error_code: ErrorCodes::Codes::INVALID_OR_EXPIRED_REFRESH_TOKEN, status: :unauthorized)
+          return
         end
       end
 

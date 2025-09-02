@@ -24,14 +24,14 @@ module Api
           
           render json: { message: 'SLA configuration updated' }
         rescue => e
-          render json: { error: e.message }, status: :unprocessable_entity
+          render_error(errors: [e.message], message: ErrorCodes::Messages::FAILED_TO_UPDATE_SLA, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_SLA, status: :unprocessable_entity)
         end
   
         private
   
         def verify_admin
           return if current_user.admin? && current_user.organization == @organization
-          render json: { error: 'Unauthorized' }, status: :unauthorized
+          render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_UPDATE_SLA, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_UPDATE_SLA, status: :unauthorized)
         end
   
         def business_hours_params

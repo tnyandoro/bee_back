@@ -18,7 +18,7 @@ class Api::V1::DocumentsController < ApplicationController
       pdf_url = rails_blob_url(@document.pdf_file, expires_in: 1.hour)
       render json: document_response(@document).merge(pdf_url: pdf_url)
     else
-      render json: { error: 'No file attached' }, status: :not_found
+      render render_error(message: ErrorCodes::Messages::FILE_NOT_ATTACHED, code: ErrorCodes::Codes::FILE_NOT_ATTACHED, status: :not_found)
     end
   end
   

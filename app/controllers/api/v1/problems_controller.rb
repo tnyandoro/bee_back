@@ -11,7 +11,7 @@ module Api
         per_page = [per_page, 100].min
 
         if page < 1 || per_page < 1
-          render json: { error: "Invalid pagination parameters" }, status: :unprocessable_entity
+          render_error(message: ErrorCodes::Messages::INVALID_PAGINATION_PARAMETERS, error_code: ErrorCodes::Codes::INVALID_PAGINATION_PARAMETERS, status: :unprocessable_entity)
           return
         end
 
@@ -49,7 +49,7 @@ module Api
           meta: { fetched_at: Time.current.iso8601, timezone: Time.zone.name, subdomain: @organization.subdomain }
         }, status: :ok
       rescue ActiveRecord::RecordNotFound
-        render json: { error: "User not found in this organization" }, status: :not_found
+        render_error(message: ErrorCodes::Messages::USER_DOES_NOT_BELONG_TO_ORGANIZATION, error_code: ErrorCodes::Codes::USER_DOES_NOT_BELONG_TO_ORGANIZATION, status: :not_found)
       rescue => e
         handle_exception('index', e)
       end
@@ -61,7 +61,7 @@ module Api
       def create
         log_debug_context('create', params)
         unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin?
-          return render json: { error: "Only team leads or higher can create problems" }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_CREATE, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_CREATE, status: :forbidden)
         end
 
         ticket_attrs = build_ticket_attributes
@@ -81,7 +81,7 @@ module Api
             end
           else
             log_failure('Ticket', @ticket)
-            render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
+            render_error(errors: @ticket.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_PROBLEM, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_PROBLEM, status: :unprocessable_entity)
             raise ActiveRecord::Rollback
           end
         end
@@ -92,7 +92,7 @@ module Api
       def update
         log_debug_context('update', params)
         unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin?
-          return render json: { error: "Only team leads or higher can update problems" }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_UPDATE_PROBLEM, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_UPDATE_PROBLEM, status: :forbidden)
         end
 
         update_attrs = safe_problem_params.to_h.symbolize_keys.except(:organization_id, :creator_id, :ticket_id, :related_incident_id)
@@ -102,7 +102,7 @@ module Api
           render json: problem_attributes(@problem)
         else
           log_failure('Problem', @problem, update_attrs)
-          render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
+          render_error(errors: @problem.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_UPDATE_PROBLEM, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_PROBLEM, status: :unprocessable_entity)
         end
       rescue => e
         handle_exception('update', e)
@@ -110,7 +110,7 @@ module Api
 
       def destroy
         unless current_user.is_admin? || current_user.domain_admin?
-          return render json: { error: "Only admins can delete problems" }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_DELETE_PROBLEM, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_DELETE_PROBLEM, status: :forbidden)
         end
         @problem.destroy!
         head :no_content
@@ -121,7 +121,7 @@ module Api
       def set_problem
         @problem = @organization.problems.find(params[:id])
       rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Problem not found in this organization' }, status: :not_found
+        render_error(message: ErrorCodes::Messages::PROBLEM_NOT_FOUND_IN_ORGANIZATION, error_code: ErrorCodes::Codes::PROBLEM_NOT_FOUND_IN_ORGANIZATION, status: :not_found)
       end
 
       def set_organization_from_subdomain
@@ -136,12 +136,13 @@ module Api
         end
 
         if param_subdomain.blank?
-          render json: { error: "Subdomain is missing in the request" }, status: :bad_request and return
+          render_error(message: ErrorCodes::Messages::SUBDOMAIN_MISSING, error_code: ErrorCodes::Codes::SUBDOMAIN_MISSING, status: :bad_request)
+          return
         end
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
         unless @organization
-          render json: { error: "Organization not found for subdomain: #{param_subdomain}" }, status: :not_found
+          render_error(message: ErrorCodes::Messages::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, error_code: ErrorCodes::Codes::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, status: :not_found)
         end
       end
 
@@ -231,7 +232,7 @@ module Api
       def handle_exception(action, exception)
         Rails.logger.error "[ProblemsController##{action}] Exception: #{exception.message}"
         Rails.logger.error exception.backtrace.join("\n")
-        render json: { error: 'Internal server error', details: exception.message }, status: :internal_server_error
+        render_error(message: ErrorCodes::Messages::INTERNAL_SERVER_ERROR, error_code: ErrorCodes::Codes::INTERNAL_SERVER_ERROR, details: exception.message, status: :internal_server_error)
       end
 
       def problem_attributes(problem)

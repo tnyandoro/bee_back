@@ -26,7 +26,8 @@ module Api
                                   .find_by(id: params[:id], organization: @organization)
         
         unless @notification
-          return render json: { error: "Notification not found" }, status: :not_found
+          render_error(message: ErrorCodes::Messages.NOTIFICATION_NOT_FOUND, error_code: ErrorCodes::Codes.NOTIFICATION_NOT_FOUND, status: :not_found)
+          return
         end
 
         @notification.update!(read: true)
@@ -38,7 +39,7 @@ module Api
       def set_organization
         @organization = Organization.find(params[:organization_id])
       rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Organization not found' }, status: :not_found
+        render_error(message: ErrorCodes::Messages.ORGANIZATION_NOT_FOUND, error_code: ErrorCodes::Codes.ORGANIZATION_NOT_FOUND, status: :not_found)
       end
     end
   end

@@ -15,14 +15,14 @@ module Api
       rescue => e
         Rails.logger.error "❌ Dashboard error: #{e.class} - #{e.message}"
         Rails.logger.error e.backtrace.take(10).join("\n  ")
-        render_error("An unexpected error occurred", status: :internal_server_error)
+        render_error(message: ErrorCodes::Messages.INTERNAL_SERVER_ERROR, error_code: ErrorCodes::Codes.INTERNAL_SERVER_ERROR, details: e.message, status: :internal_server_error)
       end
 
       private
 
       def set_organization
         @organization = Organization.find_by(subdomain: params[:subdomain])
-        render_error("Organization not found", status: :not_found) unless @organization
+        render_error(message: ErrorCodes::Messages.ORGANIZATION_NOT_FOUND, error_code: ErrorCodes::Codes.ORGANIZATION_NOT_FOUND, status: :not_found) unless @organization
       end
 
       def build_dashboard_data

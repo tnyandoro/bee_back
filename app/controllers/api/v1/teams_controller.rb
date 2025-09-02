@@ -39,18 +39,18 @@ module Api
                    location: api_v1_organization_team_url(@organization.subdomain, @team)
           else
             Rails.logger.error("Team save errors: #{@team.errors.full_messages.join(', ')}")
-            render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
+            render_error(errors: @team.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_TEAM, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_TEAM, status: :unprocessable_entity)
           end
         end
       rescue ActiveRecord::RecordInvalid => e
         Rails.logger.error("ActiveRecord::RecordInvalid: #{e.record.errors.full_messages.join(', ')}")
-        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+        render_error(errors: e.record.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_TEAM, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_TEAM, status: :unprocessable_entity)
       rescue StandardError => e
         Rails.logger.error("TeamsController#create StandardError: #{e.class} - #{e.message}")
         Rails.logger.error(e.backtrace.join("\n"))
-        render json: { error: "Internal Server Error" }, status: :internal_server_error
-      end          
-      
+        render_error(message: ErrorCodes::Messages::INTERNAL_SERVER_ERROR, error_code: ErrorCodes::Codes::INTERNAL_SERVER_ERROR, status: :internal_server_error)
+      end
+
       # PATCH/PUT /api/v1/organizations/:organization_subdomain/teams/:id
       def update
         ActiveRecord::Base.transaction do
@@ -61,11 +61,11 @@ module Api
           if @team.update(team_params.except(:user_ids))
             render json: team_attributes(@team), status: :ok
           else
-            render json: { errors: @team.errors.full_messages }, status: :unprocessable_entity
+            render_error(errors: @team.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_UPDATE_TEAM, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_TEAM, status: :unprocessable_entity)
           end
         end
       rescue ActiveRecord::RecordInvalid => e
-        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+        render_error(errors: e.record.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_UPDATE_TEAM, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_TEAM, status: :unprocessable_entity)
       end
 
       # PATCH /api/v1/organizations/:organization_subdomain/teams/:id/deactivate
@@ -77,7 +77,7 @@ module Api
         end
         render json: { message: "Team deactivated successfully" }, status: :ok
       rescue ActiveRecord::RecordInvalid => e
-        render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+        render_error(errors: e.record.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_DELETE_TEAM, error_code: ErrorCodes::Codes::FAILED_TO_DELETE_TEAM, status: :unprocessable_entity)
       end
 
       private
@@ -85,7 +85,7 @@ module Api
       def set_team
         @team = @organization.teams.where(deactivated_at: nil).find(params[:id] || params[:team_id])
       rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Team not found or already deactivated' }, status: :not_found
+        render_error(message: ErrorCodes::Messages::TEAM_NOT_FOUND, error_code: ErrorCodes::Codes::TEAM_NOT_FOUND, status: :not_found)
       end
 
       def team_params
@@ -94,7 +94,7 @@ module Api
 
       def authorize_admin_or_super_user
         unless current_user&.is_admin? || current_user&.super_user?
-          render json: { error: 'You are not authorized to perform this action' }, status: :forbidden
+          render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_MANAGE_TEAMS, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_MANAGE_TEAMS, status: :forbidden)
         end
       end
 

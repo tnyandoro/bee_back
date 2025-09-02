@@ -35,19 +35,19 @@ module Api
               raise ActiveRecord::Rollback, "Failed to create admin user"
             end
           else
-            render_error(organization.errors.full_messages, "Failed to create organization")
+            render_error(errors: organization.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_ORGANIZATION, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_ORGANIZATION, status: :unprocessable_entity)
           end
         end
       rescue => e
         Rails.logger.error "Error creating organization: #{e.message}"
-        render_error("Failed to create organization", e.message)
+        render_error(message: ErrorCodes::Messages::FAILED_TO_CREATE_ORGANIZATION, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_ORGANIZATION, details: e.message, status: :unprocessable_entity)
       end
 
       def update
         if @organization.update(organization_params)
           render_success(@organization, "Organization updated successfully")
         else
-          render_error(@organization.errors.full_messages, "Failed to update organization")
+          render_error(errors: @organization.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_UPDATE_ORGANIZATION, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_ORGANIZATION, status: :unprocessable_entity)
         end
       end
 
@@ -55,7 +55,7 @@ module Api
         if @organization.destroy
           head :no_content
         else
-          render_error(@organization.errors.full_messages, "Failed to delete organization")
+          render_error(errors: @organization.errors.full_messages, code: ErrorCodes::Codes::FAILED_TO_DELETE_ORGANIZATION, message: ErrorCodes::Messages::FAILED_TO_DELETE_ORGANIZATION, status: :unprocessable_entity)
         end
       end
 
@@ -69,7 +69,7 @@ module Api
 
         user = User.find_by(id: params[:user_id])
         unless user
-          return render_error("User not found", status: :not_found)
+          return render_error(message: ErrorCodes::Messages::USER_NOT_FOUND, error_code: ErrorCodes::Codes::USER_NOT_FOUND, status: :not_found)
         end
 
         if @organization.users.exists?(user.id)
@@ -87,12 +87,12 @@ module Api
         render_success(user, "User added successfully", :created)
       rescue => e
         Rails.logger.error "Error adding user to organization: #{e.message}"
-        render_error("Failed to add user", e.message)
+        render_error(message: ErrorCodes::Messages::FAILED_TO_ADD_USER, error_code: ErrorCodes::Codes::FAILED_TO_ADD_USER, details: e.message, status: :unprocessable_entity)
       end
 
       def validate_subdomain
         subdomain = params[:subdomain].presence || params.dig(:organization, :subdomain)
-        return render_error("Subdomain is missing", status: :bad_request) unless subdomain.present?
+        return render_error(message: ErrorCodes::Messages::SUBDOMAIN_MISSING, error_code: ErrorCodes::Codes::SUBDOMAIN_MISSING, status: :bad_request) unless subdomain.present?
 
         organization = Organization.find_by("LOWER(subdomain) = ?", subdomain.downcase)
 
@@ -139,12 +139,13 @@ module Api
       def set_organization_from_subdomain
         subdomain = params[:subdomain]
         @organization = Organization.find_by("LOWER(subdomain) = ?", subdomain&.downcase)
-        render_error("Organization not found", status: :not_found) unless @organization
+
+        render_error(message: ErrorCodes::Messages::ORGANIZATION_NOT_FOUND, error_code: ErrorCodes::Codes::ORGANIZATION_NOT_FOUND, status: :not_found) unless @organization
       end
 
       def authorize_add_user!
         unless current_user.role_domain_admin? || current_user.role_sub_domain_admin? || current_user.role_general_manager?
-          render_forbidden("You are not authorized to add users to this organization")
+          render_error(message: ErrorCodes::Messages::FORBIDDEN, error_code: ErrorCodes::Codes::FORBIDDEN, status: :forbidden)
         end
       end
 

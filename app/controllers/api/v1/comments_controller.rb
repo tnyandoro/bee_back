@@ -14,7 +14,7 @@ module Api
         if comment.save
           render json: { comment: comment }, status: :created
         else
-          render json: { errors: comment.errors.full_messages }, status: :unprocessable_entity
+          render_error(errors: comment.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_COMMENT, code: ErrorCodes::Codes::FAILED_TO_CREATE_COMMENT, status: :unprocessable_entity)
         end
       end
 

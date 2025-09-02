@@ -14,14 +14,14 @@ module Api
       def set_organization
         @organization = Organization.find_by(subdomain: params[:subdomain])
         unless @organization
-          render json: { error: 'Organization not found' }, status: :not_found
+          render_error(message: ErrorCodes::Messages.ORGANIZATION_NOT_FOUND, error_code: ErrorCodes::Codes.ORGANIZATION_NOT_FOUND, status: :not_found)
         end
       end
 
       def authenticate_user
         token = request.headers['Authorization']&.split(' ')&.last
         unless token && valid_token?(token)
-          render json: { error: 'Unauthorized' }, status: :unauthorized
+          render_error(message: ErrorCodes::Messages.UNAUTHORIZED, error_code: ErrorCodes::Codes.UNAUTHORIZED, status: :unauthorized)
         end
       end
 

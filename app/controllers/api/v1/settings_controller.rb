@@ -14,7 +14,7 @@ module Api
         incoming_value = params[:value]
 
         if key.blank? || incoming_value.nil?
-          return render_error("Missing key or value", status: :bad_request)
+          return render_error(message: ErrorCodes::Messages::MISSING_KEY_OR_VALUE, error_code: ErrorCodes::Codes::MISSING_KEY_OR_VALUE, status: :bad_request)
         end
 
         setting = @organization.settings.find_or_initialize_by(key: key)
@@ -29,7 +29,7 @@ module Api
         if setting.save
           render json: setting
         else
-          render_error(setting.errors.full_messages, status: :unprocessable_entity)
+          render_error(errors: setting.full_messages, message: ErrorCodes::Messages::FAILED_TO_SAVE_SETTING, error_code: ErrorCodes::Codes::FAILED_TO_SAVE_SETTING, status: :unprocessable_entity)
         end
       end
 
@@ -38,7 +38,7 @@ module Api
       def set_organization
         subdomain = params[:organization_subdomain] || params[:subdomain]
         @organization = Organization.find_by(subdomain: subdomain)
-        render_error("Organization not found", status: :not_found) unless @organization
+        render_error(message: ErrorCodes::Messages::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, error_code: ErrorCodes::Codes::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, status: :not_found) unless @organization
       end
     end
   end

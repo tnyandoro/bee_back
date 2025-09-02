@@ -10,7 +10,7 @@ class ApplicationController < ActionController::API
     token = header.split(' ').last if header
 
     unless token
-      render json: { error: 'Missing token' }, status: :unauthorized
+      render_error(message: ErrorCodes::Messages::MISSING_TOKEN, error_code: ErrorCodes::Codes::MISSING_TOKEN, status: :unauthorized)
       return
     end
 
@@ -18,9 +18,9 @@ class ApplicationController < ActionController::API
       decoded = JwtService.decode(token)
       @current_user = User.find(decoded[:user_id])
     rescue JWT::ExpiredSignature
-      render json: { error: 'Token expired' }, status: :unauthorized
+      render_error(message: ErrorCodes::Messages::EXPIRED_TOKEN, error_code: ErrorCodes::Codes::EXPIRED_TOKEN, status: :unauthorized)
     rescue JWT::DecodeError
-      render json: { error: 'Invalid token' }, status: :unauthorized
+      render_error(message: ErrorCodes::Messages::INVALID_TOKEN, error_code: ErrorCodes::Codes::INVALID_TOKEN, status: :unauthorized)
     end
   end
 

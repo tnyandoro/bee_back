@@ -7,12 +7,12 @@ module Api
         organization = Organization.find_by("LOWER(subdomain) = ?", subdomain)
 
         unless organization
-          return render json: { error: "Organization not found" }, status: :not_found
+          return render_error(message: ErrorCodes::Messages::ORGANIZATION_NOT_FOUND, error_code: ErrorCodes::Codes::ORGANIZATION_NOT_FOUND, status: :not_found)
         end
 
         user = organization.users.find_by(email: params[:email]&.downcase)
         unless user
-          return render json: { error: "Email not found" }, status: :not_found
+          return render_error(message: ErrorCodes::Messages::USER_NOT_FOUND, error_code: ErrorCodes::Codes::USER_NOT_FOUND, status: :not_found)
         end
 
         raw_token = SecureRandom.hex(20)
@@ -30,7 +30,7 @@ module Api
         render json: { message: "Password reset email sent" }, status: :ok
       rescue => e
         Rails.logger.error "Reset error: #{e.message}"
-        render json: { error: "Server error: #{e.message}" }, status: :unprocessable_entity
+        render_error(errors: [e.message], message: ErrorCodes::Messages::PASSWORD_RESET_FAILED, error_code: ErrorCodes::Codes::PASSWORD_RESET_FAILED, status: :unprocessable_entity)
       end
 
       def update
@@ -45,15 +45,15 @@ module Api
         end
 
         if params[:password].blank? || params[:password_confirmation].blank?
-          return render json: { error: "Password and confirmation are required" }, status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::PASSWORD_AND_CONF_REQUIRED, error_code: ErrorCodes::Codes::PASSWORD_AND_CONF_REQUIRED, status: :unprocessable_entity)
         end
 
         if params[:password] != params[:password_confirmation]
-          return render json: { error: "Passwords do not match" }, status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::PASSWORDS_DO_NOT_MATCH, error_code: ErrorCodes::Codes::PASSWORDS_DO_NOT_MATCH, status: :unprocessable_entity)
         end
 
         if params[:password].length < 6
-          return render json: { error: "Password must be at least 6 characters" }, status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::PASSWORD_NOT_LONG_ENOUGH, error_code: ErrorCodes::Codes::PASSWORD_NOT_LONG_ENOUGH, status: :unprocessable_entity)
         end
 
         user.update!(
@@ -65,7 +65,7 @@ module Api
         render json: { message: "Password updated successfully" }, status: :ok
       rescue => e
         Rails.logger.error "Password update error: #{e.message}"
-        render json: { error: "Server error: #{e.message}" }, status: :unprocessable_entity
+        render_error(errors: [e.message], message: ErrorCodes::Messages::INTERNAL_SERVER_ERROR, error_code: ErrorCodes::Codes::INTERNAL_SERVER_ERROR, status: :unprocessable_entity)
       end
     end
   end

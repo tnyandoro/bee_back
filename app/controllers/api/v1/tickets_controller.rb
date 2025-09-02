@@ -20,7 +20,7 @@ module Api
         per_page = [per_page, 100].min
 
         if page < 1 || per_page < 1
-          render json: { error: "Invalid pagination parameters" }, status: :unprocessable_entity
+          render_error(message: ErrorCodes::Messages::INVALID_PAGINATION_PARAMETERS, error_code: ErrorCodes::Codes::INVALID_PAGINATION_PARAMETERS, status: :unprocessable_entity)
           return
         end
 
@@ -41,11 +41,11 @@ module Api
       # -------------------------------
       def show
         unless @ticket.organization_id == @organization.id
-          return render json: { error: "Ticket does not belong to this organization" }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::TICKET_NOT_FOUND_FOR_ORGANIZATION, error_code: ErrorCodes::Codes::TICKET_NOT_FOUND_FOR_ORGANIZATION, status: :forbidden)
         end
 
         unless current_user.domain_admin? || current_user.system_admin? || @ticket.team_id == current_user.team_id
-          return render json: { error: "You are not authorized to view this ticket" }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_VIEW_TICKETS, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_VIEW_TICKETS, status: :forbidden)
         end
 
         render json: ticket_attributes(@ticket)
@@ -56,7 +56,7 @@ module Api
       # -------------------------------
       def create
         unless current_user.can_create_tickets?(ticket_params[:ticket_type])
-          return render_forbidden("Unauthorized to create #{ticket_params[:ticket_type]} ticket")
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_CREATE_TICKET_TYPE.sub("###TICKET_TYPE###", ticket_params[:ticket_type]), error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_CREATE_TICKET_TYPE, status: :forbidden)
         end
 
         ticket_params_adjusted = ticket_params_with_enums
@@ -74,12 +74,11 @@ module Api
         begin
           process_team_and_assignee(ticket_params_adjusted)
         rescue ActiveRecord::RecordNotFound => e
-          return render json: { error: e.message }, status: :not_found
+          return render_error(errors: [e.message], message: ErrorCodes::Messages::FAILED_TO_CREATE_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_TICKET, status: :not_found)
         end
 
         unless VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
-          return render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" },
-                        status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::INVALID_TICKET_CATEGORY.sub("###VALID_CATEGORIES###", VALID_CATEGORIES.join(', ')), error_code: ErrorCodes::Codes::INVALID_TICKET_CATEGORY, status: :unprocessable_entity)
         end
 
         if @ticket.save
@@ -114,8 +113,7 @@ module Api
 
           render json: ticket_attributes(@ticket), status: :created
         else
-          render json: { errors: @ticket.errors.full_messages, details: @ticket.errors.details },
-                status: :unprocessable_entity
+          render_error(errors: @ticket.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_TICKET, details: @ticket.errors.details, status: :unprocessable_entity)
         end
       end
 
@@ -124,7 +122,7 @@ module Api
       # -------------------------------
       def update
         unless current_user.can_resolve_tickets?(@ticket.ticket_type) || current_user.can_reassign_tickets? || current_user.can_change_urgency?
-          return render_forbidden("Unauthorized to update this ticket")
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_UPDATE_TICKETS, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_UPDATE_TICKETS, status: :forbidden)
         end
 
         ticket_params_adjusted = ticket_params_with_enums
@@ -133,7 +131,7 @@ module Api
 
         if ticket_params_adjusted[:priority].present?
           unless current_user.can_change_urgency?
-            return render_forbidden("Unauthorized to change ticket urgency")
+            return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_CHANGE_TICKET_URGENCY, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_CHANGE_TICKET_URGENCY, status: :forbidden)
           end
           priority_value = ticket_params_adjusted[:priority].to_i
           ticket_params_adjusted[:priority] = Ticket.priorities.key([0, [3, priority_value].min].max)
@@ -142,11 +140,11 @@ module Api
         begin
           process_team_and_assignee_for_update(ticket_params_adjusted)
         rescue ActiveRecord::RecordNotFound => e
-          return render json: { error: e.message }, status: :not_found
+          return render_error(errors: [e.message], message: ErrorCodes::Messages::FAILED_TO_UPDATE_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_TICKET, status: :not_found)
         end
 
         if ticket_params_adjusted[:category].present? && !VALID_CATEGORIES.include?(ticket_params_adjusted[:category])
-          return render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::INVALID_TICKET_CATEGORY.sub("###VALID_CATEGORIES###", VALID_CATEGORIES.join(', ')), error_code: ErrorCodes::Codes::INVALID_TICKET_CATEGORY, status: :unprocessable_entity)
         end
 
         # Handle attachments
@@ -171,7 +169,7 @@ module Api
         if @ticket.update(ticket_params_adjusted)
           if ticket_params_adjusted[:status] == 'resolved' && !@ticket.resolved_at_was
             unless current_user.can_resolve_tickets?(@ticket.ticket_type)
-              return render_forbidden("Unauthorized to resolve #{@ticket.ticket_type} ticket")
+              return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_RESOLVE_TICKET_TYPE.sub("###TICKET_TYPE###", @ticket.ticket_type), error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_RESOLVE_TICKET_TYPE, status: :forbidden)
             end
             @ticket.update!(resolved_at: Time.current)
             create_resolution_comment(ticket_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
@@ -190,7 +188,7 @@ module Api
 
           render json: ticket_attributes(@ticket)
         else
-          render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
+          return render_error(errors: @ticket.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_UPDATE_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_TICKET, status: :unprocessable_entity)
         end
       end
 
@@ -199,7 +197,7 @@ module Api
       # -------------------------------
       def destroy
         unless current_user.is_admin? || current_user.domain_admin? || current_user.system_admin?
-          return render_forbidden("Only admins can delete tickets")
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_DELETE_TICKETS, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_DELETE_TICKETS, status: :forbidden)
         end
         @ticket.destroy!
         head :no_content
@@ -210,12 +208,12 @@ module Api
       # -------------------------------
       def assign_to_user
         unless current_user.can_reassign_tickets? || (current_user.team_leader? && current_user.team == @ticket.team)
-          return render json: { error: 'You are not authorized to assign this ticket' }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_ASSIGN_TICKETS, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_ASSIGN_TICKETS, status: :forbidden)
         end
 
         assignee = @ticket.team.users.find_by(id: params[:user_id])
         unless assignee
-          return render json: { error: 'User not found in the team' }, status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::USER_NOT_FOUND_IN_TEAM, error_code: ErrorCodes::Codes::USER_NOT_FOUND_IN_TEAM, status: :unprocessable_entity)
         end
 
         if @ticket.update(assignee: assignee, status: 'assigned')
@@ -228,7 +226,7 @@ module Api
             }
           ), status: :ok
         else
-          render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
+          render_error(errors: @ticket.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_ASSIGN_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_ASSIGN_TICKET, status: :unprocessable_entity)
         end
       end
 
@@ -237,7 +235,7 @@ module Api
       # -------------------------------
       def escalate_to_problem
         unless current_user.team_leader? || current_user.super_user? || current_user.department_manager? || current_user.general_manager? || current_user.domain_admin? || current_user.system_admin?
-          return render json: { error: 'Only team leads or higher can escalate tickets to problems' }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_ESCALATE_TICKETS, error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_ESCALATE_TICKETS, status: :forbidden)
         end
 
         @problem = Problem.new(
@@ -253,7 +251,7 @@ module Api
           create_escalation_notification if @ticket.assignee
           render json: { message: 'Ticket escalated to problem', problem: @problem.as_json }, status: :created
         else
-          render json: { errors: @problem.errors.full_messages }, status: :unprocessable_entity
+          render_error(errors: @problem.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_ESCALATE_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_ESCALATE_TICKET, status: :unprocessable_entity)
         end
       end
 
@@ -262,11 +260,11 @@ module Api
       # -------------------------------
       def resolve
         unless current_user.can_resolve_tickets?(@ticket.ticket_type)
-          return render json: { error: "You are not authorized to resolve this #{@ticket.ticket_type} ticket" }, status: :forbidden
+          return render_error(message: ErrorCodes::Messages::UNAUTHORIZED_TO_RESOLVE_TICKET_TYPE.sub("###TICKET_TYPE###", @ticket.ticket_type), error_code: ErrorCodes::Codes::UNAUTHORIZED_TO_RESOLVE_TICKET_TYPE, status: :forbidden)
         end
 
         if @ticket.resolved? || @ticket.closed?
-          return render json: { error: 'Ticket is already resolved or closed' }, status: :unprocessable_entity
+          return render_error(message: ErrorCodes::Messages::TICKET_ALREADY_RESOLVED_OR_CLOSED, error_code: ErrorCodes::Codes::TICKET_ALREADY_RESOLVED_OR_CLOSED, status: :unprocessable_entity)
         end
 
         resolution_params_adjusted = resolve_params
@@ -281,7 +279,7 @@ module Api
           end
           render json: ticket_attributes(@ticket), status: :ok
         rescue ActiveRecord::RecordInvalid => e
-          render json: { error: e.message }, status: :unprocessable_entity
+          render_error(errors: [e.message], message: ErrorCodes::Messages::FAILED_TO_RESOLVE_TICKET, error_code: ErrorCodes::Codes::FAILED_TO_RESOLVE_TICKET, status: :unprocessable_entity)
         end
       end
 
@@ -299,7 +297,7 @@ module Api
         if attachment
           redirect_to rails_blob_url(attachment, disposition: "attachment")
         else
-          render json: { error: "Attachment not found" }, status: :not_found
+          render_error(message: ErrorCodes::Messages::TICKET_ATTACHMENT_NOT_FOUND, error_code: ErrorCodes::Codes::TICKET_ATTACHMENT_NOT_FOUND, status: :not_found)
         end
       end
 
@@ -424,7 +422,7 @@ module Api
 
       def set_creator
         @creator = current_user
-        render json: { error: 'User not authenticated' }, status: :unauthorized unless @creator
+        render_error(message: ErrorCodes::Messages::UNAUTHENTICATED, error_code: ErrorCodes::Codes::UNAUTHENTICATED, status: :unauthorized) unless @creator
       end
 
       def set_organization_from_subdomain
@@ -433,7 +431,7 @@ module Api
         @organization = Organization.find_by(subdomain: subdomain)
         unless @organization
           Rails.logger.error "Organization not found for subdomain: #{subdomain}"
-          render json: { error: "Organization not found for subdomain: #{subdomain}" }, status: :not_found
+          render_error(message: ErrorCodes::Messages::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, error_code: ErrorCodes::Codes::ORGANIZATION_NOT_FOUND_FOR_SUBDOMAIN, status: :not_found)
         end
       end
 
@@ -445,14 +443,14 @@ module Api
       def validate_status
         return true unless params[:status].present?
         return true if VALID_STATUSES.include?(params[:status])
-        render json: { error: "Invalid status. Allowed values are: #{VALID_STATUSES.join(', ')}" }, status: :unprocessable_entity
+        render_error(message: ErrorCodes::Messages::INVALID_STATUS.sub("###VALID_STATUSES###", VALID_STATUSES.join(', ')), error_code: ErrorCodes::Codes::INVALID_STATUS, status: :unprocessable_entity)
         false
       end
 
       def validate_ticket_type
         return true unless params[:ticket_type].present?
         return true if VALID_TICKET_TYPES.include?(params[:ticket_type])
-        render json: { error: "Invalid ticket type. Allowed values are: #{VALID_TICKET_TYPES.join(', ')}" }, status: :unprocessable_entity
+        render_error(message: ErrorCodes::Messages::INVALID_TICKET_TYPE.sub("###VALID_TICKET_TYPES###", VALID_TICKET_TYPES.join(', ')), error_code: ErrorCodes::Codes::INVALID_TICKET_TYPE, status: :unprocessable_entity)
         false
       end
 
@@ -615,7 +613,7 @@ module Api
                   @organization.tickets.find_by(ticket_number: params[:id])
         raise ActiveRecord::RecordNotFound unless @ticket
       rescue ActiveRecord::RecordNotFound
-        render json: { error: 'Ticket not found' }, status: :not_found
+        render_error(message: ErrorCodes::Messages::TICKET_NOT_FOUND, error_code: ErrorCodes::Codes::TICKET_NOT_FOUND, status: :not_found)
       end
 
       def ticket_params_with_enums

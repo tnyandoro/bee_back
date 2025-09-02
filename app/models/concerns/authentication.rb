@@ -13,7 +13,7 @@ module Authentication
       @current_user = User.find_by(auth_token: token) if token
   
       unless @current_user
-        render json: { error: "Not authenticated" }, status: :unauthorized
+        render_error(message: ErrorCodes::Messages::NOT_AUTHORIZED, error_code: ErrorCodes::Codes::NOT_AUTHORIZED, status: :unauthorized)
       end
     end
   
