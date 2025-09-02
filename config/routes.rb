@@ -28,6 +28,7 @@ Rails.application.routes.draw do
           get 'dashboard', to: 'dashboard#show'
           get 'profile', to: 'profiles#show'
           get 'tickets', to: 'organizations#tickets'
+          get 'latest_ticket_number', to: 'organizations#latest_ticket_number'
           get 'users', to: 'organizations#users'
           get 'settings', to: 'settings#index'
           put 'settings', to: 'settings#update'

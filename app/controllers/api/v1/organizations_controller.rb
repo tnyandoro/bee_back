@@ -134,6 +134,28 @@ module Api
         }, status: :ok
       end
 
+      def latest_ticket_number
+        scope = @organization.tickets
+        scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
+        scope = apply_filters(scope)
+
+        page = [params[:page].to_i, 1].max
+        per_page = [[params[:per_page].to_i, 1].max, 100].min
+
+        tickets = scope.paginate(page: page, per_page: per_page)
+
+        Rails.logger.info "Tickets query result for latest ticket numbers query #{params[:ticket_number]}: #{tickets.pluck(:ticket_number).inspect}"
+
+        render json: {
+          tickets: tickets.map { |t| ticket_attributes(t) },
+          pagination: {
+            current_page: tickets.current_page,
+            total_pages: tickets.total_pages,
+            total_entries: tickets.total_entries
+          }
+        }, status: :ok
+      end
+
       private
 
       def set_organization_from_subdomain
