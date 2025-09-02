@@ -11,7 +11,7 @@ class CreateMissingTicketSequences < ActiveRecord::Migration[7.0]
       end
     end
   end
-
+# add this to render.yaml
   def down
     safety_assured do
       Organization.find_each do |org|
