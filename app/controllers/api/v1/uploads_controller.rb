@@ -10,7 +10,7 @@ module Api
         file_url = params[:file]
 
         if file_url.blank?
-          return render json: { error: "No file URL provided" }, status: :bad_request
+          return render_error(message: ErrorCodes::Messages::NO_FILE_URL_PROVIDED, error_code: ErrorCodes::Codes::NO_FILE_URL_PROVIDED, status: :bad_request)
         end
 
         begin
@@ -28,11 +28,11 @@ module Api
               url: url_for(current_user.profile_picture)
             }, status: :ok
           else
-            render json: { error: "Failed to save profile picture" }, status: :unprocessable_entity
+            render_error(message: ErrorCodes::Messages::FAILED_TO_SAVE_PROFILE_PICTURE, error_code: ErrorCodes::Codes::FAILED_TO_SAVE_PROFILE_PICTURE, status: :unprocessable_entity)
           end
         rescue => e
           Rails.logger.error "❌ Profile upload failed: #{e.message}"
-          render json: { error: "Upload failed", details: e.message }, status: :unprocessable_entity
+          render_error(message: ErrorCodes::Messages::FAILED_TO_SAVE_PROFILE_PICTURE, error_code: ErrorCodes::Codes::FAILED_TO_SAVE_PROFILE_PICTURE, status: :unprocessable_entity)
         end
       end
 
@@ -41,7 +41,7 @@ module Api
         file = params[:file]
 
         if file.blank?
-          return render_error("No file uploaded", status: :bad_request)
+          return render_error(message: ErrorCodes::Messages::NO_FILE_UPLOADED, error_code: ErrorCodes::Codes::NO_FILE_UPLOADED, status: :bad_request)
         end
 
         begin
@@ -56,7 +56,7 @@ module Api
           render json: { url: logo_url }, status: :ok
         rescue => e
           Rails.logger.error "❌ Logo upload failed: #{e.message}"
-          render_error("Logo upload failed", details: e.message, status: :internal_server_error)
+          render_error(message: ErrorCodes::Messages::LOGO_UPLOAD_FAILED, error_code: ErrorCodes::Codes::LOGO_UPLOAD_FAILED, status: :internal_server_error)
         end
       end
     end

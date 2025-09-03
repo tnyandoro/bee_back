@@ -104,6 +104,19 @@ class ErrorCodes
     UNAUTHORIZED_TO_CREATE_TICKET_TYPE = 4049
     UNAUTHORIZED_TO_CHANGE_TICKET_URGENCY = 4050
     UNAUTHORIZED_TO_RESOLVE_TICKET_TYPE = 4051
+
+    # Tickets Controller Errors
+    NO_FILE_URL_PROVIDED = 4052
+    FAILED_TO_SAVE_PROFILE_PICTURE = 4053
+    UPLOAD_FAILED = 4054
+    NO_FILE_UPLOADED = 4055
+    LOGO_UPLOAD_FAILED = 4056
+
+    # Users Controller Errors
+    USER_NOT_FOUND = 4057
+    FAILED_TO_CREATE_USER = 4058
+    FAILED_TO_UPDATE_USER = 4059
+
   end
 
   module Messages
@@ -205,6 +218,18 @@ class ErrorCodes
     UNAUTHORIZED_TO_CREATE_TICKET_TYPE = "Unauthorized to create ###TICKET_TYPE### tickets"
     UNAUTHORIZED_TO_CHANGE_TICKET_URGENCY = "You are not authorized to change the urgency of this ticket"
     UNAUTHORIZED_TO_RESOLVE_TICKET_TYPE = "Unauthorized to resolve ###TICKET_TYPE### tickets"
+
+    # Tickets Controller Errors
+    NO_FILE_URL_PROVIDED = "No file URL provided"
+    FAILED_TO_SAVE_PROFILE_PICTURE = "Failed to save profile picture"
+    UPLOAD_FAILED = "Upload failed"
+    NO_FILE_UPLOADED = "No file uploaded"
+    LOGO_UPLOAD_FAILED = "Logo upload failed"
+
+    # Users Controller Errors
+    USER_NOT_FOUND = "User not found"
+    FAILED_TO_CREATE_USER = "Failed to create user"
+    FAILED_TO_UPDATE_USER = "Failed to update user"
   end
 
 end

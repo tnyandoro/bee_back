@@ -52,7 +52,8 @@ module Api
           Rails.logger.error "User creation failed for email: #{user_params[:email]}"
           Rails.logger.error "Validation errors: #{@user.errors.full_messages}"
           Rails.logger.error "Error details: #{@user.errors.details}"
-          
+
+          render_error(errors: @user.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_CREATE_USER, error_code: ErrorCodes::Codes::FAILED_TO_CREATE_USER, status: :unprocessable_entity)
           render_error(@user.errors.full_messages.join(', '))
         end
       rescue StandardError => e
@@ -67,7 +68,7 @@ module Api
         if @user.update(user_params)
           render_success(user_attributes(@user))
         else
-          render_error(@user.errors.full_messages.join(', '))
+          render_error(errors: @user.errors.full_messages, message: ErrorCodes::Messages::FAILED_TO_UPDATE_USER, error_code: ErrorCodes::Codes::FAILED_TO_UPDATE_USER, status: :unprocessable_entity)
         end
       rescue StandardError => e
         render_internal_server_error(e)
@@ -92,7 +93,7 @@ module Api
       def set_user
         @user = @organization.users.find(params[:id])
       rescue ActiveRecord::RecordNotFound
-        render_not_found('User')
+        render_error(message: ErrorCodes::Messages::USER_NOT_FOUND, error_code: ErrorCodes::Codes::USER_NOT_FOUND, status: :not_found)
       end
 
       def user_params
