@@ -15,6 +15,7 @@ class Ticket < ApplicationRecord
   belongs_to :assignee, class_name: "User", optional: true
   belongs_to :team, optional: true
   belongs_to :sla_policy, optional: true
+  belongs_to :document, optional: true
   
   has_one_attached :attachment
 
@@ -181,9 +182,9 @@ class Ticket < ApplicationRecord
 
   def prefix_for_type(type)
     {
-      "Incident" => "INC",
-      "Request" => "REQ",
-      "Problem" => "PRB"
+      "Incident" => "CIPC_INC",
+      "Request" => "CIPC_REQ",
+      "Problem" => "CIPC_PRB"
     }.fetch(type, "TKT")
   end
 

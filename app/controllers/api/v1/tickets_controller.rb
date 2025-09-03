@@ -37,7 +37,7 @@ module Api
       end
 
       # -------------------------------
-      # SHOW new changes
+      # SHOW
       # -------------------------------
       def show
         unless @ticket.organization_id == @organization.id
@@ -84,7 +84,9 @@ module Api
 
         if @ticket.save
           if params[:ticket][:attachment].present?
-            @ticket.attachment.attach(params[:ticket][:attachment])
+            document = Document.create!(tenant: @organization)
+            document.pdf_file.attach(params[:ticket][:attachment])
+            @ticket.update(document: document)
           end
 
           if params[:ticket][:files].present?
@@ -99,6 +101,16 @@ module Api
 
           create_initial_comment
           create_notifications
+
+          # Send emails for team and assignee
+          if @ticket.team
+            @ticket.team.users.each do |user|
+              TicketMailer.ticket_assigned_to_team(@ticket, user).deliver_later if user.email
+            end
+          end
+          if @ticket.assignee
+            TicketMailer.ticket_assigned_to_user(@ticket, @ticket.assignee).deliver_later if @ticket.assignee.email
+          end
 
           render json: ticket_attributes(@ticket), status: :created
         else
@@ -116,6 +128,8 @@ module Api
         end
 
         ticket_params_adjusted = ticket_params_with_enums
+        original_team_id = @ticket.team_id
+        original_assignee_id = @ticket.assignee_id
 
         if ticket_params_adjusted[:priority].present?
           unless current_user.can_change_urgency?
@@ -135,6 +149,17 @@ module Api
           return render json: { error: "Invalid category. Allowed values are: #{VALID_CATEGORIES.join(', ')}" }, status: :unprocessable_entity
         end
 
+        # Handle attachments
+        if params[:ticket][:attachment].present?
+          document = @ticket.document || Document.create!(tenant: @organization)
+          document.pdf_file.attach(params[:ticket][:attachment])
+          @ticket.update(document: document)
+        end
+
+        if params[:ticket][:files].present?
+          @ticket.files.attach(params[:ticket][:files])
+        end
+
         if params[:ticket].present?
           resolution_fields = params.require(:ticket).permit(
             :status, :resolved_at, :resolution_note, :reason, :resolution_method,
@@ -152,6 +177,17 @@ module Api
             create_resolution_comment(ticket_params_adjusted[:resolution_note] || "Resolved by #{current_user.name}")
             create_resolution_notification
           end
+
+          # Send emails if team or assignee changed
+          if @ticket.team_id != original_team_id && @ticket.team
+            @ticket.team.users.each do |user|
+              TicketMailer.ticket_assigned_to_team(@ticket, user).deliver_later if user.email
+            end
+          end
+          if @ticket.assignee_id != original_assignee_id && @ticket.assignee
+            TicketMailer.ticket_assigned_to_user(@ticket, @ticket.assignee).deliver_later if @ticket.assignee.email
+          end
+
           render json: ticket_attributes(@ticket)
         else
           render json: { errors: @ticket.errors.full_messages }, status: :unprocessable_entity
@@ -183,7 +219,7 @@ module Api
         end
 
         if @ticket.update(assignee: assignee, status: 'assigned')
-          SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, assignee.id) if defined?(SendTicketAssignmentEmailsJob)
+          TicketMailer.ticket_assigned_to_user(@ticket, assignee).deliver_later if assignee.email
           create_assignment_notification(assignee)
           render json: ticket_attributes(@ticket).merge(
             notification: {
@@ -253,15 +289,22 @@ module Api
       # DOWNLOAD ATTACHMENT
       # -------------------------------
       def download_attachment
-        if @ticket.attachment.attached?
-          redirect_to rails_blob_url(@ticket.attachment, disposition: "attachment")
+        attachment = if @ticket.document&.pdf_file&.attached?
+                       @ticket.document.pdf_file
+                     elsif @ticket.attachment&.attached?
+                       @ticket.attachment
+                     else
+                       @ticket.files.find { |file| file.id.to_s == params[:attachment_id] }
+                     end
+        if attachment
+          redirect_to rails_blob_url(attachment, disposition: "attachment")
         else
           render json: { error: "Attachment not found" }, status: :not_found
         end
       end
 
       # -------------------------------
-      # OTHER METHODS (PRIVATE)
+      # PRIVATE METHODS
       # -------------------------------
 
       private
@@ -275,12 +318,6 @@ module Api
           read: false
         )
         NotificationMailer.notify_user(notification).deliver_later
-
-        if @ticket.assignee
-          notification = create_assignment_notification(@ticket.assignee)
-          NotificationMailer.notify_user(notification).deliver_later
-          SendTicketAssignmentEmailsJob.perform_later(@ticket.id, @ticket.team.id, @ticket.assignee.id)
-        end
       end
 
       def ticket_attributes(ticket)
@@ -298,7 +335,7 @@ module Api
           assignee_id: ticket.assignee_id,
           requester_id: ticket.requester_id,
           creator_id: ticket.creator_id,
-          reported_at: ticket.reported_at&.in_time_zone('Pretoria')&.strftime('%Y-%m-%dT%H:%M'),
+          reported_at: ticket.reported_at&.in_time_zone('Africa/Johannesburg')&.strftime('%Y-%m-%dT%H:%M'),
           caller_name: ticket.caller_name,
           caller_surname: ticket.caller_surname,
           caller_email: ticket.caller_email,
@@ -306,12 +343,12 @@ module Api
           customer: ticket.customer,
           source: ticket.source,
           category: ticket.category,
-          response_due_at: ticket.response_due_at&.in_time_zone('Pretoria')&.iso8601,
-          resolution_due_at: ticket.resolution_due_at&.in_time_zone('Pretoria')&.iso8601,
+          response_due_at: ticket.response_due_at&.in_time_zone('Africa/Johannesburg')&.iso8601,
+          resolution_due_at: ticket.resolution_due_at&.in_time_zone('Africa/Johannesburg')&.iso8601,
           escalation_level: ticket.escalation_level,
           sla_breached: ticket.sla_breached,
           calculated_priority: ticket.calculated_priority,
-          resolved_at: ticket.resolved_at&.in_time_zone('Pretoria')&.iso8601,
+          resolved_at: ticket.resolved_at&.in_time_zone('Africa/Johannesburg')&.iso8601,
           resolution_note: ticket.resolution_note,
           reason: ticket.reason,
           resolution_method: ticket.resolution_method,
@@ -323,16 +360,44 @@ module Api
           assignee: ticket.assignee ? { id: ticket.assignee.id, name: ticket.assignee.name } : nil,
           creator: ticket.creator ? { id: ticket.creator.id, name: ticket.creator.name } : nil,
           requester: ticket.requester ? { id: ticket.requester.id, name: ticket.requester.name } : nil,
-          created_at: ticket.created_at&.in_time_zone('Pretoria')&.iso8601,
-          updated_at: ticket.updated_at&.in_time_zone('Pretoria')&.iso8601,
-          attachment: ticket.attachment.attached? ? { filename: ticket.attachment.filename.to_s, url: rails_blob_url(ticket.attachment) } : nil,
-          files: ticket.files.attached? ? ticket.files.map { |file| { filename: file.filename.to_s, url: rails_blob_url(file) } } : [],
+          created_at: ticket.created_at&.in_time_zone('Africa/Johannesburg')&.iso8601,
+          updated_at: ticket.updated_at&.in_time_zone('Africa/Johannesburg')&.iso8601,
+          attachments: (
+            attachments = []
+            if ticket.document&.pdf_file&.attached?
+              attachments << {
+                id: ticket.document.pdf_file.id,
+                filename: ticket.document.pdf_file.filename.to_s,
+                url: rails_blob_url(ticket.document.pdf_file),
+                size: ticket.document.pdf_file.byte_size
+              }
+            end
+            if ticket.attachment&.attached?
+              attachments << {
+                id: ticket.attachment.id,
+                filename: ticket.attachment.filename.to_s,
+                url: rails_blob_url(ticket.attachment),
+                size: ticket.attachment.byte_size
+              }
+            end
+            if ticket.files&.attached?
+              ticket.files.each do |file|
+                attachments << {
+                  id: file.id,
+                  filename: file.filename.to_s,
+                  url: rails_blob_url(file),
+                  size: file.byte_size
+                }
+              end
+            end
+            attachments
+          ),
           notifications: ticket.notifications.map do |notification|
             {
               id: notification.id,
               message: notification.message,
               read: notification.read,
-              created_at: notification.created_at.in_time_zone('Pretoria').iso8601
+              created_at: notification.created_at.in_time_zone('Africa/Johannesburg').iso8601
             }
           end
         }
@@ -346,7 +411,7 @@ module Api
           :creator_id, :requester_id, :status, :resolved_at, :resolution_note,
           :reason, :resolution_method, :cause_code, :resolution_details,
           :end_customer, :support_center, :total_kilometer,
-          :attachment, files: [] 
+          :attachment, files: []
         )
       end
 
@@ -675,7 +740,7 @@ module Api
         team.users
           .left_joins(:assigned_tickets)
           .group('users.id')
-          .having("COALESCE(SUM(CASE WHEN assigned_tickets.status IN (?) THEN 1 ELSE 0 END), 0) = 0", active_statuses)
+          .having("COALESCE(SUM(CASE WHEN tickets.status IN (?) THEN 1 ELSE 0 END), 0) = 0", active_statuses)
           .order('users.id ASC')
           .first
       end

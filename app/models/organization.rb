@@ -14,7 +14,8 @@ class Organization < ApplicationRecord
   # Callbacks
   before_validation :generate_subdomain, on: :create
   before_validation :normalize_subdomain
-  after_create :log_organization_creation
+  
+  after_create :log_organization_creation, :ensure_ticket_sequence!
   after_update :log_organization_update
 
   # Associations
@@ -175,6 +176,21 @@ class Organization < ApplicationRecord
 
   private
 
+  # In Organization model
+def ensure_ticket_sequence!
+  sequence_name = "tickets_inc_organization_#{id}_seq"
+  
+  unless ActiveRecord::Base.connection.execute(
+    "SELECT 1 FROM pg_class WHERE relname = '#{sequence_name}'"
+  ).any?
+    ActiveRecord::Base.connection.execute(
+      "CREATE SEQUENCE #{sequence_name} START 1"
+    )
+    Rails.logger.info "Created ticket sequence for organization: #{name}"
+  end
+end
+
+# Call this in an after_create callback or before ticket creation
   # Generate subdomain from the organization name if not provided
   def generate_subdomain
     self.subdomain ||= name.parameterize
