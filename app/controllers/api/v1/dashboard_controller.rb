@@ -6,7 +6,7 @@ module Api
       def show
         Rails.logger.info "📊 Dashboard request for subdomain=#{@organization.subdomain}, org=#{@organization.name} (ID: #{@organization.id})"
 
-        cache_key = "dashboard:v33:org_#{@organization.id}" # Updated version
+        cache_key = "dashboard:v36:org_#{@organization.id}" # Updated for cache busting
         data = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
           build_dashboard_data
         end
@@ -22,30 +22,35 @@ module Api
 
       def set_organization
         @organization = Organization.find_by(subdomain: params[:subdomain])
-        render_error("Organization not found", status: :not_found) unless @organization
+        unless @organization
+          Rails.logger.error "Organization not found for subdomain: #{params[:subdomain]}"
+          render_error("Organization not found", status: :not_found)
+        end
       end
 
       def build_dashboard_data
-        Rails.logger.info "Using DashboardController version v33 (tenant isolation fix)"
+        Rails.logger.info "Using DashboardController version v36 (fixed string status/priority handling)"
         org_id = @organization.id
 
         org_attrs = extract_org_attributes(@organization)
 
-        # FIXED: Ensure proper tenant isolation with explicit organization_id filtering
         tickets = Ticket.where(organization_id: org_id).includes(:assignee, :requester)
         users_count = User.where(organization_id: org_id).count
         problems = Problem.where(organization_id: org_id)
         problems_count = problems.count
-        
-        # Debug logging
+
         Rails.logger.info "Organization ID: #{org_id}"
-        Rails.logger.info "Total tickets for org_id=#{org_id}: #{tickets.count}"
-        Rails.logger.info "Problems count for org_id=#{org_id}: #{problems_count}, problem IDs: #{problems.pluck(:id).join(', ')}"
-        
-        # Verify ticket counts by organization
-        all_tickets_count = Ticket.count
-        org_tickets_count = tickets.count
-        Rails.logger.info "All tickets in system: #{all_tickets_count}, Org tickets: #{org_tickets_count}"
+        Rails.logger.info "Total tickets: #{tickets.count}, Ticket IDs: #{tickets.pluck(:id).join(', ')}"
+        Rails.logger.info "Total problems: #{problems_count}, Problem IDs: #{problems.pluck(:id).join(', ')}"
+        Rails.logger.info "Total users: #{users_count}"
+
+        null_priority_tickets = tickets.where(priority: nil).count
+        null_status_tickets = tickets.where(status: nil).count
+        if null_priority_tickets > 0 || null_status_tickets > 0
+          Rails.logger.warn "Data inconsistency - Tickets with null priority: #{null_priority_tickets}, null status: #{null_status_tickets}"
+          tickets.where(priority: nil).update_all(priority: 'p4')
+          tickets.where(status: nil).update_all(status: 'open')
+        end
 
         status_counts = compute_status_counts(tickets)
         priority_counts = compute_priority_counts(tickets)
@@ -54,7 +59,7 @@ module Api
         top_assignees = compute_top_assignees(tickets)
         recent_tickets = fetch_recent_tickets(tickets)
 
-        total_tickets = org_tickets_count # Use the actual count from the filtered query
+        total_tickets = tickets.count
         resolved_closed = status_counts["resolved"].to_i + status_counts["closed"].to_i
 
         Rails.logger.info "📊 Dashboard data summary:"
@@ -62,20 +67,23 @@ module Api
         Rails.logger.info "  - Total tickets: #{total_tickets}"
         Rails.logger.info "  - Status counts: #{status_counts}"
         Rails.logger.info "  - Priority counts: #{priority_counts}"
+        Rails.logger.info "  - P1 tickets: #{priority_counts['p1']}"
+        Rails.logger.info "  - Total problems: #{problems_count}"
+        Rails.logger.info "  - SLA data: #{sla_data}"
         Rails.logger.info "  - Top assignees: #{top_assignees}"
 
         {
           organization: org_attrs,
           stats: {
             total_tickets: total_tickets,
-            open_tickets: status_counts["open"],
-            assigned_tickets: status_counts["assigned"],
-            escalated_tickets: status_counts["escalated"],
-            resolved_tickets: status_counts["resolved"],
-            closed_tickets: status_counts["closed"],
+            open_tickets: status_counts["open"].to_i,
+            assigned_tickets: status_counts["assigned"].to_i,
+            escalated_tickets: status_counts["escalated"].to_i,
+            resolved_tickets: status_counts["resolved"].to_i,
+            closed_tickets: status_counts["closed"].to_i,
             total_problems: problems_count,
             total_members: users_count,
-            high_priority_tickets: priority_counts["p1"].to_i + priority_counts["p2"].to_i,
+            p1_tickets: priority_counts["p1"].to_i,
             unresolved_tickets: total_tickets - resolved_closed,
             resolution_rate_percent: total_tickets.positive? ? ((resolved_closed.to_f / total_tickets) * 100).round(1) : 0
           },
@@ -93,7 +101,7 @@ module Api
             fetched_at: Time.current.iso8601,
             timezone: Time.zone.name,
             tenant: org_attrs[:subdomain],
-            organization_id: org_id # Added for debugging
+            organization_id: org_id
           }
         }
       end
@@ -112,47 +120,36 @@ module Api
       end
 
       def compute_status_counts(tickets)
-        # Map integer status values to string labels
-        status_labels = { 
-          0 => "open", 
-          1 => "assigned", 
-          2 => "escalated", 
-          3 => "closed", 
-          4 => "suspended", 
-          5 => "resolved", 
-          6 => "pending" 
+        status_labels = {
+          'open' => 'open',
+          'assigned' => 'assigned',
+          'escalated' => 'escalated',
+          'closed' => 'closed',
+          'suspended' => 'suspended',
+          'resolved' => 'resolved',
+          'pending' => 'pending'
         }
-        
-        # Initialize counts with zero values
+
         counts = status_labels.values.index_with { 0 }
         invalid_statuses = []
 
-        # FIXED: Use the already filtered tickets relation to ensure proper tenant isolation
         ticket_status_counts = tickets.group(:status).count
-        
         Rails.logger.info "Raw ticket status counts: #{ticket_status_counts}"
 
-        # Count tickets by status
         ticket_status_counts.each do |status, count|
-          # Handle both string and integer status values
-          status_key = case status
-                      when String
-                        status.to_i
-                      when Integer
-                        status
-                      else
-                        nil
-                      end
+          status_key = status.to_s.downcase
 
-          if status_key && status_labels.key?(status_key)
+          if status_labels.key?(status_key)
             counts[status_labels[status_key]] = count
           else
             invalid_statuses << [status, count]
+            counts["open"] += count
           end
         end
 
         if invalid_statuses.any?
-          Rails.logger.warn "Invalid ticket statuses found: #{invalid_statuses.map { |s,c| "#{s}:#{c}" }.join(', ')}"
+          Rails.logger.warn "Invalid ticket statuses found: #{invalid_statuses.map { |s, c| "#{s}:#{c}" }.join(', ')}"
+          tickets.where(status: invalid_statuses.map(&:first)).update_all(status: 'open')
         end
 
         Rails.logger.info "Final status counts: #{counts}"
@@ -160,49 +157,33 @@ module Api
       end
 
       def compute_priority_counts(tickets)
-        # Map integer priority values to string labels
-        # Priority mapping: 0=p4(low), 1=p3(medium), 2=p2(high), 3=p1(critical)
-        priority_labels = { 
-          0 => "p4",  # Low
-          1 => "p3",  # Medium
-          2 => "p2",  # High
-          3 => "p1"   # Critical
+        priority_labels = {
+          'p4' => 'p4',
+          'p3' => 'p3',
+          'p2' => 'p2',
+          'p1' => 'p1'
         }
-        
-        # Initialize counts with zero values
+
         counts = priority_labels.values.index_with { 0 }
         invalid_priorities = []
 
-        # FIXED: Use the already filtered tickets relation
         ticket_priority_counts = tickets.group(:priority).count
-        
         Rails.logger.info "Raw ticket priority counts: #{ticket_priority_counts}"
 
-        # Count tickets by priority
         ticket_priority_counts.each do |priority, count|
-          # Handle both string and integer priority values
-          priority_key = case priority
-                        when String
-                          priority.to_i
-                        when Integer
-                          priority
-                        else
-                          nil
-                        end
+          priority_key = priority.to_s.downcase
 
-          if priority_key && priority_labels.key?(priority_key)
+          if priority_labels.key?(priority_key)
             counts[priority_labels[priority_key]] = count
           else
             invalid_priorities << [priority, count]
-            # Default invalid priorities to p4 (low)
             counts["p4"] += count
           end
         end
 
         if invalid_priorities.any?
-          Rails.logger.warn "Invalid ticket priorities found: #{invalid_priorities.map { |p,c| "#{p}:#{c}" }.join(', ')}"
-          # FIXED: Only update tickets that belong to this organization
-          tickets.where(priority: invalid_priorities.map(&:first)).update_all(priority: 0)
+          Rails.logger.warn "Invalid ticket priorities found: #{invalid_priorities.map { |p, c| "#{p}:#{c}" }.join(', ')}"
+          tickets.where(priority: invalid_priorities.map(&:first)).update_all(priority: 'p4')
         end
 
         Rails.logger.info "Final priority counts: #{counts}"
@@ -210,10 +191,9 @@ module Api
       end
 
       def compute_sla_metrics(tickets)
-        # FIXED: Use the filtered tickets relation
         breached_count = tickets.where(sla_breached: true).count
         breaching_soon_count = if Ticket.column_names.include?("breaching_sla")
-                                 tickets.where(breaching_sla: true, status: [0,1,2]).count
+                                 tickets.where(breaching_sla: true, status: ['open', 'assigned', 'escalated']).count
                                else
                                  0
                                end
@@ -222,7 +202,6 @@ module Api
       end
 
       def compute_avg_resolution_hours(tickets)
-        # FIXED: Use the filtered tickets relation
         avg_seconds = tickets.where.not(resolved_at: nil)
                             .average("EXTRACT(EPOCH FROM (resolved_at - tickets.created_at))")
         result = avg_seconds ? (avg_seconds / 3600.0).round(1) : 0.0
@@ -231,16 +210,14 @@ module Api
       end
 
       def compute_top_assignees(tickets)
-        # FIXED: Use the filtered tickets relation and ensure we're only getting assignees from this org
         assignee_data = tickets.joins("INNER JOIN users ON tickets.assignee_id = users.id")
                               .where.not(assignee_id: nil)
-                              .where(users: { organization_id: @organization.id }) # Extra safety check
+                              .where(users: { organization_id: @organization.id })
                               .group("users.id, users.name")
                               .order("count_all DESC")
                               .limit(5)
                               .count
 
-        # Convert to format expected by frontend: [{name: "User Name", tickets: count}]
         top_assignees = assignee_data.map do |(user_id, user_name), count|
           {
             name: user_name || "Unknown User",
@@ -253,7 +230,6 @@ module Api
       end
 
       def fetch_recent_tickets(tickets)
-        # FIXED: Use the filtered tickets relation
         recent = tickets.order("created_at DESC").limit(10).map do |t|
           {
             id: t.id,
@@ -273,39 +249,28 @@ module Api
       end
 
       def compute_status_label(status)
-        labels = { 
-          0 => "open", 
-          1 => "assigned", 
-          2 => "escalated", 
-          3 => "closed", 
-          4 => "suspended", 
-          5 => "resolved", 
-          6 => "pending" 
+        labels = {
+          'open' => 'open',
+          'assigned' => 'assigned',
+          'escalated' => 'escalated',
+          'closed' => 'closed',
+          'suspended' => 'suspended',
+          'resolved' => 'resolved',
+          'pending' => 'pending'
         }
-        
-        status_key = status.is_a?(String) ? status.to_i : status
-        labels[status_key] || "unknown"
+        status_key = status.to_s.downcase
+        labels[status_key] || 'open'
       end
 
       def compute_clean_priority_label(priority)
-        # Return clean priority labels without "Unknown" wrapper
-        labels = { 
-          0 => "p4",  # Low
-          1 => "p3",  # Medium  
-          2 => "p2",  # High
-          3 => "p1"   # Critical
+        labels = {
+          'p4' => 'p4',
+          'p3' => 'p3',
+          'p2' => 'p2',
+          'p1' => 'p1'
         }
-        
-        priority_key = case priority
-                      when String
-                        priority.to_i
-                      when Integer
-                        priority
-                      else
-                        0 # Default to p4/low
-                      end
-                      
-        labels[priority_key] || "p4" # Default to p4 for unknown priorities
+        priority_key = priority.to_s.downcase
+        labels[priority_key] || 'p4'
       end
 
       def safe_user_name(user, fallback_name, fallback_email)
