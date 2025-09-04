@@ -11,7 +11,7 @@ class Ticket < ApplicationRecord
 
   belongs_to :organization
   belongs_to :creator, class_name: "User"
-  belongs_to :requester, class_name: "User"
+  belongs_to :requester, class_name: "User", optional: true
   belongs_to :assignee, class_name: "User", optional: true
   belongs_to :team, optional: true
   belongs_to :sla_policy, optional: true
