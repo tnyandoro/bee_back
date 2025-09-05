@@ -19,8 +19,8 @@ default: &default
 development:
   <<: *default
   database: itsm_development
-  username: <%= ENV.fetch("DB_USERNAME", "tendai") %>
-  password: <%= ENV.fetch("DB_PASSWORD", "Mybreak28#") %>
+  username: <%= ENV.fetch("DB_USERNAME", "tal") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "EggyOfJhb") %>
   host: <%= ENV.fetch("DB_HOST", "localhost") %>
   port: 5432
 

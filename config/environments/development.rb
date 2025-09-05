@@ -52,6 +52,9 @@ Rails.application.configure do
   config.active_support.deprecation = :log
   config.log_level = :debug
 
+  # Suppress logger output.
+  # config.logger = ActiveSupport::Logger.new(nil)
+
   # Raise exceptions for disallowed deprecations
   config.active_support.disallowed_deprecation = :raise
   config.active_support.disallowed_deprecation_warnings = []
