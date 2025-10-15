@@ -2,10 +2,8 @@ require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
-  # Rails.application.routes.default_url_options[:host] = 'https://itsmapi.greensoftsolutions.net'
-  Rails.application.routes.default_url_options[:host] = 'https://connectfix.onrender.com/'
-  config.hosts << "connectfix.onrender.com"
-
+  Rails.application.routes.default_url_options[:host] = 'https://connectfix.onrender.com'
+  
   # Code is not reloaded between requests.
   config.enable_reloading = false
 
@@ -29,9 +27,7 @@ Rails.application.configure do
   # config.action_dispatch.x_sendfile_header = "X-Sendfile" # for Apache
   # config.action_dispatch.x_sendfile_header = "X-Accel-Redirect" # for NGINX
 
-  # Store uploaded files on the local file system (see config/storage.yml for options).
-  # config.active_storage.service = :local
-  # config.active_storage.service = :production
+  # Store uploaded files on Cloudinary
   config.active_storage.service = :cloudinary
   config.active_storage.draw_routes = false
   config.active_storage.replace_on_assign_to_many = false
@@ -45,7 +41,6 @@ Rails.application.configure do
   # config.assume_ssl = true
 
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  # config.force_ssl = true
   config.force_ssl = false
 
   # Log to STDOUT, replacing rails_12factor functionality.
@@ -60,12 +55,7 @@ Rails.application.configure do
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
 
   # Use a different cache store in production.
-  # config.cache_store = :mem_cache_store
-  # config.cache_store = :redis_cache_store, { url: ENV.fetch("REDIS_URL") }
-  # config/environments/production.rb
-config.cache_store = :memory_store
-
-
+  config.cache_store = :memory_store
 
   # Use Sidekiq for Active Job.
   config.active_job.queue_adapter = :sidekiq
@@ -73,27 +63,28 @@ config.cache_store = :memory_store
   config.action_mailer.perform_caching = false
 
   # Configure Gmail SMTP for Action Mailer.
-  
   config.action_mailer.perform_deliveries = true
   config.action_mailer.raise_delivery_errors = true
   config.action_mailer.default_options = {from: 'greensoftsolutionstest@gmail.com'}
 
   config.action_mailer.delivery_method = :smtp
   config.action_mailer.smtp_settings = {
-  address:              'smtp.gmail.com',
-  port:                 587,
-  domain:               'tenda',
-  user_name:            'greensoftsolutionstest@gmail.com',
-  password:             'ohch uejg nkqx cqid',
-  authentication:       'plain',
-  enable_starttls_auto: true  }
+    address:              'smtp.gmail.com',
+    port:                 587,
+    domain:               'gmail.com',
+    user_name:            'greensoftsolutionstest@gmail.com',
+    password:             'ohch uejg nkqx cqid',
+    authentication:       'plain',
+    enable_starttls_auto: true
+  }
   
-  # config.action_mailer.default_url_options = { host: "https://itsmapi.greensoftsolutions.net", protocol: "https" }
-  # config.action_mailer.asset_host = "https://itsmapi.greensoftsolutions.net"
+  config.action_mailer.default_url_options = { host: "connectfix.onrender.com", protocol: "https" }
+  config.action_mailer.asset_host = "https://connectfix.onrender.com"
+  
+  # Allow Render hostnames
+  config.hosts << "connectfix.onrender.com"
+  config.hosts << /.*\.onrender\.com/
 
-  config.action_mailer.default_url_options = { host: "https://connectfix.onrender.com//", protocol: "https" }
-  config.action_mailer.asset_host = "https://connectfix.onrender.com//"
-  # config.hosts << "itsm-api-w8vr.onrender.com"
   # Enable locale fallbacks for I18n.
   config.i18n.fallbacks = true
 
@@ -103,7 +94,7 @@ config.cache_store = :memory_store
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
 
-  # Enable DNS rebinding protection.
+  # Enable DNS rebinding protection and health checks.
   # config.hosts = [ "yourdomain.com", /.*\.yourdomain\.com/ ]
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
