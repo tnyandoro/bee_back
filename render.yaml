@@ -1,15 +1,15 @@
 version: "1"
+
 databases:
-  - name: itsm-production-db
-    databaseName: itsm_production_db_plyf
-    user: itsm_production_db_plyf_user
-    plan: basic-256mb
+  - name: itsm-postgres
+    databaseName: itsm_production
+    user: itsm_user
+    plan: free
     region: oregon
     ipAllowList:
       - source: 0.0.0.0/0
         description: everywhere
     postgresMajorVersion: "16"
-    diskSizeGB: 1
 
 services:
   - type: web
@@ -20,48 +20,18 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: DATABASE_URL
-        sync: false
-      - key: DB_HOST
-        value: dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com
-      - key: DB_USERNAME
-        value: itsm_production_db_plyf_user
-      - key: DB_PASSWORD
-        value: raQ0f5pTjvb2f0khenurB3lWwv6jwoDf
-      - key: DB_PORT
-        value: 5432
-      - key: DB_NAME
-        value: itsm_production_db_plyf
+        fromDatabase:
+          name: itsm-postgres
+          property: connectionString
       - key: RAILS_ENV
         value: production
       - key: RAILS_MASTER_KEY
-        value: b51ea58161b00e0f58175f6c70650fe3
+        sync: false  # Add manually in dashboard
       - key: SECRET_KEY_BASE
-        value: 4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916
+        sync: false  # Add manually in dashboard
       - key: RAILS_MAX_THREADS
         value: "5"
-    postdeploy:
-      - bundle exec rails db:migrate
+    buildCommand: bundle install
+    startCommand: bundle exec puma -C config/puma.rb
+    healthCheckPath: /health
     autoDeploy: true
-
-  - type: cron
-    name: db-migrate
-    runtime: docker
-    schedule: "0 0 * * *"
-    dockerfilePath: ./Dockerfile
-    startCommand: bundle exec rails db:migrate
-    autoDeploy: false
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: DB_HOST
-        value: dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com
-      - key: DB_USERNAME
-        value: itsm_production_db_plyf_user
-      - key: DB_PASSWORD
-        value: raQ0f5pTjvb2f0khenurB3lWwv6jwoDf
-      - key: DB_PORT
-        value: 5432
-      - key: DB_NAME
-        value: itsm_production_db_plyf
-      - key: RAILS_ENV
-        value: production
