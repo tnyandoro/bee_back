@@ -1,16 +1,5 @@
 version: "1"
 
-databases:
-  - name: itsm-postgres
-    databaseName: itsm_production
-    user: itsm_user
-    plan: free
-    region: oregon
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: everywhere
-    postgresMajorVersion: "16"
-
 services:
   - type: web
     name: itsm-api
@@ -20,9 +9,7 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: itsm-postgres
-          property: connectionString
+        value: postgresql://itsm_production_db_plyf_user:raQ0f5pTjvb2f0khenurB3lWwv6jwoDf@dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.com:5432/itsm_production_db_plyf?sslmode=require
       - key: RAILS_ENV
         value: production
       - key: RAILS_MASTER_KEY
