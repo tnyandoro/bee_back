@@ -1,8 +1,12 @@
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
+  # Disable host authorization completely
+  config.hosts.clear
+  
   # Settings specified here will take precedence over those in config/application.rb.
   Rails.application.routes.default_url_options[:host] = 'https://connectfix.onrender.com'
+  
   
   # Code is not reloaded between requests.
   config.enable_reloading = false
