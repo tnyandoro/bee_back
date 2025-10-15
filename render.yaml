@@ -9,13 +9,13 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: DATABASE_URL
-        value: postgresql://itsm_production_db_plyf_user:raQ0f5pTjvb2f0khenurB3lWwv6jwoDf@dpg-d19u2vjipnbc739gl720-a.oregon-postgres.render.internal:5432/itsm_production_db_plyf
+        value: postgresql://itsm_y7xd_user:iimaOBG1EPEXndz78Vh5tr34JLGNTxgN@dpg-d3nrrsl6ubrc73d9s0a0-a/itsm_y7xd
       - key: RAILS_ENV
         value: production
       - key: RAILS_MASTER_KEY
-        sync: false
+        value: 2f711165359ebd74c42b89f3416f0d88
       - key: SECRET_KEY_BASE
-        sync: false
+        value: 4e93e9947e0207a00fa03a50a289ea57032f81c6b37c6d0f4748f10f771ca56e3deefa101619f990403ca5ce15fbcc058ea22c18bfe97028bdbcc722b367b916
       - key: RAILS_MAX_THREADS
         value: "5"
       - key: PORT
