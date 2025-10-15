@@ -1,37 +1,43 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "Env variables at container start:"
-env | grep DATABASE_URL || echo "DATABASE_URL not found"
+echo "=== Container Starting ==="
+echo "Checking environment variables..."
+env | grep -E "(DATABASE_URL|RAILS_ENV|PORT)" || echo "Some environment variables not found"
+
+# Remove stale PID file
+if [ -f /rails/tmp/pids/server.pid ]; then
+  echo "Removing stale PID file..."
+  rm -f /rails/tmp/pids/server.pid
+fi
 
 # Detect Rails server startup
-if [[ "$*" == *"rails server"* ]] || [[ "$*" == *"bundle exec rails server"* ]] || [[ "$*" == *"bundle exec puma"* ]]; then
-  echo "Rails server detected. Running pre-startup tasks..."
+if [[ "$*" == *"puma"* ]] || [[ "$*" == *"rails server"* ]] || [ $# -eq 0 ]; then
+  echo "=== Rails server detected. Running pre-startup tasks... ==="
 
   if [ -z "${DATABASE_URL:-}" ]; then
     echo "ERROR: DATABASE_URL is not set" >&2
     exit 1
   fi
 
-  # Use Ruby to safely parse DATABASE_URL
+  # Parse DATABASE_URL
+  echo "Parsing DATABASE_URL..."
   eval "$(ruby << 'EOF'
 require 'uri'
 require 'shellwords'
 
 begin
   uri = URI(ENV['DATABASE_URL'])
-
   host = uri.host
   port = uri.port || 5432
   user = uri.user
   password = uri.password
   dbname = uri.path&.sub(/^\//, '') || 'postgres'
 
-  # Shell-escape each value to prevent injection
   puts "DB_HOST=#{Shellwords.escape(host)}"
   puts "DB_PORT=#{Shellwords.escape(port.to_s)}"
   puts "DB_USER=#{Shellwords.escape(user)}"
-  puts "export PGPASSWORD=#{Shellwords.escape(password).inspect}"
+  puts "export PGPASSWORD=#{Shellwords.escape(password)}"
   puts "DB_NAME=#{Shellwords.escape(dbname)}"
 rescue => e
   $stderr.puts "Failed to parse DATABASE_URL: #{e.message}"
@@ -40,26 +46,29 @@ end
 EOF
 )"
 
-  # Now wait for DB
-  echo "Waiting for PostgreSQL to be reachable at $DB_HOST:$DB_PORT..."
-  until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --timeout=10 > /dev/null 2>&1; do
-    echo "Database not reachable yet, retrying in 2s..."
+  # Wait for PostgreSQL
+  echo "Waiting for PostgreSQL at $DB_HOST:$DB_PORT..."
+  MAX_RETRIES=30
+  RETRY_COUNT=0
+  
+  until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --timeout=3 > /dev/null 2>&1; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+      echo "ERROR: Database not reachable after $MAX_RETRIES attempts" >&2
+      exit 1
+    fi
+    echo "Database not ready yet (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 2s..."
     sleep 2
   done
-  echo "PostgreSQL is reachable."
-
-  # Wait for ActiveRecord
-  # echo "Waiting for ActiveRecord to establish DB connection..."
-  # until bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')" > /dev/null 2>&1; do
-  #   echo "ActiveRecord connection failed, waiting 2s..."
-  #   sleep 2
-  # done
-  # echo "ActiveRecord connected successfully."
+  echo "✓ PostgreSQL is ready!"
 
   # Run migrations
   echo "Running database migrations..."
-  bundle exec rails db:migrate
-  echo "Migrations completed successfully."
+  if bundle exec rails db:migrate; then
+    echo "✓ Migrations completed successfully"
+  else
+    echo "WARNING: Migrations failed, but continuing..." >&2
+  fi
 
   # Create missing sequences for all organizations
   echo "Ensuring problem sequences exist..."
@@ -74,24 +83,16 @@ EOF
           puts \"Sequence already exists: #{sequence_name}\"
         end
       end
-      puts 'All sequences verified/created successfully.'
+      puts '✓ All sequences verified/created successfully.'
     rescue => e
-      puts \"Error creating sequences: #{e.message}\"
+      puts \"Warning: Error with sequences: #{e.message}\"
       puts 'Continuing with server startup...'
     end
-  " 2>/dev/null || echo "Sequence creation failed, but continuing..."
+  " 2>&1 || echo "Sequence check completed with warnings"
 
-  echo "Pre-startup tasks completed. Starting Rails server..."
+  echo "=== Pre-startup tasks completed ==="
 fi
 
-# # Execute the main command
-# exec "$@"
-
-echo "Pre-startup tasks completed. Starting Rails server..."
-
-# If no command was passed, start Rails server
-if [ $# -eq 0 ]; then
-  exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
-else
-  exec "$@"
-fi
+# Execute the main command (from Dockerfile CMD or passed arguments)
+echo "Starting application..."
+exec "$@"
