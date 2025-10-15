@@ -62,28 +62,18 @@ RUBY
   done
   echo "✓ PostgreSQL is ready!"
 
-  # Setup database - check if tables exist
-  echo "Checking database state..."
-  if bundle exec rails runner "ActiveRecord::Base.connection.tables.any?" 2>/dev/null; then
-    echo "Database has tables, running migrations..."
-    if bundle exec rails db:migrate; then
+  # Setup database - always use schema load for fresh database
+  echo "Setting up database..."
+  echo "Loading database schema..."
+  if bundle exec rails db:schema:load 2>&1; then
+    echo "✓ Schema loaded successfully"
+  else
+    echo "ERROR: Schema load failed" >&2
+    echo "Attempting migrations as fallback..."
+    if bundle exec rails db:migrate 2>&1; then
       echo "✓ Migrations completed successfully"
     else
-      echo "WARNING: Migrations failed" >&2
-      echo "Attempting schema load as fallback..."
-      if bundle exec rails db:schema:load; then
-        echo "✓ Schema loaded successfully"
-      else
-        echo "ERROR: Could not set up database" >&2
-        exit 1
-      fi
-    fi
-  else
-    echo "Fresh database detected, loading schema..."
-    if bundle exec rails db:schema:load; then
-      echo "✓ Schema loaded successfully"
-    else
-      echo "ERROR: Schema load failed" >&2
+      echo "ERROR: Could not set up database" >&2
       exit 1
     fi
   fi
@@ -92,16 +82,20 @@ RUBY
   echo "Ensuring problem sequences exist..."
   bundle exec rails runner "
     begin
-      Organization.find_each do |org|
-        sequence_name = \"tickets_prb_organization_#{org.id}_seq\"
-        unless ActiveRecord::Base.connection.execute(\"SELECT 1 FROM information_schema.sequences WHERE sequence_name = '#{sequence_name}'\").any?
-          ActiveRecord::Base.connection.execute(\"CREATE SEQUENCE #{sequence_name} START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;\")
-          puts \"Created sequence: #{sequence_name}\"
-        else
-          puts \"Sequence already exists: #{sequence_name}\"
+      if defined?(Organization) && ActiveRecord::Base.connection.table_exists?('organizations')
+        Organization.find_each do |org|
+          sequence_name = \"tickets_prb_organization_#{org.id}_seq\"
+          unless ActiveRecord::Base.connection.execute(\"SELECT 1 FROM information_schema.sequences WHERE sequence_name = '#{sequence_name}'\").any?
+            ActiveRecord::Base.connection.execute(\"CREATE SEQUENCE #{sequence_name} START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;\")
+            puts \"Created sequence: #{sequence_name}\"
+          else
+            puts \"Sequence already exists: #{sequence_name}\"
+          end
         end
+        puts '✓ All sequences verified/created successfully.'
+      else
+        puts 'No organizations table yet, skipping sequence creation.'
       end
-      puts '✓ All sequences verified/created successfully.'
     rescue => e
       puts \"Warning: Error with sequences: #{e.message}\"
       puts 'Continuing with server startup...'
