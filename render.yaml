@@ -26,12 +26,10 @@ services:
       - key: RAILS_ENV
         value: production
       - key: RAILS_MASTER_KEY
-        sync: false  # Add manually in dashboard
+        sync: false
       - key: SECRET_KEY_BASE
-        sync: false  # Add manually in dashboard
+        sync: false
       - key: RAILS_MAX_THREADS
         value: "5"
-    buildCommand: bundle install
-    startCommand: bundle exec puma -C config/puma.rb
     healthCheckPath: /health
     autoDeploy: true
