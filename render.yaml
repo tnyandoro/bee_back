@@ -31,5 +31,6 @@ services:
         sync: false
       - key: RAILS_MAX_THREADS
         value: "5"
-    healthCheckPath: /health
+      - key: PORT
+        value: "3000"
     autoDeploy: true
