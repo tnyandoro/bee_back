@@ -22,7 +22,7 @@ if [[ "$*" == *"puma"* ]] || [[ "$*" == *"rails server"* ]] || [ $# -eq 0 ]; the
 
   # Parse DATABASE_URL
   echo "Parsing DATABASE_URL..."
-  eval "$(ruby << 'EOF'
+  eval "$(ruby << 'RUBY'
 require 'uri'
 require 'shellwords'
 
@@ -43,7 +43,7 @@ rescue => e
   $stderr.puts "Failed to parse DATABASE_URL: #{e.message}"
   exit 1
 end
-EOF
+RUBY
 )"
 
   # Wait for PostgreSQL
@@ -62,12 +62,30 @@ EOF
   done
   echo "✓ PostgreSQL is ready!"
 
-  # Run migrations
-  echo "Running database migrations..."
-  if bundle exec rails db:migrate; then
-    echo "✓ Migrations completed successfully"
+  # Setup database - check if tables exist
+  echo "Checking database state..."
+  if bundle exec rails runner "ActiveRecord::Base.connection.tables.any?" 2>/dev/null; then
+    echo "Database has tables, running migrations..."
+    if bundle exec rails db:migrate; then
+      echo "✓ Migrations completed successfully"
+    else
+      echo "WARNING: Migrations failed" >&2
+      echo "Attempting schema load as fallback..."
+      if bundle exec rails db:schema:load; then
+        echo "✓ Schema loaded successfully"
+      else
+        echo "ERROR: Could not set up database" >&2
+        exit 1
+      fi
+    fi
   else
-    echo "WARNING: Migrations failed, but continuing..." >&2
+    echo "Fresh database detected, loading schema..."
+    if bundle exec rails db:schema:load; then
+      echo "✓ Schema loaded successfully"
+    else
+      echo "ERROR: Schema load failed" >&2
+      exit 1
+    fi
   fi
 
   # Create missing sequences for all organizations
