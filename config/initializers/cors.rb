@@ -58,14 +58,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
 
   allow do
     # Production
-    origins 'https://d10tmedpan81b6.cloudfront.net',
-            'https://itsm-gss.netlify.app',
-            'https://itsm-api-w8vr.onrender.com',
-            'https://gsolve360.netlify.app',
-            /\.greensoftsolutions\.net$/
-
-    resource '*',
-      headers: :any,
+    origins 'https://itsmza.netlify.app'
       methods: [:get, :post, :put, :patch, :delete, :options, :head],
       credentials: true,
       expose: ['Authorization', 'X-Organization-Subdomain'],
