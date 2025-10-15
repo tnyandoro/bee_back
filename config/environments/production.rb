@@ -3,8 +3,8 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
   # Rails.application.routes.default_url_options[:host] = 'https://itsmapi.greensoftsolutions.net'
-  Rails.application.routes.default_url_options[:host] = 'https://itsm-api-w8vr.onrender.com'
-
+  Rails.application.routes.default_url_options[:host] = 'https://connectfix.onrender.com/'
+  config.hosts << "connectfix.onrender.com"
 
   # Code is not reloaded between requests.
   config.enable_reloading = false
@@ -91,9 +91,9 @@ config.cache_store = :memory_store
   # config.action_mailer.default_url_options = { host: "https://itsmapi.greensoftsolutions.net", protocol: "https" }
   # config.action_mailer.asset_host = "https://itsmapi.greensoftsolutions.net"
 
-  config.action_mailer.default_url_options = { host: "https://itsm-api-w8vr.onrender.com/", protocol: "https" }
-  config.action_mailer.asset_host = "https://itsm-api-w8vr.onrender.com/"
-  config.hosts << "itsm-api-w8vr.onrender.com"
+  config.action_mailer.default_url_options = { host: "https://connectfix.onrender.com//", protocol: "https" }
+  config.action_mailer.asset_host = "https://connectfix.onrender.com//"
+  # config.hosts << "itsm-api-w8vr.onrender.com"
   # Enable locale fallbacks for I18n.
   config.i18n.fallbacks = true
 
