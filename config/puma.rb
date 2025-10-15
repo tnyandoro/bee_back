@@ -13,24 +13,6 @@ threads min_threads_count, max_threads_count
 
 rails_env = ENV.fetch("RAILS_ENV") { "development" }
 
-if rails_env == "production"
-  # If you are running more than 1 thread per process, the workers count
-  # should be equal to the number of processors (CPU cores) in production.
-  #
-  # It defaults to 1 because it's impossible to reliably detect how many
-  # CPU cores are available. Make sure to set the `WEB_CONCURRENCY` environment
-  # variable to match the number of processors.
-  worker_count = Integer(ENV.fetch("WEB_CONCURRENCY") { 1 })
-  if worker_count > 1
-    workers worker_count
-  else
-    preload_app!
-  end
-end
-# Specifies the `worker_timeout` threshold that Puma will use to wait before
-# terminating a worker in development environments.
-worker_timeout 3600 if ENV.fetch("RAILS_ENV", "development") == "development"
-
 # Specifies the `port` that Puma will listen on to receive requests; default is 3000.
 port ENV.fetch("PORT") { 3000 }
 
@@ -40,7 +22,43 @@ environment rails_env
 # Specifies the `pidfile` that Puma will use.
 pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
 
+# Production-specific configuration
+if rails_env == "production"
+  # Bind to Unix socket for better performance with Nginx (Droplet deployment)
+  # Comment this out if using DigitalOcean App Platform
+  bind "unix://#{Dir.pwd}/tmp/sockets/puma.sock"
+  
+  # If you are running more than 1 thread per process, the workers count
+  # should be equal to the number of processors (CPU cores) in production.
+  #
+  # It defaults to 1 because it's impossible to reliably detect how many
+  # CPU cores are available. Make sure to set the `WEB_CONCURRENCY` environment
+  # variable to match the number of processors.
+  worker_count = Integer(ENV.fetch("WEB_CONCURRENCY") { 2 })
+  
+  if worker_count > 1
+    workers worker_count
+    
+    # Preload the application before starting workers
+    preload_app!
+    
+    # Code to run before forking workers
+    before_fork do
+      ActiveRecord::Base.connection_pool.disconnect! if defined?(ActiveRecord)
+    end
+    
+    # Code to run in each worker after forking
+    on_worker_boot do
+      ActiveRecord::Base.establish_connection if defined?(ActiveRecord)
+    end
+  else
+    preload_app!
+  end
+end
+
+# Specifies the `worker_timeout` threshold that Puma will use to wait before
+# terminating a worker in development environments.
+worker_timeout 3600 if ENV.fetch("RAILS_ENV", "development") == "development"
+
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
-
-# workers ENV.fetch("WEB_CONCURRENCY") { 1 } if rails_env == "production"
