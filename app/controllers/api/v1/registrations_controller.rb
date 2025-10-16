@@ -9,17 +9,19 @@ module Api
 
       def create
         ActiveRecord::Base.transaction do
-          # Validate subdomain first
           validate_subdomain_availability!
           
           organization = Organization.new(organization_params)
           organization.save!
-
+          
+          # Ensure all ticket sequences are created
+          organization.ensure_ticket_sequence!
+          
           admin = organization.users.new(admin_params.except(:department, :department_id))
           admin.role = :domain_admin
           admin.auth_token = generate_auth_token
           admin.save!
-
+      
           render_success_response(organization, admin)
         end
       rescue StandardError => e

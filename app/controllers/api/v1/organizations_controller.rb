@@ -106,13 +106,22 @@ module Api
       def tickets
         scope = @organization.tickets
 
-        # Apply user-based visibility
+        # Apply user-based visibility - UPDATED LOGIC
         if current_user.can_view_all_tickets?
-          # all tickets
+          # Admins and managers see all tickets in the organization
+          Rails.logger.info "User #{current_user.id} can view all tickets"
         elsif current_user.can_view_assigned_tickets?
+          # Users who can view assigned tickets see only tickets assigned to them
           scope = scope.where(assignee_id: current_user.id)
+          Rails.logger.info "User #{current_user.id} can view assigned tickets only"
+        elsif current_user.team_id.present?
+          # Regular users with a team see all tickets in their team
+          scope = scope.where(team_id: current_user.team_id)
+          Rails.logger.info "User #{current_user.id} can view team tickets (team_id: #{current_user.team_id})"
         else
+          # Users without a team see only their own tickets
           scope = scope.where(requester_id: current_user.id)
+          Rails.logger.info "User #{current_user.id} can view only their own tickets"
         end
 
         scope = apply_filters(scope)
@@ -122,7 +131,8 @@ module Api
 
         tickets = scope.paginate(page: page, per_page: per_page)
 
-        Rails.logger.info "Tickets query result for ticket_number #{params[:ticket_number]}: #{tickets.pluck(:ticket_number).inspect}"
+        Rails.logger.info "Tickets query result for user #{current_user.id}: #{tickets.pluck(:ticket_number).inspect}"
+        Rails.logger.info "Total tickets found: #{tickets.total_entries}"
 
         render json: {
           tickets: tickets.map { |t| ticket_attributes(t) },
@@ -161,6 +171,8 @@ module Api
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(ticket_type: params[:ticket_type]) if params[:ticket_type].present?
         scope = scope.where(ticket_number: params[:ticket_number]) if params[:ticket_number].present?
+        scope = scope.where(team_id: params[:team_id]) if params[:team_id].present?
+        scope = scope.where(priority: params[:priority]) if params[:priority].present?
         scope
       end
 
@@ -195,7 +207,9 @@ module Api
           resolved_at: ticket.resolved_at&.iso8601,
           resolution_note: ticket.resolution_note,
           assignee: ticket.assignee ? { id: ticket.assignee.id, name: ticket.assignee.name } : nil,
-          creator: ticket.creator ? { id: ticket.creator.id, name: ticket.creator.name } : nil
+          creator: ticket.creator ? { id: ticket.creator.id, name: ticket.creator.name } : nil,
+          created_at: ticket.created_at&.iso8601,
+          updated_at: ticket.updated_at&.iso8601
         }
       end
     end
