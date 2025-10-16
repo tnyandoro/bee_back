@@ -44,22 +44,10 @@ module Api
       # ---------------------------
       # Organization resolution
       # ---------------------------
-      # def set_organization_from_subdomain
-      #   param_subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
-      #   param_subdomain = 'demo' if Rails.env.development? && param_subdomain.blank?
-
-      #   if param_subdomain.blank? && Organization.count == 1
-      #     @organization = Organization.first
-      #     return
-      #   end
-
-      #   return render_error("Subdomain is missing", status: :bad_request) unless param_subdomain.present?
-
-      #   @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
-      #   return render_error("Organization not found", status: :not_found) unless @organization
-      # end
-
       def set_organization_from_subdomain
+        # Skip for registration endpoint
+        return if controller_name == 'registrations' && action_name == 'create'
+        
         param_subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
         param_subdomain = 'demo' if Rails.env.development? && param_subdomain.blank?
 

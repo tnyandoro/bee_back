@@ -1,7 +1,10 @@
 module Api
   module V1
     class RegistrationsController < Api::V1::ApiController
-      # skip_before_action :authenticate_user!, only: [:create]
+      skip_before_action :authenticate_user!, only: [:create]
+      skip_before_action :set_organization_from_subdomain, only: [:create]
+      skip_before_action :verify_user_organization, only: [:create]
+      
       rescue_from ActiveRecord::RecordInvalid, with: :handle_validation_error
 
       def create
@@ -12,9 +15,8 @@ module Api
           organization = Organization.new(organization_params)
           organization.save!
 
-          # admin = organization.users.new(admin_params.except(:department))
           admin = organization.users.new(admin_params.except(:department, :department_id))
-          admin.role = :domain_admin # Changed from :admin
+          admin.role = :domain_admin
           admin.auth_token = generate_auth_token
           admin.save!
 
@@ -52,13 +54,18 @@ module Api
 
       def admin_params
         params.require(:admin).permit(
-          :name, :email, :password, :password_confirmation,
-          :department_id, :position, :username
+          :first_name, :last_name, :email, :password, :password_confirmation,
+          :department, :position, :username, :phone_number
         ).tap do |p|
+          # Map first_name to name (required field)
+          p[:name] = p.delete(:first_name) if p[:first_name]
+          # Keep last_name as is (it's already in the schema)
+          # last_name is already permitted and will be saved
+          
           p[:email] = p[:email]&.downcase
           p[:username] = p[:username]&.downcase
         end
-      end         
+      end       
 
       def render_success_response(organization, admin)
         render json: {

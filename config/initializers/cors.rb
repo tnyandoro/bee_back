@@ -57,8 +57,10 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
   end
 
   allow do
-    # Production
     origins 'https://itsmza.netlify.app'
+    
+    resource '*',
+      headers: :any,
       methods: [:get, :post, :put, :patch, :delete, :options, :head],
       credentials: true,
       expose: ['Authorization', 'X-Organization-Subdomain'],
