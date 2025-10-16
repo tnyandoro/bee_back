@@ -99,7 +99,10 @@ class User < ApplicationRecord
     role_incident_manager? || role_system_admin? || role_domain_admin?
   end
   
+  # FIXED: Added admin roles to see all tickets
   def can_view_all_tickets?
+    role_system_admin? || role_domain_admin? || role_sub_domain_admin? ||
+    role_general_manager? || role_department_manager? ||
     role_service_desk_agent? || role_service_desk_tl? || 
     role_service_desk_manager? || role_incident_manager? || 
     role_problem_manager?
