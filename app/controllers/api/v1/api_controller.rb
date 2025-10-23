@@ -8,6 +8,8 @@ module Api
       rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
       rescue_from ActionController::RoutingError, with: :render_not_found
       rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
+      rescue_from JWT::ExpiredSignature, with: :render_token_expired
+      rescue_from JWT::DecodeError, with: :render_invalid_token
       rescue_from StandardError, with: :render_internal_server_error
 
       # --- Filters ---
@@ -21,24 +23,44 @@ module Api
       # Authentication
       # ---------------------------
       def authenticate_user!
-        render_error("Unauthorized", status: :unauthorized) unless current_user
+        return if current_user.present?
+        
+        render_error("Authentication required", status: :unauthorized)
       end
 
       def current_user
         return @current_user if defined?(@current_user)
 
-        token = request.headers['Authorization']&.split(' ')&.last
+        token = extract_token_from_header
         return @current_user = nil if token.blank?
 
-        payload = JwtService.decode(token)
-        if payload && payload["exp"] > Time.now.to_i
-          @current_user = User.find_by(id: payload["user_id"], organization_id: payload["org_id"])
-        else
+        begin
+          payload = JwtService.decode(token)
+          
+          if payload && payload["exp"] > Time.now.to_i
+            @current_user = User.find_by(
+              id: payload["user_id"], 
+              organization_id: payload["org_id"]
+            )
+          else
+            @current_user = nil
+          end
+        rescue JWT::ExpiredSignature
           @current_user = nil
+          raise # Let rescue_from handle it
+        rescue JWT::DecodeError => e
+          Rails.logger.warn "JWT decode error: #{e.message}"
+          @current_user = nil
+          raise # Let rescue_from handle it
         end
-      rescue JWT::DecodeError => e
-        Rails.logger.warn "JWT decode error: #{e.message}"
-        @current_user = nil
+      end
+
+      def extract_token_from_header
+        auth_header = request.headers['Authorization']
+        return nil unless auth_header.present?
+        
+        # Support both "Bearer <token>" and just "<token>"
+        auth_header.split(' ').last
       end
 
       # ---------------------------
@@ -46,20 +68,35 @@ module Api
       # ---------------------------
       def set_organization_from_subdomain
         # Skip for registration endpoint
-        return if controller_name == 'registrations' && action_name == 'create'
+        return if skip_organization_check?
         
-        param_subdomain = params[:subdomain] || params[:organization_subdomain] || request.subdomains.first
+        param_subdomain = resolve_subdomain
+        
+        # Development fallback: use demo subdomain
         param_subdomain = 'demo' if Rails.env.development? && param_subdomain.blank?
 
+        # If only one organization exists and no subdomain provided, use it
         if param_subdomain.blank? && Organization.count == 1
           @organization = Organization.first
           return
         end
 
-        return render_error("Subdomain is missing", status: :bad_request) unless param_subdomain.present?
+        return render_error("Subdomain is required", status: :bad_request) unless param_subdomain.present?
 
         @organization = Organization.find_by("LOWER(subdomain) = ?", param_subdomain.downcase)
-        return render_error("Organization not found", status: :not_found) unless @organization
+        return render_error("Organization not found for subdomain: #{param_subdomain}", status: :not_found) unless @organization
+      end
+
+      def skip_organization_check?
+        # Add any controllers/actions that should skip organization check
+        (controller_name == 'registrations' && action_name == 'create')
+      end
+
+      def resolve_subdomain
+        # Priority: explicit param > organization_subdomain param > subdomain from request
+        params[:subdomain] || 
+        params[:organization_subdomain] || 
+        request.subdomains.first
       end
 
       # ---------------------------
@@ -68,8 +105,11 @@ module Api
       def verify_user_organization
         return if current_user.nil? || @organization.nil?
 
-        if current_user.organization_id != @organization.id
-          render_error("User does not belong to this organization", status: :forbidden)
+        unless current_user.organization_id == @organization.id
+          render_error(
+            "Access denied: User does not belong to this organization", 
+            status: :forbidden
+          )
         end
       end
 
@@ -77,27 +117,62 @@ module Api
       # Rendering helpers
       # ---------------------------
       def render_success(data, message = "Success", status: :ok)
-        render json: { message: message, data: data }, status: status
+        render json: { 
+          success: true,
+          message: message, 
+          data: data 
+        }, status: status
       end
 
-      def render_error(errors, message: nil, details: nil, status: :unprocessable_entity)
+      def render_error(error_message, message: nil, details: nil, status: :unprocessable_entity)
         render json: {
-          error: message || "An error occurred",
-          details: details || errors
+          success: false,
+          error: message || error_message,
+          details: details || error_message
         }, status: status
       end
 
       def render_not_found(exception = nil)
-        render_error("Resource not found", details: exception&.message, status: :not_found)
+        render_error(
+          "Resource not found", 
+          details: exception&.message, 
+          status: :not_found
+        )
       end
 
       def render_forbidden(exception = nil)
-        render_error("You are not authorized to perform this action", details: exception&.message, status: :forbidden)
+        render_error(
+          "You are not authorized to perform this action", 
+          details: exception&.message, 
+          status: :forbidden
+        )
+      end
+
+      def render_token_expired(exception = nil)
+        render_error(
+          "Token has expired", 
+          details: "Please log in again",
+          status: :unauthorized
+        )
+      end
+
+      def render_invalid_token(exception = nil)
+        render_error(
+          "Invalid authentication token", 
+          details: Rails.env.production? ? nil : exception&.message,
+          status: :unauthorized
+        )
       end
 
       def render_internal_server_error(exception = nil)
-        Rails.logger.error "Internal Server Error: #{exception&.message}"
-        render_error("Internal server error", details: Rails.env.production? ? nil : exception&.message, status: :internal_server_error)
+        Rails.logger.error "Internal Server Error: #{exception&.class} - #{exception&.message}"
+        Rails.logger.error exception&.backtrace&.join("\n")
+        
+        render_error(
+          "Internal server error", 
+          details: Rails.env.production? ? nil : exception&.message, 
+          status: :internal_server_error
+        )
       end
     end
   end

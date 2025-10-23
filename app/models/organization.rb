@@ -174,21 +174,34 @@ class Organization < ApplicationRecord
     }
   end
 
+  def ensure_ticket_sequence!
+    sequence_name = "tickets_inc_organization_#{id}_seq"
+    
+    unless ActiveRecord::Base.connection.execute(
+      "SELECT 1 FROM pg_class WHERE relname = '#{sequence_name}'"
+    ).any?
+      ActiveRecord::Base.connection.execute(
+        "CREATE SEQUENCE #{sequence_name} START 1"
+      )
+      Rails.logger.info "Created ticket sequence for organization: #{name}"
+    end
+  end
+
   private
 
   # In Organization model
-def ensure_ticket_sequence!
-  sequence_name = "tickets_inc_organization_#{id}_seq"
-  
-  unless ActiveRecord::Base.connection.execute(
-    "SELECT 1 FROM pg_class WHERE relname = '#{sequence_name}'"
-  ).any?
-    ActiveRecord::Base.connection.execute(
-      "CREATE SEQUENCE #{sequence_name} START 1"
-    )
-    Rails.logger.info "Created ticket sequence for organization: #{name}"
+  def ensure_ticket_sequence!
+    sequence_name = "tickets_inc_organization_#{id}_seq"
+    
+    unless ActiveRecord::Base.connection.execute(
+      "SELECT 1 FROM pg_class WHERE relname = '#{sequence_name}'"
+    ).any?
+      ActiveRecord::Base.connection.execute(
+        "CREATE SEQUENCE #{sequence_name} START 1"
+      )
+      Rails.logger.info "Created ticket sequence for organization: #{name}"
+    end
   end
-end
 
 # Call this in an after_create callback or before ticket creation
   # Generate subdomain from the organization name if not provided
